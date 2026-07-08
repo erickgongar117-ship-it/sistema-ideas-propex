@@ -7,6 +7,9 @@ type QrContext = {
   params: Promise<{ code: string }>;
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest, context: QrContext) {
   const { code } = await context.params;
   const area = await prisma.area.findFirst({ where: { code: code.toUpperCase(), active: true } });
@@ -29,7 +32,10 @@ export async function GET(request: NextRequest, context: QrContext) {
   return new Response(new Blob([new Uint8Array(buffer)]), {
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=3600",
+      "Cache-Control": "no-store, max-age=0, must-revalidate",
+      "CDN-Cache-Control": "no-store",
+      "Vercel-CDN-Cache-Control": "no-store",
+      "X-QR-Target": url,
       ...(download ? { "Content-Disposition": `attachment; filename="QR-${area.code}.png"` } : {})
     }
   });

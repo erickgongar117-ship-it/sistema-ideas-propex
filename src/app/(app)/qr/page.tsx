@@ -20,6 +20,7 @@ export default async function QrPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {areas.map((area) => {
           const captureUrl = `${baseUrl}/captura/${area.code}`;
+          const qrUrl = `/api/qr/${area.code}?target=${encodeURIComponent(captureUrl)}`;
           return (
             <article className="surface rounded-lg p-5" key={area.id}>
               <div className="flex items-start justify-between gap-3">
@@ -30,9 +31,9 @@ export default async function QrPage() {
                 </div>
                 <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-700">{area.active ? "Activo" : "Inactivo"}</span>
               </div>
-              <img alt={`QR ${area.code}`} className="mx-auto mt-4 h-56 w-56 rounded-lg border border-line bg-white p-2" src={`/api/qr/${area.code}`} />
+              <img alt={`QR ${area.code}`} className="mx-auto mt-4 h-56 w-56 rounded-lg border border-line bg-white p-2" src={qrUrl} />
               <p className="mt-4 break-all rounded-lg bg-panel p-3 text-xs font-semibold text-slate-600">{captureUrl}</p>
-              <a className="btn btn-secondary mt-4 w-full" download href={`/api/qr/${area.code}?download=1`}>
+              <a className="btn btn-secondary mt-4 w-full" download href={`${qrUrl}&download=1`}>
                 <Download className="h-4 w-4" aria-hidden />
                 Descargar PNG
               </a>

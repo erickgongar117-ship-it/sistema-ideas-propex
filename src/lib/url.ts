@@ -6,6 +6,7 @@ export function appBaseUrl() {
 }
 
 export function baseUrlFromRequest(origin?: string | null) {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/$/, "");
   if (origin) return origin.replace(/\/$/, "");
   return appBaseUrl();
 }
