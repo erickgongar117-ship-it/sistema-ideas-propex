@@ -14,12 +14,31 @@ const captureSteps = [
 
 type CaptureProps = {
   params: Promise<{ code: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; campos?: string }>;
 };
+
+const fieldLabels: Record<string, string> = {
+  collaboratorName: "Nombre del colaborador",
+  areaCode: "Area",
+  shift: "Turno",
+  problem: "Que problema viste",
+  proposal: "Que propones hacer",
+  expectedBenefit: "Que mejora esperas"
+};
+
+function fieldHasError(fields: string[], field: string) {
+  return fields.includes(field);
+}
+
+function fieldClass(fields: string[], field: string) {
+  return fieldHasError(fields, field) ? "field border-rose-400 bg-rose-50" : "field";
+}
 
 export default async function CapturePage({ params, searchParams }: CaptureProps) {
   const { code } = await params;
   const query = await searchParams;
+  const errorFields = query.campos ? query.campos.split(",").filter(Boolean) : [];
+  const missingLabels = errorFields.map((field) => fieldLabels[field] ?? field);
   const area = await prisma.area.findFirst({
     where: { code: code.toUpperCase(), active: true },
     include: { supervisor: true }
@@ -74,7 +93,16 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
 
         {query.error ? (
           <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">
-            Revisa los campos obligatorios antes de enviar.
+            {query.error === "area" ? (
+              "El QR apunta a un area que no esta activa. Prueba con otro QR o avisa a Mejora Continua."
+            ) : missingLabels.length ? (
+              <>
+                Falta completar o mejorar: {missingLabels.join(", ")}.
+                <span className="mt-1 block font-semibold">Puedes escribir frases cortas; no tiene que ser perfecto.</span>
+              </>
+            ) : (
+              "Revisa los campos marcados antes de enviar."
+            )}
           </div>
         ) : null}
 
@@ -84,7 +112,8 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
           <div className="grid gap-4 sm:grid-cols-2">
             <label>
               <span className="label">Nombre del colaborador *</span>
-              <input className="field" name="collaboratorName" required />
+              <input className={fieldClass(errorFields, "collaboratorName")} name="collaboratorName" placeholder="Tu nombre" required />
+              {fieldHasError(errorFields, "collaboratorName") ? <span className="mt-1 block text-xs font-bold text-rose-700">Escribe al menos 2 letras.</span> : null}
             </label>
             <label>
               <span className="label">Numero de empleado</span>
@@ -96,7 +125,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
             </label>
             <label>
               <span className="label">Turno *</span>
-              <select className="field" name="shift" required>
+              <select className={fieldClass(errorFields, "shift")} name="shift" required>
                 {shifts.map((shift) => (
                   <option key={shift} value={shift}>
                     {shift}
@@ -109,15 +138,18 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
           <div className="mt-4 grid gap-4">
             <label>
               <span className="label">Que problema viste? *</span>
-              <textarea className="field min-h-28" name="problem" placeholder="Ejemplo: el material se queda atorado en..." required />
+              <textarea className={`${fieldClass(errorFields, "problem")} min-h-24`} name="problem" placeholder="Ejemplo: se atora material, falta señal, hay riesgo..." required />
+              {fieldHasError(errorFields, "problem") ? <span className="mt-1 block text-xs font-bold text-rose-700">Describe el problema con al menos 3 letras.</span> : null}
             </label>
             <label>
               <span className="label">Que propones hacer? *</span>
-              <textarea className="field min-h-28" name="proposal" placeholder="Ejemplo: cambiar la posicion de..." required />
+              <textarea className={`${fieldClass(errorFields, "proposal")} min-h-24`} name="proposal" placeholder="Ejemplo: poner etiqueta, cambiar ubicacion, reparar..." required />
+              {fieldHasError(errorFields, "proposal") ? <span className="mt-1 block text-xs font-bold text-rose-700">Escribe una propuesta corta.</span> : null}
             </label>
             <label>
               <span className="label">Que mejora esperas? *</span>
-              <textarea className="field min-h-24" name="expectedBenefit" placeholder="Ejemplo: menos tiempo perdido, mas seguridad..." required />
+              <textarea className={`${fieldClass(errorFields, "expectedBenefit")} min-h-20`} name="expectedBenefit" placeholder="Ejemplo: mas seguro, menos merma, mas rapido..." required />
+              {fieldHasError(errorFields, "expectedBenefit") ? <span className="mt-1 block text-xs font-bold text-rose-700">Escribe el beneficio esperado, aunque sea corto.</span> : null}
             </label>
           </div>
 

@@ -18,12 +18,12 @@ const text = (formData: FormData, key: string) => String(formData.get(key) ?? ""
 const checked = (formData: FormData, key: string) => ["on", "true", "1", "yes", "si"].includes(text(formData, key).toLowerCase());
 
 const ideaSchema = z.object({
-  collaboratorName: z.string().min(3),
+  collaboratorName: z.string().min(2),
   areaCode: z.string().min(1),
   shift: z.string().min(1),
-  problem: z.string().min(8),
-  proposal: z.string().min(8),
-  expectedBenefit: z.string().min(5)
+  problem: z.string().min(3),
+  proposal: z.string().min(3),
+  expectedBenefit: z.string().min(2)
 });
 
 const userRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"];
@@ -52,9 +52,10 @@ export async function logoutAction() {
 }
 
 export async function submitIdeaAction(formData: FormData) {
+  const areaCode = text(formData, "areaCode") || "P1";
   const parsed = ideaSchema.safeParse({
     collaboratorName: text(formData, "collaboratorName"),
-    areaCode: text(formData, "areaCode"),
+    areaCode,
     shift: text(formData, "shift"),
     problem: text(formData, "problem"),
     proposal: text(formData, "proposal"),
@@ -62,14 +63,15 @@ export async function submitIdeaAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    redirect(`/captura/${text(formData, "areaCode")}?error=datos`);
+    const fields = parsed.error.issues.map((issue) => String(issue.path[0])).filter(Boolean);
+    redirect(`/captura/${areaCode}?error=datos&campos=${encodeURIComponent([...new Set(fields)].join(","))}`);
   }
 
   const area = await prisma.area.findFirst({
     where: { code: parsed.data.areaCode, active: true },
     include: { supervisor: true }
   });
-  if (!area) redirect("/captura/P1?error=area");
+  if (!area) redirect(`/captura/${areaCode}?error=area`);
 
   const selectedImpacts = formData
     .getAll("impactTypes")
@@ -141,7 +143,7 @@ export async function submitIdeaAction(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect(`/captura/gracias?folio=${encodeURIComponent(idea.folio)}`);
+  redirect(`/captura/gracias?folio=${encodeURIComponent(idea.folio)}&area=${encodeURIComponent(area.code)}`);
 }
 
 export async function supervisorDecisionAction(formData: FormData) {
