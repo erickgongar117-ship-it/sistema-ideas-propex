@@ -351,9 +351,9 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
 
           {canMC ? (
             <article className="surface rounded-lg p-5">
-              <h2 className="text-lg font-black text-ink">Cierre y puntos automaticos</h2>
+              <h2 className="text-lg font-black text-ink">Cierre y puntos sugeridos</h2>
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                El sistema calcula los puntos con las reglas activas. Mejora Continua puede retirarlos despues si la idea no los merece.
+                El sistema marca una sugerencia inicial. Puedes quitar reglas, agregar otras o cambiar puntos antes de cerrar.
               </p>
               {!hasAfterEvidence && idea.requiresEvidence ? (
                 <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
@@ -363,14 +363,14 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
 
               <div className="mt-4 rounded-lg border border-line bg-panel p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-black uppercase text-slate-500">{isClosed ? "Puntos otorgados" : "Puntos sugeridos"}</p>
+                  <p className="text-sm font-black uppercase text-slate-500">{isClosed ? "Puntos otorgados" : "Sugerencia del sistema"}</p>
                   <p className="text-3xl font-black text-ink">{isClosed ? idea.pointsAssigned : automaticPoints.totalPoints}</p>
                 </div>
                 <div className="mt-3 space-y-2">
-                  {(isClosed ? idea.pointRuleSelections : automaticPoints.selectedRules).length ? (
-                    (isClosed ? idea.pointRuleSelections : automaticPoints.selectedRules).map((item) => {
-                      const rule = "pointRule" in item ? item.pointRule : item;
-                      const points = "pointRule" in item ? item.points : item.points;
+                  {isClosed && idea.pointRuleSelections.length ? (
+                    idea.pointRuleSelections.map((item) => {
+                      const rule = item.pointRule;
+                      const points = item.points;
                       return (
                         <div className="flex items-start justify-between gap-3 rounded-lg bg-white p-3 text-sm" key={rule.id}>
                         <div>
@@ -384,9 +384,25 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                       );
                     })
                   ) : (
-                    <p className="rounded-lg bg-white p-3 text-sm font-bold text-slate-600">
-                      No hay reglas activas aplicables para esta idea.
-                    </p>
+                    <>
+                      {automaticPoints.selectedRules.length ? (
+                        automaticPoints.selectedRules.map((rule) => (
+                          <div className="flex items-start justify-between gap-3 rounded-lg bg-white p-3 text-sm" key={rule.id}>
+                            <div>
+                              <p className="font-black text-ink">{rule.name}</p>
+                              <p className="text-slate-600">{rule.description}</p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-700">
+                              +{rule.points}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="rounded-lg bg-white p-3 text-sm font-bold text-slate-600">
+                          No hay reglas sugeridas para esta idea.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -394,8 +410,37 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
               {!isClosed ? (
                 <form action={closeIdeaAction} className="mt-4 grid gap-3">
                   <input name="ideaId" type="hidden" value={idea.id} />
+                  <div className="rounded-lg border border-line bg-white p-3">
+                    <p className="text-sm font-black text-ink">Editar puntos antes de cerrar</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-600">
+                      Desmarca lo que no aplique, marca reglas adicionales o cambia el numero de puntos.
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {pointRules.map((rule) => {
+                        const suggested = automaticPoints.selectedRules.some((item) => item.id === rule.id);
+                        return (
+                          <label className="grid gap-3 rounded-lg border border-line bg-panel p-3 text-sm sm:grid-cols-[1fr_92px]" key={rule.id}>
+                            <span className="flex items-start gap-2">
+                              <input defaultChecked={suggested} className="mt-1" name="pointRuleIds" type="checkbox" value={rule.id} />
+                              <span>
+                                <span className="font-black text-ink">
+                                  {rule.name}
+                                  {suggested ? <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-black text-brand-700">Sugerida</span> : null}
+                                </span>
+                                <span className="block text-slate-600">{rule.description}</span>
+                              </span>
+                            </span>
+                            <span>
+                              <span className="label mb-1">Puntos</span>
+                              <input className="field py-2" defaultValue={rule.points} min={0} name={`points-${rule.id}`} type="number" />
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <button className="btn btn-primary" type="submit">
-                    Cerrar y asignar puntos automaticos
+                    Cerrar con puntos revisados
                   </button>
                 </form>
               ) : null}

@@ -391,6 +391,7 @@ export async function implementationUpdateAction(formData: FormData) {
 export async function closeIdeaAction(formData: FormData) {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const ideaId = text(formData, "ideaId");
+  const selectedRuleIds = new Set(formData.getAll("pointRuleIds").map(String));
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
     include: { approvals: true, attachments: true }
@@ -399,15 +400,23 @@ export async function closeIdeaAction(formData: FormData) {
   const hasAfterEvidence = idea.attachments.some((attachment) => attachment.type === "AFTER");
   if (idea.requiresEvidence && !hasAfterEvidence) redirect(`/ideas/${ideaId}?error=evidencia`);
 
-  const pointRules = await prisma.pointRule.findMany({ where: { active: true }, orderBy: { createdAt: "asc" } });
-  const { selectedRules, totalPoints } = automaticPointRules(idea, pointRules);
+  const selectedRules = await prisma.pointRule.findMany({
+    where: { id: { in: [...selectedRuleIds] }, active: true },
+    orderBy: { createdAt: "asc" }
+  });
+  const pointAdjustments = new Map<string, number>();
+  for (const rule of selectedRules) {
+    const value = Number(text(formData, `points-${rule.id}`));
+    pointAdjustments.set(rule.id, Number.isFinite(value) ? Math.max(0, value) : rule.points);
+  }
+  const totalPoints = selectedRules.reduce((sum, rule) => sum + (pointAdjustments.get(rule.id) ?? rule.points), 0);
   await prisma.ideaPointRule.deleteMany({ where: { ideaId } });
   for (const rule of selectedRules) {
     await prisma.ideaPointRule.create({
       data: {
         ideaId,
         pointRuleId: rule.id,
-        points: rule.points
+        points: pointAdjustments.get(rule.id) ?? rule.points
       }
     });
   }
@@ -437,9 +446,17 @@ export async function closeIdeaAction(formData: FormData) {
   await auditLog({
     entity: "Idea",
     entityId: ideaId,
-    action: "IDEA_CLOSED_AUTO_POINTS",
+    action: "IDEA_CLOSED_REVIEWED_POINTS",
     userId: user.id,
-    details: { totalPoints, selectedRuleIds: selectedRules.map((rule) => rule.id), selectedRules: selectedRules.map((rule) => rule.name) }
+    details: {
+      totalPoints,
+      selectedRuleIds: selectedRules.map((rule) => rule.id),
+      selectedRules: selectedRules.map((rule) => ({
+        name: rule.name,
+        defaultPoints: rule.points,
+        assignedPoints: pointAdjustments.get(rule.id) ?? rule.points
+      }))
+    }
   });
   await notifyIdeaClosed(ideaId);
   revalidatePath("/dashboard");
