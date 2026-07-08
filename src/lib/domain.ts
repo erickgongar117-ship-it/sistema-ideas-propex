@@ -152,6 +152,15 @@ export function approvalTypeForRole(role: Role): ApprovalType | null {
   return null;
 }
 
+export function roleHomePath(role: Role): string {
+  if (role === "SUPERVISOR") return "/supervisor";
+  if (role === "CALIDAD") return "/validaciones/calidad";
+  if (role === "SEGURIDAD") return "/validaciones/seguridad";
+  if (role === "MANTENIMIENTO") return "/validaciones/mantenimiento";
+  if (role === "MEJORA_CONTINUA" || role === "ADMIN") return "/dashboard";
+  return "/";
+}
+
 export function isTerminalStatus(status: IdeaStatus): boolean {
   return ["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(status);
 }

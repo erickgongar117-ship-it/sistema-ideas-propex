@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Download, Search } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
+import { requireUser } from "@/lib/auth";
 import { classificationLabels, priorityLabels, statusLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
@@ -11,6 +12,7 @@ type IdeasPageProps = {
 };
 
 export default async function IdeasPage({ searchParams }: IdeasPageProps) {
+  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const query = await searchParams;
   const where: Prisma.IdeaWhereInput = {};
   if (query.q) {

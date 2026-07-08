@@ -1,5 +1,6 @@
 import { createPointRuleAction, updateAreaAction, updatePointRuleAction, updateSupportSettingsAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 function parseSettings(value?: string | null) {
@@ -12,6 +13,7 @@ function parseSettings(value?: string | null) {
 }
 
 export default async function ConfigPage() {
+  await requireUser(["ADMIN"]);
   const [areas, supervisors, pointRules, supportSetting] = await Promise.all([
     prisma.area.findMany({ include: { supervisor: true }, orderBy: { code: "asc" } }),
     prisma.user.findMany({ where: { role: "SUPERVISOR", active: true }, orderBy: { name: "asc" } }),

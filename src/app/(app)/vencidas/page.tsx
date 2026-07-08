@@ -3,9 +3,11 @@ import { runRemindersAction } from "@/app/actions";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function OverduePage() {
+  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const ideas = await prisma.idea.findMany({
     where: {
       OR: [{ status: "VENCIDA" }, { dueDate: { lt: new Date() }, status: { notIn: ["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"] } }]

@@ -16,28 +16,38 @@ import {
   Wrench
 } from "lucide-react";
 import Link from "next/link";
-import type { User } from "@prisma/client";
+import type { Role, User } from "@prisma/client";
+import type { ComponentType } from "react";
 import { logoutAction } from "@/app/actions";
 import { roleLabels } from "@/lib/domain";
 
-const nav = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/supervisor", label: "Supervisor", icon: UserCheck },
-  { href: "/validaciones/calidad", label: "Calidad", icon: ShieldCheck },
-  { href: "/validaciones/seguridad", label: "Seguridad", icon: ClipboardCheck },
-  { href: "/validaciones/mantenimiento", label: "Mantenimiento", icon: Wrench },
-  { href: "/mejora", label: "Mejora Continua", icon: Gauge },
-  { href: "/implementacion", label: "Implementacion", icon: ListChecks },
-  { href: "/ideas", label: "Tabla maestra", icon: ClipboardList },
-  { href: "/kanban", label: "Kanban", icon: KanbanSquare },
-  { href: "/qr", label: "QR por area", icon: QrCode },
-  { href: "/reportes", label: "Reportes", icon: Download },
-  { href: "/notificaciones", label: "Notificaciones", icon: Bell },
-  { href: "/auditoria", label: "Auditoria", icon: BarChart3 },
-  { href: "/configuracion", label: "Configuracion", icon: Settings }
+type NavItem = {
+  href: string;
+  label: string;
+  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  roles: Role[];
+};
+
+const nav: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"] },
+  { href: "/supervisor", label: "Supervisor", icon: UserCheck, roles: ["ADMIN", "SUPERVISOR"] },
+  { href: "/validaciones/calidad", label: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"] },
+  { href: "/validaciones/seguridad", label: "Seguridad", icon: ClipboardCheck, roles: ["ADMIN", "SEGURIDAD"] },
+  { href: "/validaciones/mantenimiento", label: "Mantenimiento", icon: Wrench, roles: ["ADMIN", "MANTENIMIENTO"] },
+  { href: "/mejora", label: "Mejora Continua", icon: Gauge, roles: ["ADMIN", "MEJORA_CONTINUA"] },
+  { href: "/implementacion", label: "Implementacion", icon: ListChecks, roles: ["ADMIN", "MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR"] },
+  { href: "/ideas", label: "Tabla maestra", icon: ClipboardList, roles: ["ADMIN", "MEJORA_CONTINUA"] },
+  { href: "/kanban", label: "Kanban", icon: KanbanSquare, roles: ["ADMIN", "MEJORA_CONTINUA"] },
+  { href: "/qr", label: "QR por area", icon: QrCode, roles: ["ADMIN", "MEJORA_CONTINUA"] },
+  { href: "/reportes", label: "Reportes", icon: Download, roles: ["ADMIN", "MEJORA_CONTINUA"] },
+  { href: "/notificaciones", label: "Notificaciones", icon: Bell, roles: ["ADMIN", "MEJORA_CONTINUA"] },
+  { href: "/auditoria", label: "Auditoria", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"] },
+  { href: "/configuracion", label: "Configuracion", icon: Settings, roles: ["ADMIN"] }
 ];
 
 export function AppShell({ user, children }: { user: User; children: React.ReactNode }) {
+  const visibleNav = nav.filter((item) => item.roles.includes(user.role));
+
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[280px_1fr]">
       <aside className="border-b border-line bg-white lg:min-h-screen lg:border-b-0 lg:border-r">
@@ -59,7 +69,7 @@ export function AppShell({ user, children }: { user: User; children: React.React
         </div>
 
         <nav className="flex gap-1 overflow-x-auto p-3 lg:block lg:space-y-1 lg:overflow-visible">
-          {nav.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             return (
               <Link

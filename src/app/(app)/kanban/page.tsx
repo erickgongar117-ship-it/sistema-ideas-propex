@@ -1,9 +1,11 @@
 import { IdeaCard } from "@/components/idea-card";
 import { PageHeader } from "@/components/page-header";
+import { requireUser } from "@/lib/auth";
 import { kanbanColumns } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 export default async function KanbanPage() {
+  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const ideas = await prisma.idea.findMany({
     include: { area: true, supervisor: true, implementationOwner: true },
     orderBy: { updatedAt: "desc" }

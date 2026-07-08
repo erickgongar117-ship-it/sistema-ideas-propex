@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Role, User } from "@prisma/client";
+import { roleHomePath } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 const SESSION_COOKIE = "propex_session";
@@ -80,6 +81,6 @@ export async function getCurrentUser() {
 export async function requireUser(roles?: Role[]) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (roles && !roles.includes(user.role)) redirect("/");
+  if (roles && !roles.includes(user.role)) redirect(roleHomePath(user.role));
   return user;
 }

@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { ApprovalType, Classification, Priority } from "@prisma/client";
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
-import { approvalTypeForRole, impactOptions, requiredApprovalTypes } from "@/lib/domain";
+import { approvalTypeForRole, impactOptions, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
 import { saveUpload } from "@/lib/files";
 import { ideaMailBody, notify } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +40,7 @@ export async function loginAction(formData: FormData) {
   }
 
   await setSession(user);
-  redirect("/");
+  redirect(roleHomePath(user.role));
 }
 
 export async function logoutAction() {
@@ -231,7 +231,7 @@ export async function validationDecisionAction(formData: FormData) {
   const comments = text(formData, "comments");
   const explicitType = text(formData, "type") as ApprovalType;
   const type = user.role === "ADMIN" && explicitType ? explicitType : approvalTypeForRole(user.role);
-  if (!type || !requiredApprovalTypes({ impactsQuality: true, impactsSafety: true, requiresMaintenance: true }).includes(type)) redirect("/");
+  if (!type || !requiredApprovalTypes({ impactsQuality: true, impactsSafety: true, requiresMaintenance: true }).includes(type)) redirect("/dashboard");
   if ((decision === "RECHAZAR" || decision === "SOLICITAR_INFORMACION") && !comments) redirect(`/ideas/${ideaId}?error=justificacion`);
 
   const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, include: { area: true, supervisor: true } });

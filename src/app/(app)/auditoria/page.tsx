@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function AuditPage() {
+  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const logs = await prisma.auditLog.findMany({
     include: { user: true },
     orderBy: { createdAt: "desc" },

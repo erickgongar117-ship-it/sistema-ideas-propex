@@ -1,12 +1,18 @@
 import { Download } from "lucide-react";
+import { headers } from "next/headers";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { appBaseUrl } from "@/lib/url";
+import { baseUrlFromRequest } from "@/lib/url";
 
 export default async function QrPage() {
+  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const areas = await prisma.area.findMany({ include: { supervisor: true }, orderBy: { code: "asc" } });
-  const baseUrl = appBaseUrl();
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
+  const baseUrl = baseUrlFromRequest(host ? `${protocol}://${host}` : null);
 
   return (
     <>

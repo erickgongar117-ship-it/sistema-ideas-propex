@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import {
   addCommentAction,
@@ -19,6 +19,7 @@ import {
   classificationLabels,
   parseImpactTypes,
   priorityLabels,
+  roleHomePath,
   roleLabels
 } from "@/lib/domain";
 import { requireUser } from "@/lib/auth";
@@ -52,6 +53,18 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
   ]);
 
   if (!idea) notFound();
+
+  const canViewIdea =
+    user.role === "ADMIN" ||
+    user.role === "MEJORA_CONTINUA" ||
+    (user.role === "SUPERVISOR" && idea.supervisorId === user.id) ||
+    (user.role === "CALIDAD" && idea.approvals.some((approval) => approval.type === "CALIDAD")) ||
+    (user.role === "SEGURIDAD" && idea.approvals.some((approval) => approval.type === "SEGURIDAD")) ||
+    (user.role === "MANTENIMIENTO" &&
+      (idea.approvals.some((approval) => approval.type === "MANTENIMIENTO") ||
+        ["EN_IMPLEMENTACION", "IMPLEMENTADA", "VENCIDA"].includes(idea.status)));
+
+  if (!canViewIdea) redirect(roleHomePath(user.role));
 
   const canSupervisor = user.role === "ADMIN" || (user.role === "SUPERVISOR" && idea.supervisorId === user.id);
   const roleApprovalType = approvalTypeForRole(user.role);

@@ -2,9 +2,11 @@ import Link from "next/link";
 import { Download, FileSpreadsheet } from "lucide-react";
 import { runRemindersAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function ReportsPage() {
+  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const [ideaCount, notificationCount, overdueCount] = await Promise.all([
     prisma.idea.count(),
     prisma.notificationOutbox.count({ where: { status: { in: ["PENDING", "ERROR"] } } }),

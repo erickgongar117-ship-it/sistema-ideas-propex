@@ -4,6 +4,7 @@ import { Download, Plus, QrCode } from "lucide-react";
 import { BarList, KpiCard } from "@/components/mini-charts";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
+import { requireUser } from "@/lib/auth";
 import { parseImpactTypes, statusLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
@@ -15,6 +16,7 @@ function averageHours(rows: Array<{ idea: { createdAt: Date }; decidedAt: Date |
 }
 
 export default async function DashboardPage() {
+  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const [ideas, areas, supervisorApprovals, validationApprovals] = await Promise.all([
     prisma.idea.findMany({
       include: { area: true, supervisor: true, implementationOwner: true },

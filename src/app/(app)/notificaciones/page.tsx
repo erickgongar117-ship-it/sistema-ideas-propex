@@ -1,9 +1,11 @@
 import { markNotificationAction, retryNotificationAction } from "@/app/actions";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function NotificationsPage() {
+  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const notifications = await prisma.notificationOutbox.findMany({
     include: { idea: { include: { area: true } } },
     orderBy: { createdAt: "desc" },
