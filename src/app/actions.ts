@@ -10,6 +10,7 @@ import { clearSession, requireUser, setSession } from "@/lib/auth";
 import { approvalTypeForRole, impactOptions, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
 import { saveUpload } from "@/lib/files";
 import { ideaMailBody, notify } from "@/lib/notifications";
+import { automaticPointRules } from "@/lib/points";
 import { prisma } from "@/lib/prisma";
 import { approveSupervisor, markOverdueIdeas, nextFolio, notifyIdeaClosed, updateStatusAfterValidations } from "@/lib/workflow";
 
@@ -390,19 +391,18 @@ export async function implementationUpdateAction(formData: FormData) {
 export async function closeIdeaAction(formData: FormData) {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const ideaId = text(formData, "ideaId");
-  const selectedRules = formData.getAll("pointRuleIds").map(String);
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
-    include: { attachments: true }
+    include: { approvals: true, attachments: true }
   });
 
   const hasAfterEvidence = idea.attachments.some((attachment) => attachment.type === "AFTER");
   if (idea.requiresEvidence && !hasAfterEvidence) redirect(`/ideas/${ideaId}?error=evidencia`);
 
-  const rules = await prisma.pointRule.findMany({ where: { id: { in: selectedRules }, active: true } });
-  const totalPoints = rules.reduce((sum, rule) => sum + rule.points, 0);
+  const pointRules = await prisma.pointRule.findMany({ where: { active: true }, orderBy: { createdAt: "asc" } });
+  const { selectedRules, totalPoints } = automaticPointRules(idea, pointRules);
   await prisma.ideaPointRule.deleteMany({ where: { ideaId } });
-  for (const rule of rules) {
+  for (const rule of selectedRules) {
     await prisma.ideaPointRule.create({
       data: {
         ideaId,
@@ -434,9 +434,51 @@ export async function closeIdeaAction(formData: FormData) {
       pointsAssigned: totalPoints
     }
   });
-  await auditLog({ entity: "Idea", entityId: ideaId, action: "IDEA_CLOSED", userId: user.id, details: { totalPoints, selectedRules } });
+  await auditLog({
+    entity: "Idea",
+    entityId: ideaId,
+    action: "IDEA_CLOSED_AUTO_POINTS",
+    userId: user.id,
+    details: { totalPoints, selectedRuleIds: selectedRules.map((rule) => rule.id), selectedRules: selectedRules.map((rule) => rule.name) }
+  });
   await notifyIdeaClosed(ideaId);
-  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath(`/ideas/${ideaId}`);
+  redirect(`/ideas/${ideaId}`);
+}
+
+export async function removeIdeaPointsAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const ideaId = text(formData, "ideaId");
+  const reason = text(formData, "reason");
+  if (!reason) redirect(`/ideas/${ideaId}?error=justificacion`);
+
+  const idea = await prisma.idea.findUniqueOrThrow({
+    where: { id: ideaId },
+    include: { pointRuleSelections: { include: { pointRule: true } } }
+  });
+
+  await prisma.ideaPointRule.deleteMany({ where: { ideaId } });
+  await prisma.idea.update({ where: { id: ideaId }, data: { pointsAssigned: 0 } });
+  await prisma.comment.create({
+    data: {
+      ideaId,
+      userId: user.id,
+      comment: `Mejora Continua retiro los puntos automaticos. Motivo: ${reason}`
+    }
+  });
+  await auditLog({
+    entity: "Idea",
+    entityId: ideaId,
+    action: "AUTO_POINTS_REMOVED",
+    userId: user.id,
+    details: {
+      previousPoints: idea.pointsAssigned,
+      previousRules: idea.pointRuleSelections.map((selection) => selection.pointRule.name),
+      reason
+    }
+  });
+  revalidatePath("/dashboard");
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}`);
 }

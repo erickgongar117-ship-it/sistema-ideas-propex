@@ -23,18 +23,23 @@ const flow = ["Registrar", "Revisar", "Validar", "Implementar", "Cerrar"];
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-panel text-ink">
-      <section className="relative min-h-[92vh] overflow-hidden">
+    <main className="min-h-screen text-ink">
+      <section className="relative min-h-[86vh] overflow-hidden">
         <img
-          alt="Equipo de manufactura revisando mejoras en piso"
+          alt="Servicios Proboca"
           className="absolute inset-0 h-full w-full object-cover"
-          src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=2200&q=85"
+          src="/brand/proboca-servicios.jpg"
         />
-        <div className="absolute inset-0 bg-ink/68" />
+        <div className="absolute inset-0 bg-slate-950/78" />
         <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-          <div>
-            <p className="text-xs font-black uppercase text-brand-100">Proboca</p>
-            <p className="text-lg font-black text-white">Ideas de Mejora PROpEx</p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-14 w-28 items-center justify-center rounded-lg bg-white p-2">
+              <img alt="Proboca" className="max-h-10 max-w-full object-contain" src="/brand/proboca-logo.png" />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase text-brand-100">PROpEx</p>
+              <p className="text-lg font-black text-white">Ideas de Mejora</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Link className="btn border-white/25 bg-white/10 text-white hover:bg-white/20" href="/captura/P1">
@@ -47,13 +52,12 @@ export default function HomePage() {
           </div>
         </nav>
 
-        <div className="relative z-10 mx-auto flex min-h-[76vh] max-w-7xl items-center px-4 pb-10 pt-8 sm:px-6 lg:px-8">
+        <div className="relative z-10 mx-auto flex min-h-[68vh] max-w-7xl items-center px-4 pb-10 pt-8 sm:px-6 lg:px-8">
           <div className="max-w-3xl text-white">
-            <p className="text-sm font-black uppercase text-brand-100">Resumen de la pagina</p>
-            <h1 className="mt-4 text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">Proboca convierte ideas del piso en mejoras medibles.</h1>
+            <p className="text-sm font-black uppercase text-brand-100">Productora de Bocados Carnicos</p>
+            <h1 className="mt-4 text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">PROpEx convierte ideas de planta en mejoras visibles.</h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-100 sm:text-lg">
-              La pagina organiza el programa de ideas de mejora: captura publica por QR, revision de supervisor, validaciones SQDCM,
-              asignacion de responsables, evidencia antes/despues, cierre con puntos y reportes ejecutivos.
+              Captura por QR, seguimiento por rol, evidencia antes/despues y puntos automaticos en un flujo simple para piso, soporte y Mejora Continua.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link className="btn btn-primary" href="/captura/P1">
@@ -66,6 +70,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        <div className="absolute bottom-0 left-0 right-0 z-10 h-3 bg-brand-500" />
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
@@ -78,7 +83,7 @@ export default function HomePage() {
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
             {flow.map((item) => (
-              <span className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-bold text-slate-700" key={item}>
+              <span className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-black text-slate-700" key={item}>
                 {item}
               </span>
             ))}
@@ -102,21 +107,17 @@ export default function HomePage() {
 
       <section className="bg-white py-12">
         <div className="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-3 lg:px-8">
-          <img
-            alt="Tablero de indicadores de operacion"
-            className="h-72 w-full rounded-lg object-cover"
-            src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=85"
-          />
-          <img
-            alt="Colaboradores revisando proceso productivo"
-            className="h-72 w-full rounded-lg object-cover"
-            src="https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&q=85"
-          />
-          <img
-            alt="Linea de manufactura con control visual"
-            className="h-72 w-full rounded-lg object-cover"
-            src="https://images.unsplash.com/photo-1565008447742-97f6f38c985c?auto=format&fit=crop&w=1200&q=85"
-          />
+          {[
+            ["Supervisor", "bg-emerald-600", "Revision rapida y clara"],
+            ["Calidad", "bg-red-600", "Validacion de inocuidad"],
+            ["Mantenimiento", "bg-blue-600", "Ejecucion y evidencia"]
+          ].map(([title, color, text]) => (
+            <article className="rounded-lg border border-line bg-panel p-6 shadow-soft" key={title}>
+              <div className={`h-2 w-20 rounded-full ${color}`} />
+              <h3 className="mt-5 text-2xl font-black">{title}</h3>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{text}</p>
+            </article>
+          ))}
         </div>
       </section>
 

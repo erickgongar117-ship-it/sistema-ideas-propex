@@ -8,6 +8,14 @@ import { approvalTypeLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 
+const validationTone: Record<ApprovalType, { card: string; link: string; stripe: string }> = {
+  SUPERVISOR: { card: "border-emerald-200", link: "text-emerald-800", stripe: "bg-emerald-600" },
+  CALIDAD: { card: "border-red-200", link: "text-red-800", stripe: "bg-red-600" },
+  SEGURIDAD: { card: "border-slate-300", link: "text-slate-800", stripe: "bg-slate-600" },
+  MANTENIMIENTO: { card: "border-blue-200", link: "text-blue-800", stripe: "bg-blue-600" },
+  MEJORA_CONTINUA_FINAL: { card: "border-slate-800", link: "text-slate-950", stripe: "bg-slate-950" }
+};
+
 export async function ValidationInbox({ type, roles, title }: { type: ApprovalType; roles: Role[]; title: string }) {
   await requireUser(["ADMIN", ...roles]);
   const approvals = await prisma.approval.findMany({
@@ -15,6 +23,7 @@ export async function ValidationInbox({ type, roles, title }: { type: ApprovalTy
     include: { idea: { include: { area: true, supervisor: true } }, assignedTo: true },
     orderBy: { createdAt: "asc" }
   });
+  const tone = validationTone[type];
 
   return (
     <>
@@ -22,10 +31,12 @@ export async function ValidationInbox({ type, roles, title }: { type: ApprovalTy
       {!approvals.length ? <EmptyState title="Sin validaciones pendientes" /> : null}
       <div className="grid gap-4">
         {approvals.map((approval) => (
-          <article className="surface rounded-lg p-5" key={approval.id}>
+          <article className={`surface overflow-hidden rounded-lg border ${tone.card}`} key={approval.id}>
+            <div className={`h-2 ${tone.stripe}`} />
+            <div className="p-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
-                <Link className="text-lg font-black text-brand-700" href={`/ideas/${approval.idea.id}`}>
+                <Link className={`text-lg font-black ${tone.link}`} href={`/ideas/${approval.idea.id}`}>
                   {approval.idea.folio}
                 </Link>
                 <p className="text-sm font-bold text-slate-500">
@@ -60,6 +71,7 @@ export async function ValidationInbox({ type, roles, title }: { type: ApprovalTy
                 </button>
               </div>
             </form>
+            </div>
           </article>
         ))}
       </div>

@@ -7,6 +7,7 @@ import {
   classifyIdeaAction,
   closeIdeaAction,
   implementationUpdateAction,
+  removeIdeaPointsAction,
   supervisorDecisionAction,
   validationDecisionAction
 } from "@/app/actions";
@@ -23,12 +24,21 @@ import {
   roleLabels
 } from "@/lib/domain";
 import { requireUser } from "@/lib/auth";
+import { automaticPointRules } from "@/lib/points";
 import { prisma } from "@/lib/prisma";
 import type { ApprovalType } from "@prisma/client";
 
 type DetailProps = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string }>;
+};
+
+const approvalTone: Record<ApprovalType, string> = {
+  SUPERVISOR: "border-emerald-200 bg-emerald-50",
+  CALIDAD: "border-red-200 bg-red-50",
+  SEGURIDAD: "border-slate-300 bg-slate-100",
+  MANTENIMIENTO: "border-blue-200 bg-blue-50",
+  MEJORA_CONTINUA_FINAL: "border-slate-800 bg-slate-950 text-white"
 };
 
 export default async function IdeaDetailPage({ params, searchParams }: DetailProps) {
@@ -72,7 +82,8 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
     user.role === "ADMIN" ? ["CALIDAD", "SEGURIDAD", "MANTENIMIENTO"] : roleApprovalType ? [roleApprovalType].filter((type) => type !== "SUPERVISOR" && type !== "MEJORA_CONTINUA_FINAL") : [];
   const canMC = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
   const hasAfterEvidence = idea.attachments.some((attachment) => attachment.type === "AFTER");
-  const selectedPointRuleIds = new Set(idea.pointRuleSelections.map((selection) => selection.pointRuleId));
+  const automaticPoints = automaticPointRules(idea, pointRules);
+  const isClosed = idea.status === "CERRADA";
 
   return (
     <>
@@ -134,15 +145,15 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
             <h2 className="text-lg font-black text-ink">Validaciones</h2>
             <div className="mt-4 grid gap-3">
               {idea.approvals.map((approval) => (
-                <div className="rounded-lg border border-line bg-panel p-3" key={approval.id}>
+                <div className={`rounded-lg border p-3 ${approvalTone[approval.type]}`} key={approval.id}>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="font-black text-ink">{approvalTypeLabels[approval.type]}</p>
-                      <p className="text-sm text-slate-600">{approval.assignedTo?.name ?? "Sin asignar"}</p>
+                      <p className="font-black">{approvalTypeLabels[approval.type]}</p>
+                      <p className="text-sm opacity-75">{approval.assignedTo?.name ?? "Sin asignar"}</p>
                     </div>
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">{approvalStatusLabels[approval.status]}</span>
                   </div>
-                  {approval.comments ? <p className="mt-2 text-sm text-slate-700">{approval.comments}</p> : null}
+                  {approval.comments ? <p className="mt-2 text-sm opacity-80">{approval.comments}</p> : null}
                 </div>
               ))}
             </div>
@@ -340,27 +351,63 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
 
           {canMC ? (
             <article className="surface rounded-lg p-5">
-              <h2 className="text-lg font-black text-ink">Cierre y puntos</h2>
+              <h2 className="text-lg font-black text-ink">Cierre y puntos automaticos</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                El sistema calcula los puntos con las reglas activas. Mejora Continua puede retirarlos despues si la idea no los merece.
+              </p>
               {!hasAfterEvidence && idea.requiresEvidence ? (
                 <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
                   Falta evidencia despues para cierre.
                 </p>
               ) : null}
-              <form action={closeIdeaAction} className="mt-4 grid gap-3">
-                <input name="ideaId" type="hidden" value={idea.id} />
-                {pointRules.map((rule) => (
-                  <label className="flex items-start gap-2 rounded-lg border border-line bg-panel p-3 text-sm" key={rule.id}>
-                    <input defaultChecked={selectedPointRuleIds.has(rule.id)} name="pointRuleIds" type="checkbox" value={rule.id} />
-                    <span>
-                      <strong>{rule.name}</strong>
-                      <span className="block text-slate-600">{rule.points} puntos</span>
-                    </span>
-                  </label>
-                ))}
-                <button className="btn btn-primary" type="submit">
-                  Cerrar idea
-                </button>
-              </form>
+
+              <div className="mt-4 rounded-lg border border-line bg-panel p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-black uppercase text-slate-500">{isClosed ? "Puntos otorgados" : "Puntos sugeridos"}</p>
+                  <p className="text-3xl font-black text-ink">{isClosed ? idea.pointsAssigned : automaticPoints.totalPoints}</p>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {(isClosed ? idea.pointRuleSelections : automaticPoints.selectedRules).length ? (
+                    (isClosed ? idea.pointRuleSelections : automaticPoints.selectedRules).map((item) => {
+                      const rule = "pointRule" in item ? item.pointRule : item;
+                      const points = "pointRule" in item ? item.points : item.points;
+                      return (
+                        <div className="flex items-start justify-between gap-3 rounded-lg bg-white p-3 text-sm" key={rule.id}>
+                        <div>
+                          <p className="font-black text-ink">{rule.name}</p>
+                          <p className="text-slate-600">{rule.description}</p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-700">
+                          +{points}
+                        </span>
+                      </div>
+                      );
+                    })
+                  ) : (
+                    <p className="rounded-lg bg-white p-3 text-sm font-bold text-slate-600">
+                      No hay reglas activas aplicables para esta idea.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {!isClosed ? (
+                <form action={closeIdeaAction} className="mt-4 grid gap-3">
+                  <input name="ideaId" type="hidden" value={idea.id} />
+                  <button className="btn btn-primary" type="submit">
+                    Cerrar y asignar puntos automaticos
+                  </button>
+                </form>
+              ) : null}
+              {isClosed && idea.pointsAssigned > 0 ? (
+                <form action={removeIdeaPointsAction} className="mt-5 grid gap-3 border-t border-line pt-4">
+                  <input name="ideaId" type="hidden" value={idea.id} />
+                  <textarea className="field min-h-20" name="reason" placeholder="Motivo para retirar puntos" required />
+                  <button className="btn btn-danger" type="submit">
+                    Retirar puntos
+                  </button>
+                </form>
+              ) : null}
               <form action={cancelIdeaAction} className="mt-5 grid gap-3 border-t border-line pt-4">
                 <input name="ideaId" type="hidden" value={idea.id} />
                 <textarea className="field min-h-20" name="reason" placeholder="Justificacion de cancelacion" />
