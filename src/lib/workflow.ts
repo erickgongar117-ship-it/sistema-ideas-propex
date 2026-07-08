@@ -21,6 +21,12 @@ export async function supportUserFor(type: ApprovalType) {
   return prisma.user.findFirst({ where: { role, active: true }, orderBy: { createdAt: "asc" } });
 }
 
+export async function supportUsersFor(type: ApprovalType) {
+  const role = supportRoleForApproval[type];
+  if (!role) return [];
+  return prisma.user.findMany({ where: { role, active: true }, orderBy: { createdAt: "asc" } });
+}
+
 export async function createValidationApprovals(ideaId: string) {
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
@@ -29,7 +35,8 @@ export async function createValidationApprovals(ideaId: string) {
   const required = requiredApprovalTypes(idea);
 
   for (const type of required) {
-    const assignedTo = await supportUserFor(type);
+    const supportUsers = await supportUsersFor(type);
+    const assignedTo = supportUsers[0] ?? null;
     await prisma.approval.upsert({
       where: { ideaId_type: { ideaId, type } },
       update: {
@@ -43,10 +50,10 @@ export async function createValidationApprovals(ideaId: string) {
       }
     });
 
-    if (assignedTo?.email) {
+    for (const supportUser of supportUsers) {
       await notify({
         ideaId,
-        to: assignedTo.email,
+        to: supportUser.email,
         subject: `Idea de mejora pendiente de validacion - Folio ${idea.folio} - Area ${idea.area.code}`,
         body: ideaMailBody({
           folio: idea.folio,

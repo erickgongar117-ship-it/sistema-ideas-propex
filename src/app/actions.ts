@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import type { ApprovalType, Classification, Priority } from "@prisma/client";
+import type { ApprovalType, Classification, Priority, Role } from "@prisma/client";
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
 import { approvalTypeForRole, impactOptions, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
@@ -25,6 +25,8 @@ const ideaSchema = z.object({
   proposal: z.string().min(8),
   expectedBenefit: z.string().min(5)
 });
+
+const userRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"];
 
 export async function loginAction(formData: FormData) {
   const email = text(formData, "email");
@@ -584,10 +586,62 @@ export async function updateSupportSettingsAction(formData: FormData) {
   revalidatePath("/configuracion");
 }
 
+export async function createUserAction(formData: FormData) {
+  const admin = await requireUser(["ADMIN"]);
+  const role = text(formData, "role") as Role;
+  if (!userRoles.includes(role)) redirect("/configuracion?error=rol");
+
+  const email = text(formData, "email").toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) redirect("/configuracion?error=correo");
+  const password = text(formData, "password") || "admin123";
+  const user = await prisma.user.create({
+    data: {
+      name: text(formData, "name"),
+      email,
+      role,
+      active: checked(formData, "active"),
+      passwordHash: await bcrypt.hash(password, 10)
+    }
+  });
+  await auditLog({ entity: "User", entityId: user.id, action: "USER_CREATED", userId: admin.id, details: { email, role } });
+  revalidatePath("/configuracion");
+}
+
+export async function updateUserAction(formData: FormData) {
+  const admin = await requireUser(["ADMIN"]);
+  const userId = text(formData, "userId");
+  const role = text(formData, "role") as Role;
+  if (!userRoles.includes(role)) redirect("/configuracion?error=rol");
+
+  const email = text(formData, "email").toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing && existing.id !== userId) redirect("/configuracion?error=correo");
+  const password = text(formData, "password");
+  const data = {
+    name: text(formData, "name"),
+    email,
+    role,
+    active: checked(formData, "active"),
+    ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {})
+  };
+
+  const user = await prisma.user.update({ where: { id: userId }, data });
+  await auditLog({ entity: "User", entityId: user.id, action: "USER_UPDATED", userId: admin.id, details: { email: user.email, role } });
+  revalidatePath("/configuracion");
+}
+
 export async function markNotificationAction(formData: FormData) {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser();
+  const notificationId = text(formData, "notificationId");
+  const where =
+    user.role === "ADMIN" || user.role === "MEJORA_CONTINUA"
+      ? { id: notificationId }
+      : { id: notificationId, to: { contains: user.email } };
+  const notification = await prisma.notificationOutbox.findFirst({ where });
+  if (!notification) redirect("/notificaciones");
   await prisma.notificationOutbox.update({
-    where: { id: text(formData, "notificationId") },
+    where: { id: notification.id },
     data: { status: "DISMISSED" }
   });
   revalidatePath("/notificaciones");

@@ -42,7 +42,7 @@ const nav: NavItem[] = [
   { href: "/kanban", label: "Kanban", icon: KanbanSquare, roles: ["ADMIN", "MEJORA_CONTINUA"], tone: "dark" },
   { href: "/qr", label: "QR por area", icon: QrCode, roles: ["ADMIN", "MEJORA_CONTINUA"], tone: "dark" },
   { href: "/reportes", label: "Reportes", icon: Download, roles: ["ADMIN", "MEJORA_CONTINUA"], tone: "dark" },
-  { href: "/notificaciones", label: "Notificaciones", icon: Bell, roles: ["ADMIN", "MEJORA_CONTINUA"], tone: "dark" },
+  { href: "/notificaciones", label: "Notificaciones", icon: Bell, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"], tone: "dark" },
   { href: "/auditoria", label: "Auditoria", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], tone: "dark" },
   { href: "/configuracion", label: "Configuracion", icon: Settings, roles: ["ADMIN"], tone: "dark" }
 ];
@@ -100,7 +100,15 @@ const toneClass: Record<NavItem["tone"], string> = {
   blue: "text-blue-800 hover:border-blue-600 hover:bg-blue-600 hover:text-white"
 };
 
-export function AppShell({ user, children }: { user: User; children: React.ReactNode }) {
+export function AppShell({
+  user,
+  children,
+  pendingNotifications
+}: {
+  user: User;
+  children: React.ReactNode;
+  pendingNotifications: number;
+}) {
   const visibleNav = nav.filter((item) => item.roles.includes(user.role));
   const theme = roleTheme[user.role];
 
@@ -137,6 +145,9 @@ export function AppShell({ user, children }: { user: User; children: React.React
                   {roleLabels[user.role]}
                 </span>
                 <p className="mt-2 text-xs font-bold opacity-80">{theme.label}</p>
+                <Link className="mt-3 inline-flex rounded-full bg-white/90 px-3 py-1 text-xs font-black text-slate-950" href="/notificaciones">
+                  {pendingNotifications} notificaciones pendientes
+                </Link>
               </div>
             </div>
           </div>
@@ -154,7 +165,12 @@ export function AppShell({ user, children }: { user: User; children: React.React
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-current">
                   <Icon className="h-4 w-4" aria-hidden />
                 </span>
-                <span>{item.label}</span>
+                <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                  <span>{item.label}</span>
+                  {item.href === "/notificaciones" && pendingNotifications > 0 ? (
+                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-black text-white">{pendingNotifications}</span>
+                  ) : null}
+                </span>
               </Link>
             );
           })}

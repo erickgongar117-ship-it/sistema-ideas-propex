@@ -1,32 +1,120 @@
-import { createPointRuleAction, updateAreaAction, updatePointRuleAction, updateSupportSettingsAction } from "@/app/actions";
+import {
+  createPointRuleAction,
+  createUserAction,
+  updateAreaAction,
+  updatePointRuleAction,
+  updateUserAction
+} from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
+import { roleLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
-function parseSettings(value?: string | null) {
-  if (!value) return { calidad: "", seguridad: "", mantenimiento: "", mejoraContinua: "" };
-  try {
-    return JSON.parse(value) as { calidad?: string; seguridad?: string; mantenimiento?: string; mejoraContinua?: string };
-  } catch {
-    return { calidad: "", seguridad: "", mantenimiento: "", mejoraContinua: "" };
-  }
-}
+const configurableRoles = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"] as const;
 
-export default async function ConfigPage() {
+type ConfigPageProps = {
+  searchParams: Promise<{ error?: string }>;
+};
+
+export default async function ConfigPage({ searchParams }: ConfigPageProps) {
   await requireUser(["ADMIN"]);
-  const [areas, supervisors, pointRules, supportSetting] = await Promise.all([
+  const query = await searchParams;
+  const [areas, supervisors, users, pointRules] = await Promise.all([
     prisma.area.findMany({ include: { supervisor: true }, orderBy: { code: "asc" } }),
     prisma.user.findMany({ where: { role: "SUPERVISOR", active: true }, orderBy: { name: "asc" } }),
-    prisma.pointRule.findMany({ orderBy: { createdAt: "asc" } }),
-    prisma.setting.findUnique({ where: { key: "supportEmails" } })
+    prisma.user.findMany({ where: { role: { in: [...configurableRoles] } }, orderBy: [{ role: "asc" }, { name: "asc" }] }),
+    prisma.pointRule.findMany({ orderBy: { createdAt: "asc" } })
   ]);
-  const support = parseSettings(supportSetting?.value);
 
   return (
     <>
-      <PageHeader title="Configuracion" description="Areas, supervisores, reglas de puntos y correos de soporte." />
+      <PageHeader title="Configuracion" description="Usuarios, correos reales, areas, supervisores y reglas de puntos." />
+
+      {query.error ? (
+        <div className="mb-5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-black text-rose-800">
+          {query.error === "correo" ? "Ese correo ya esta registrado en otro usuario." : "Revisa la informacion capturada."}
+        </div>
+      ) : null}
 
       <section className="surface rounded-lg p-5">
+        <h2 className="text-lg font-black text-ink">Usuarios y correos de acceso</h2>
+        <p className="mt-1 text-sm font-semibold text-slate-600">
+          Solo Administrador puede dar de alta usuarios, cambiar correos reales, activar/desactivar accesos y asignar rol.
+        </p>
+        <div className="mt-4 grid gap-3">
+          {users.map((user) => (
+            <form action={updateUserAction} className="grid gap-3 rounded-lg border border-line bg-panel p-3 xl:grid-cols-[1fr_1.4fr_190px_150px_120px_auto]" key={user.id}>
+              <input name="userId" type="hidden" value={user.id} />
+              <label>
+                <span className="label">Nombre</span>
+                <input className="field" name="name" defaultValue={user.name} required />
+              </label>
+              <label>
+                <span className="label">Correo real</span>
+                <input className="field" name="email" defaultValue={user.email} required type="email" />
+              </label>
+              <label>
+                <span className="label">Rol</span>
+                <select className="field" name="role" defaultValue={user.role}>
+                  {configurableRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {roleLabels[role]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="label">Nueva contrasena</span>
+                <input className="field" name="password" placeholder="No cambiar" type="text" />
+              </label>
+              <label className="flex items-end gap-2 pb-3 text-sm font-bold text-slate-700">
+                <input defaultChecked={user.active} name="active" type="checkbox" />
+                Activo
+              </label>
+              <div className="flex items-end">
+                <button className="btn btn-secondary w-full" type="submit">
+                  Guardar
+                </button>
+              </div>
+            </form>
+          ))}
+        </div>
+        <form action={createUserAction} className="mt-5 grid gap-3 rounded-lg border border-dashed border-brand-500 bg-brand-50 p-3 xl:grid-cols-[1fr_1.4fr_190px_150px_120px_auto]">
+          <label>
+            <span className="label">Nuevo usuario</span>
+            <input className="field" name="name" required />
+          </label>
+          <label>
+            <span className="label">Correo real</span>
+            <input className="field" name="email" required type="email" />
+          </label>
+          <label>
+            <span className="label">Rol</span>
+            <select className="field" name="role" defaultValue="MEJORA_CONTINUA">
+              {configurableRoles.map((role) => (
+                <option key={role} value={role}>
+                  {roleLabels[role]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="label">Contrasena</span>
+            <input className="field" name="password" placeholder="admin123 si se deja vacia" type="text" />
+          </label>
+          <label className="flex items-end gap-2 pb-3 text-sm font-bold text-slate-700">
+            <input defaultChecked name="active" type="checkbox" />
+            Activo
+          </label>
+          <div className="flex items-end">
+            <button className="btn btn-primary w-full" type="submit">
+              Crear
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="surface mt-5 rounded-lg p-5">
         <h2 className="text-lg font-black text-ink">Areas y supervisores</h2>
         <div className="mt-4 grid gap-3">
           {areas.map((area) => (
@@ -63,31 +151,6 @@ export default async function ConfigPage() {
             </form>
           ))}
         </div>
-      </section>
-
-      <section className="surface mt-5 rounded-lg p-5">
-        <h2 className="text-lg font-black text-ink">Correos de areas soporte</h2>
-        <form action={updateSupportSettingsAction} className="mt-4 grid gap-3 md:grid-cols-4">
-          <label>
-            <span className="label">Calidad/Inocuidad</span>
-            <input className="field" name="calidad" defaultValue={support.calidad ?? ""} type="email" />
-          </label>
-          <label>
-            <span className="label">Seguridad</span>
-            <input className="field" name="seguridad" defaultValue={support.seguridad ?? ""} type="email" />
-          </label>
-          <label>
-            <span className="label">Mantenimiento</span>
-            <input className="field" name="mantenimiento" defaultValue={support.mantenimiento ?? ""} type="email" />
-          </label>
-          <label>
-            <span className="label">Mejora Continua</span>
-            <input className="field" name="mejoraContinua" defaultValue={support.mejoraContinua ?? ""} type="email" />
-          </label>
-          <button className="btn btn-primary md:col-span-4 md:w-fit" type="submit">
-            Guardar correos
-          </button>
-        </form>
       </section>
 
       <section className="surface mt-5 rounded-lg p-5">
