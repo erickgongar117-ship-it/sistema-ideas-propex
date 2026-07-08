@@ -2,10 +2,11 @@ import { Download } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { prisma } from "@/lib/prisma";
+import { appBaseUrl } from "@/lib/url";
 
 export default async function QrPage() {
   const areas = await prisma.area.findMany({ include: { supervisor: true }, orderBy: { code: "asc" } });
-  const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+  const baseUrl = appBaseUrl();
 
   return (
     <>

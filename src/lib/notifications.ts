@@ -1,4 +1,5 @@
 import { NotificationChannel } from "@prisma/client";
+import { appBaseUrl } from "@/lib/url";
 import { prisma } from "@/lib/prisma";
 
 type NotifyInput = {
@@ -129,8 +130,7 @@ export async function notify(input: NotifyInput) {
 }
 
 export function ideaLink(ideaId: string) {
-  const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
-  return `${baseUrl}/ideas/${ideaId}`;
+  return `${appBaseUrl()}/ideas/${ideaId}`;
 }
 
 export function ideaMailBody(input: {

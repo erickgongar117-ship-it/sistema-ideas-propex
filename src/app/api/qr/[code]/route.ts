@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { appBaseUrl } from "@/lib/url";
 
 type QrContext = {
   params: Promise<{ code: string }>;
@@ -13,8 +14,7 @@ export async function GET(request: NextRequest, context: QrContext) {
     return new Response("Area no encontrada", { status: 404 });
   }
 
-  const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
-  const url = `${baseUrl}/captura/${area.code}`;
+  const url = `${appBaseUrl()}/captura/${area.code}`;
   const buffer = await QRCode.toBuffer(url, {
     type: "png",
     width: 900,
