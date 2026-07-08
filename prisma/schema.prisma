@@ -1,0 +1,258 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEJORA_CONTINUA
+  SUPERVISOR
+  CALIDAD
+  SEGURIDAD
+  MANTENIMIENTO
+  COLABORADOR
+}
+
+enum IdeaStatus {
+  REGISTRADA
+  EN_REVISION_SUPERVISOR
+  RECHAZADA_SUPERVISOR
+  SOLICITUD_INFORMACION
+  APROBADA_SUPERVISOR
+  EN_VALIDACION_CALIDAD
+  EN_VALIDACION_SEGURIDAD
+  EN_VALIDACION_MANTENIMIENTO
+  RECHAZADA_VALIDACION
+  APROBADA_PARA_IMPLEMENTAR
+  CLASIFICACION_MEJORA_CONTINUA
+  EN_IMPLEMENTACION
+  IMPLEMENTADA
+  EN_VALIDACION_FINAL
+  CERRADA
+  CANCELADA
+  VENCIDA
+}
+
+enum Priority {
+  BAJA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum Classification {
+  IDEA_RAPIDA
+  ACCION_MANTENIMIENTO
+  KAIZEN
+  PROYECTO_DMAIC
+  CINCO_S_GESTION_VISUAL
+  SEGURIDAD
+  CALIDAD_INOCUIDAD
+  NO_VIABLE
+}
+
+enum ApprovalType {
+  SUPERVISOR
+  CALIDAD
+  SEGURIDAD
+  MANTENIMIENTO
+  MEJORA_CONTINUA_FINAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  MORE_INFO
+}
+
+enum ApprovalDecision {
+  APROBAR
+  RECHAZAR
+  SOLICITAR_INFORMACION
+}
+
+enum AttachmentType {
+  BEFORE
+  AFTER
+  OTHER
+}
+
+enum NotificationChannel {
+  EMAIL
+  TEAMS
+  LOCAL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  ERROR
+  DISMISSED
+}
+
+model User {
+  id                     String     @id @default(cuid())
+  name                   String
+  email                  String     @unique
+  role                   Role
+  passwordHash           String
+  active                 Boolean    @default(true)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  supervisedAreas        Area[]     @relation("AreaSupervisor")
+  supervisedIdeas        Idea[]     @relation("IdeaSupervisor")
+  ownedImplementations   Idea[]     @relation("ImplementationOwner")
+  approvals              Approval[]
+  comments               Comment[]
+  auditLogs              AuditLog[]
+}
+
+model Area {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  supervisorId String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  supervisor   User?    @relation("AreaSupervisor", fields: [supervisorId], references: [id])
+  ideas        Idea[]
+}
+
+model Idea {
+  id                    String           @id @default(cuid())
+  folio                 String           @unique
+  collaboratorName      String
+  collaboratorEmail     String?
+  employeeNumber        String?
+  areaId                String
+  shift                 String
+  problem               String
+  proposal              String
+  expectedBenefit       String
+  impactTypes           String
+  impactsQuality        Boolean          @default(false)
+  impactsSafety         Boolean          @default(false)
+  requiresMaintenance   Boolean          @default(false)
+  priority              Priority?
+  classification        Classification?
+  status                IdeaStatus       @default(EN_REVISION_SUPERVISOR)
+  supervisorId          String?
+  implementationOwnerId String?
+  dueDate               DateTime?
+  requiresEvidence      Boolean          @default(true)
+  implementedAt         DateTime?
+  closedAt              DateTime?
+  pointsAssigned        Int              @default(0)
+  rejectionReason       String?
+  moreInfoRequest       String?
+  mcComments            String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  area                  Area             @relation(fields: [areaId], references: [id])
+  supervisor            User?            @relation("IdeaSupervisor", fields: [supervisorId], references: [id])
+  implementationOwner   User?            @relation("ImplementationOwner", fields: [implementationOwnerId], references: [id])
+  approvals             Approval[]
+  attachments           Attachment[]
+  comments              Comment[]
+  pointRuleSelections   IdeaPointRule[]
+  notifications         NotificationOutbox[]
+}
+
+model Approval {
+  id           String           @id @default(cuid())
+  ideaId       String
+  type         ApprovalType
+  assignedToId String?
+  status       ApprovalStatus   @default(PENDING)
+  decision     ApprovalDecision?
+  comments     String?
+  decidedAt    DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  idea         Idea             @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  assignedTo   User?            @relation(fields: [assignedToId], references: [id])
+
+  @@unique([ideaId, type])
+}
+
+model Attachment {
+  id         String         @id @default(cuid())
+  ideaId     String
+  type       AttachmentType
+  filename   String
+  path       String
+  uploadedBy String?
+  createdAt  DateTime       @default(now())
+  idea       Idea           @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  ideaId    String
+  userId    String?
+  comment   String
+  createdAt DateTime @default(now())
+  idea      Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model PointRule {
+  id          String          @id @default(cuid())
+  name        String
+  description String
+  points      Int
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  ideas       IdeaPointRule[]
+}
+
+model IdeaPointRule {
+  id          String    @id @default(cuid())
+  ideaId      String
+  pointRuleId String
+  points      Int
+  createdAt   DateTime  @default(now())
+  idea        Idea      @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  pointRule   PointRule @relation(fields: [pointRuleId], references: [id])
+
+  @@unique([ideaId, pointRuleId])
+}
+
+model NotificationOutbox {
+  id           String             @id @default(cuid())
+  ideaId       String?
+  channel      NotificationChannel
+  to           String
+  subject      String
+  body         String
+  status       NotificationStatus @default(PENDING)
+  errorMessage String?
+  sentAt       DateTime?
+  createdAt    DateTime           @default(now())
+  idea         Idea?              @relation(fields: [ideaId], references: [id], onDelete: SetNull)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  entity    String
+  entityId  String
+  action    String
+  userId    String?
+  details   String
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
