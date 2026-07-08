@@ -36,6 +36,10 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
         </div>
       ) : null}
 
+      <section className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+        Los correos del directorio se usan para asignar responsables y crear notificaciones. Para que salgan correos reales a Outlook, tambien deben estar configuradas las variables Microsoft Graph en Vercel; si no, se guardan como notificaciones pendientes dentro del sistema.
+      </section>
+
       <section className="surface rounded-lg p-5">
         <h2 className="text-lg font-black text-ink">Usuarios y correos de acceso</h2>
         <p className="mt-1 text-sm font-semibold text-slate-600">

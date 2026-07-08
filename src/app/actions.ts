@@ -360,7 +360,10 @@ export async function implementationUpdateAction(formData: FormData) {
   const comments = text(formData, "comments");
   const markImplemented = checked(formData, "markImplemented");
 
-  const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId } });
+  const idea = await prisma.idea.findUniqueOrThrow({
+    where: { id: ideaId },
+    include: { area: true, supervisor: true, implementationOwner: true }
+  });
   if (user.role === "SUPERVISOR" && idea.supervisorId !== user.id) redirect(`/ideas/${ideaId}`);
 
   const afterEvidence = await saveUpload(formData.get("afterEvidence") as File | null, `${idea.folio}-after`);
@@ -380,14 +383,37 @@ export async function implementationUpdateAction(formData: FormData) {
     await prisma.comment.create({ data: { ideaId, userId: user.id, comment: comments } });
   }
 
-  await prisma.idea.update({
+  const updatedIdea = await prisma.idea.update({
     where: { id: ideaId },
     data: {
       status: markImplemented ? "IMPLEMENTADA" : "EN_IMPLEMENTACION",
       implementedAt: markImplemented ? new Date() : idea.implementedAt
-    }
+    },
+    include: { area: true, supervisor: true, implementationOwner: true }
   });
   await auditLog({ entity: "Idea", entityId: ideaId, action: "IMPLEMENTATION_UPDATED", userId: user.id, details: { markImplemented, hasEvidence: Boolean(afterEvidence) } });
+
+  const recipients = new Set<string>();
+  if (updatedIdea.supervisor?.email) recipients.add(updatedIdea.supervisor.email);
+  if (updatedIdea.implementationOwner?.email) recipients.add(updatedIdea.implementationOwner.email);
+  const mcUsers = await prisma.user.findMany({ where: { role: { in: ["MEJORA_CONTINUA", "ADMIN"] }, active: true } });
+  mcUsers.forEach((mcUser) => recipients.add(mcUser.email));
+  for (const to of recipients) {
+    await notify({
+      ideaId,
+      to,
+      subject: `${markImplemented ? "Idea marcada como implementada" : "Avance de implementacion actualizado"} - Folio ${updatedIdea.folio} - Area ${updatedIdea.area.code}`,
+      body: ideaMailBody({
+        folio: updatedIdea.folio,
+        area: updatedIdea.area.code,
+        problem: updatedIdea.problem,
+        proposal: updatedIdea.proposal,
+        action: `${user.name} actualizo el avance.${comments ? ` Comentario: ${comments}` : ""}${afterEvidence ? " Se cargo evidencia." : ""}`,
+        ideaId
+      })
+    });
+  }
+
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}`);
 }
