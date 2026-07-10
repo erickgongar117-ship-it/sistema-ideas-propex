@@ -44,6 +44,12 @@ enum Priority {
   CRITICA
 }
 
+enum IdeaCategory {
+  A
+  B
+  C
+}
+
 enum Classification {
   IDEA_RAPIDA
   ACCION_MANTENIMIENTO
@@ -136,9 +142,12 @@ model Idea {
   proposal              String
   expectedBenefit       String
   impactTypes           String
+  category              IdeaCategory     @default(A)
   impactsQuality        Boolean          @default(false)
   impactsSafety         Boolean          @default(false)
   requiresMaintenance   Boolean          @default(false)
+  requiresExternalSupport Boolean        @default(false)
+  externalSupportDetails String?
   priority              Priority?
   classification        Classification?
   status                IdeaStatus       @default(EN_REVISION_SUPERVISOR)

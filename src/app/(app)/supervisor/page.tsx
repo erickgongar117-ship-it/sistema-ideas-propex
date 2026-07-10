@@ -7,8 +7,29 @@ import { PageHeader } from "@/components/page-header";
 import { SectionHeading } from "@/components/section-heading";
 import { StatusPill } from "@/components/status-pill";
 import { requireUser } from "@/lib/auth";
-import { approvalStatusLabels, approvalTypeLabels } from "@/lib/domain";
+import { approvalStatusLabels, approvalTypeLabels, ideaCategoryLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
+
+function SupportRequestFields({ idea }: { idea: { impactsQuality: boolean; impactsSafety: boolean; requiresMaintenance: boolean } }) {
+  return (
+    <fieldset className="rounded-lg border border-line bg-panel p-3">
+      <legend className="px-1 text-xs font-extrabold text-ink">¿Necesitas apoyo para validar o realizar esta idea?</legend>
+      <p className="mb-3 mt-1 text-xs leading-5 text-slate-500">Marca las áreas que deban revisarla. Al aprobar, les aparecerá automáticamente en su bandeja.</p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {[
+          ["impactsQuality", "Calidad / Inocuidad", idea.impactsQuality, "accent-red-600"],
+          ["impactsSafety", "Seguridad", idea.impactsSafety, "accent-slate-700"],
+          ["requiresMaintenance", "Mantenimiento", idea.requiresMaintenance, "accent-blue-600"]
+        ].map(([name, label, selected, accent]) => (
+          <label className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-xs font-extrabold text-slate-700" key={String(name)}>
+            <input className={String(accent)} defaultChecked={Boolean(selected)} name={String(name)} type="checkbox" />
+            {String(label)}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 export default async function SupervisorPage() {
   const user = await requireUser(["ADMIN", "SUPERVISOR"]);
@@ -56,6 +77,7 @@ export default async function SupervisorPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Link className="text-lg font-extrabold text-emerald-800 hover:underline" href={`/ideas/${idea.id}`}>{idea.folio}</Link>
                       <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-extrabold text-emerald-800">Área {idea.area.code}</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-extrabold text-slate-700">{ideaCategoryLabels[idea.category]}</span>
                     </div>
                     <p className="mt-1 text-xs font-bold text-slate-500">{idea.collaboratorName} · {idea.shift} · {idea.createdAt.toLocaleDateString("es-MX")}</p>
                   </div>
@@ -79,6 +101,7 @@ export default async function SupervisorPage() {
 
                 <form action={supervisorDecisionAction} className="mt-4 grid gap-3">
                   <input name="ideaId" type="hidden" value={idea.id} />
+                  <SupportRequestFields idea={idea} />
                   <label>
                     <span className="label">Comentario de la decision</span>
                     <textarea className="field min-h-20" name="comments" placeholder="Obligatorio al rechazar o solicitar información" />

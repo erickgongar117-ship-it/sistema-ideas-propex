@@ -3,9 +3,16 @@ import {
   ApprovalType,
   Classification,
   IdeaStatus,
+  IdeaCategory,
   Priority,
   Role
 } from "@prisma/client";
+
+export const ideaCategoryLabels: Record<IdeaCategory, string> = {
+  A: "Categoría A · Operador y supervisor",
+  B: "Categoría B · Apoyo interno",
+  C: "Categoría C · Externo o cotización"
+};
 
 export const roleLabels: Record<Role, string> = {
   ADMIN: "Administrador",
@@ -65,7 +72,7 @@ export const priorityLabels: Record<Priority, string> = {
 };
 
 export const classificationLabels: Record<Classification, string> = {
-  IDEA_RAPIDA: "Idea rápida",
+  IDEA_RAPIDA: "Idea de mejora",
   ACCION_MANTENIMIENTO: "Acción de mantenimiento",
   KAIZEN: "Kaizen",
   PROYECTO_DMAIC: "Proyecto DMAIC",

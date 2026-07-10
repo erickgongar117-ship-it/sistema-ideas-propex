@@ -4,15 +4,15 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import type { ApprovalType, Classification, Priority, Role } from "@prisma/client";
+import type { ApprovalType, Classification, IdeaCategory, Priority, Role } from "@prisma/client";
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
-import { approvalTypeForRole, impactOptions, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
+import { approvalTypeForRole, impactOptions, nextValidationStatus, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
 import { saveUpload } from "@/lib/files";
 import { ideaMailBody, notify } from "@/lib/notifications";
 import { automaticPointRules } from "@/lib/points";
 import { prisma } from "@/lib/prisma";
-import { approveSupervisor, markOverdueIdeas, nextFolio, notifyIdeaClosed, updateStatusAfterValidations } from "@/lib/workflow";
+import { approveSupervisor, createValidationApprovals, markOverdueIdeas, nextFolio, notifyIdeaClosed, updateStatusAfterValidations } from "@/lib/workflow";
 
 const text = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
 const checked = (formData: FormData, key: string) => ["on", "true", "1", "yes", "si"].includes(text(formData, key).toLowerCase());
@@ -23,7 +23,8 @@ const ideaSchema = z.object({
   shift: z.string().min(1),
   problem: z.string().min(3),
   proposal: z.string().min(3),
-  expectedBenefit: z.string().min(2)
+  expectedBenefit: z.string().min(2),
+  category: z.enum(["A", "B", "C"])
 });
 
 const userRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"];
@@ -59,12 +60,14 @@ export async function submitIdeaAction(formData: FormData) {
     shift: text(formData, "shift"),
     problem: text(formData, "problem"),
     proposal: text(formData, "proposal"),
-    expectedBenefit: text(formData, "expectedBenefit")
+    expectedBenefit: text(formData, "expectedBenefit"),
+    category: text(formData, "category")
   });
 
   if (!parsed.success) {
     const fields = parsed.error.issues.map((issue) => String(issue.path[0])).filter(Boolean);
-    redirect(`/captura/${areaCode}?error=datos&campos=${encodeURIComponent([...new Set(fields)].join(","))}`);
+    const category = text(formData, "category");
+    redirect(`/captura/${areaCode}?error=datos&campos=${encodeURIComponent([...new Set(fields)].join(","))}&categoria=${encodeURIComponent(category)}`);
   }
 
   const area = await prisma.area.findFirst({
@@ -77,6 +80,15 @@ export async function submitIdeaAction(formData: FormData) {
     .getAll("impactTypes")
     .map(String)
     .filter((impact) => impactOptions.includes(impact));
+  const selectedSupport = {
+    impactsQuality: parsed.data.category === "A" ? false : checked(formData, "impactsQuality"),
+    impactsSafety: parsed.data.category === "A" ? false : checked(formData, "impactsSafety"),
+    requiresMaintenance: parsed.data.category === "A" ? false : checked(formData, "requiresMaintenance")
+  };
+  const externalSupportDetails = text(formData, "externalSupportDetails");
+  if (parsed.data.category === "C" && externalSupportDetails.length < 3) {
+    redirect(`/captura/${areaCode}?error=datos&campos=externalSupportDetails&categoria=C`);
+  }
 
   const idea = await prisma.idea.create({
     data: {
@@ -90,9 +102,10 @@ export async function submitIdeaAction(formData: FormData) {
       proposal: parsed.data.proposal,
       expectedBenefit: parsed.data.expectedBenefit,
       impactTypes: JSON.stringify(selectedImpacts),
-      impactsQuality: checked(formData, "impactsQuality"),
-      impactsSafety: checked(formData, "impactsSafety"),
-      requiresMaintenance: checked(formData, "requiresMaintenance"),
+      category: parsed.data.category,
+      ...selectedSupport,
+      requiresExternalSupport: parsed.data.category === "C",
+      externalSupportDetails: parsed.data.category === "C" ? externalSupportDetails : null,
       status: "EN_REVISION_SUPERVISOR",
       supervisorId: area.supervisorId
     }
@@ -221,6 +234,13 @@ export async function supervisorDecisionAction(formData: FormData) {
   }
 
   if (decision === "APROBAR") {
+    const support = {
+      impactsQuality: checked(formData, "impactsQuality"),
+      impactsSafety: checked(formData, "impactsSafety"),
+      requiresMaintenance: checked(formData, "requiresMaintenance")
+    };
+    const category: IdeaCategory = idea.category === "C" ? "C" : Object.values(support).some(Boolean) ? "B" : "A";
+    await prisma.idea.update({ where: { id: ideaId }, data: { ...support, category } });
     await approveSupervisor(ideaId, user.id);
   }
 
@@ -290,6 +310,64 @@ export async function validationDecisionAction(formData: FormData) {
   }
 
   revalidatePath("/");
+  revalidatePath(`/ideas/${ideaId}`);
+  redirect(`/ideas/${ideaId}`);
+}
+
+export async function reopenRejectedIdeaAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const ideaId = text(formData, "ideaId");
+  const justification = text(formData, "justification");
+  if (!justification) redirect(`/ideas/${ideaId}?error=justificacion`);
+
+  const idea = await prisma.idea.findUniqueOrThrow({
+    where: { id: ideaId },
+    include: { area: true, supervisor: true }
+  });
+  if (!["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status)) redirect(`/ideas/${ideaId}`);
+
+  const support = {
+    impactsQuality: checked(formData, "impactsQuality"),
+    impactsSafety: checked(formData, "impactsSafety"),
+    requiresMaintenance: checked(formData, "requiresMaintenance")
+  };
+  const category: IdeaCategory = idea.category === "C" ? "C" : Object.values(support).some(Boolean) ? "B" : "A";
+
+  await prisma.idea.update({
+    where: { id: ideaId },
+    data: {
+      ...support,
+      category,
+      rejectionReason: null,
+      moreInfoRequest: null,
+      mcComments: justification
+    }
+  });
+  await prisma.approval.upsert({
+    where: { ideaId_type: { ideaId, type: "SUPERVISOR" } },
+    update: { status: "APPROVED", decision: "APROBAR", comments: `Revalidada por Mejora Continua: ${justification}`, decidedAt: new Date() },
+    create: { ideaId, type: "SUPERVISOR", assignedToId: idea.supervisorId, status: "APPROVED", decision: "APROBAR", comments: `Revalidada por Mejora Continua: ${justification}`, decidedAt: new Date() }
+  });
+
+  const required = await createValidationApprovals(ideaId);
+  const status = required.length ? nextValidationStatus(required) : "APROBADA_PARA_IMPLEMENTAR";
+  await prisma.idea.update({ where: { id: ideaId }, data: { status } });
+  await prisma.comment.create({ data: { ideaId, userId: user.id, comment: `Mejora Continua reabrió la idea. Justificación: ${justification}` } });
+  await auditLog({ entity: "Idea", entityId: ideaId, action: "MC_REOPENED_REJECTED_IDEA", userId: user.id, details: { justification, support, status } });
+
+  const recipients = new Set<string>();
+  if (idea.supervisor?.email) recipients.add(idea.supervisor.email);
+  if (idea.collaboratorEmail) recipients.add(idea.collaboratorEmail);
+  for (const to of recipients) {
+    await notify({
+      ideaId,
+      to,
+      subject: `Idea reabierta por Mejora Continua - Folio ${idea.folio} - Area ${idea.area.code}`,
+      body: ideaMailBody({ folio: idea.folio, area: idea.area.code, problem: idea.problem, proposal: idea.proposal, action: `Revalidada: ${justification}`, ideaId })
+    });
+  }
+
+  revalidatePath("/mejora");
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}`);
 }

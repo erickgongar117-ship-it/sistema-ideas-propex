@@ -9,7 +9,6 @@ import {
   ClipboardCheck,
   Factory,
   Gauge,
-  HardHat,
   HeartHandshake,
   ImagePlus,
   Leaf,
@@ -20,9 +19,9 @@ import {
   Sparkles,
   Truck,
   UserRound,
-  Wrench
 } from "lucide-react";
 import { submitIdeaAction } from "@/app/actions";
+import { CaptureClassification } from "@/components/capture-classification";
 import { impactOptions, shifts } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
@@ -30,7 +29,7 @@ export const dynamic = "force-dynamic";
 
 type CaptureProps = {
   params: Promise<{ code: string }>;
-  searchParams: Promise<{ error?: string; campos?: string }>;
+  searchParams: Promise<{ error?: string; campos?: string; categoria?: string }>;
 };
 
 const fieldLabels: Record<string, string> = {
@@ -39,7 +38,8 @@ const fieldLabels: Record<string, string> = {
   shift: "el turno",
   problem: "el problema",
   proposal: "la propuesta",
-  expectedBenefit: "el beneficio esperado"
+  expectedBenefit: "el beneficio esperado",
+  externalSupportDetails: "lo que se necesita comprar, cotizar o solicitar externamente"
 };
 
 const impactIcons: Record<string, ComponentType<{ className?: string; "aria-hidden"?: boolean }>> = {
@@ -117,7 +117,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
         <div className="my-4 grid grid-cols-3 gap-2 sm:my-5 sm:gap-3">
           {[
             ["1", "Idea", Lightbulb],
-            ["2", "Impacto", ClipboardCheck],
+            ["2", "Categoría", ClipboardCheck],
             ["3", "Enviar", Send]
           ].map(([number, label, Icon]) => {
             const StepIcon = Icon as ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -205,10 +205,13 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
           </section>
 
           <section className="border-t border-line p-5 sm:p-6">
-            <FormSectionTitle description="Marca todo lo que podria mejorar con esta idea." icon={ClipboardCheck} number="3" title="Impacto y evidencia" />
-            <fieldset>
-              <legend className="label">¿Qué beneficia la idea?</legend>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <FormSectionTitle description="Indica quién participará y marca todo lo que podría mejorar." icon={ClipboardCheck} number="3" title="Categoría, apoyo e impacto" />
+            <CaptureClassification initialCategory={query.categoria === "B" || query.categoria === "C" ? query.categoria : "A"} />
+
+            <div className="mt-6 border-t border-line pt-6">
+              <fieldset>
+                <legend className="label">¿Qué beneficia la idea?</legend>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {impactOptions.map((impact) => {
                   const ImpactIcon = impactIcons[impact] ?? Check;
                   return (
@@ -224,33 +227,9 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                     </label>
                   );
                 })}
-              </div>
-            </fieldset>
-
-            <fieldset className="mt-6">
-              <legend className="label">¿Necesita revisión de algún departamento?</legend>
-              <div className="grid gap-2 lg:grid-cols-3">
-                {[
-                  ["impactsQuality", "Calidad / Inocuidad", "Producto, limpieza, empaque o proceso", PackageCheck, "peer-checked:border-red-400 peer-checked:bg-red-50 peer-checked:text-red-900"],
-                  ["impactsSafety", "Seguridad", "Riesgo, ergonomia o condicion insegura", HardHat, "peer-checked:border-slate-500 peer-checked:bg-slate-100 peer-checked:text-slate-900"],
-                  ["requiresMaintenance", "Mantenimiento", "Reparacion, instalacion o ajuste tecnico", Wrench, "peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:text-blue-900"]
-                ].map(([name, title, description, Icon, selectedClass]) => {
-                  const DepartmentIcon = Icon as ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-                  return (
-                    <label className="capture-choice cursor-pointer" key={name as string}>
-                      <input className="peer sr-only" name={name as string} type="checkbox" />
-                      <span className={`flex min-h-20 items-start gap-3 rounded-lg border border-line bg-white p-3 transition ${selectedClass as string}`}>
-                        <DepartmentIcon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-                        <span>
-                          <span className="block text-sm font-extrabold">{title as string}</span>
-                          <span className="mt-1 block text-xs leading-4 opacity-75">{description as string}</span>
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
+                </div>
+              </fieldset>
+            </div>
 
             <label className="mt-6 block rounded-lg border border-dashed border-slate-300 bg-panel p-4">
               <span className="flex items-center gap-2 text-sm font-extrabold text-ink">

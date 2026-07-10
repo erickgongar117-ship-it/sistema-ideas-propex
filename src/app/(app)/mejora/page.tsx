@@ -14,7 +14,7 @@ export default async function MejoraContinuaPage() {
   await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const [ideas, owners] = await Promise.all([
     prisma.idea.findMany({
-      where: { status: { in: ["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA", "IMPLEMENTADA", "EN_VALIDACION_FINAL"] } },
+      where: { status: { in: ["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA", "IMPLEMENTADA", "EN_VALIDACION_FINAL", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"] } },
       include: { area: true, implementationOwner: true },
       orderBy: { updatedAt: "desc" }
     }),
@@ -33,7 +33,7 @@ export default async function MejoraContinuaPage() {
       </section>
 
       <section className="mt-8">
-        <SectionHeading count={ideas.length} description="Abre solo la acción que necesitas realizar." title="Ideas listas para gestionar" />
+        <SectionHeading count={ideas.length} description="Clasifica las aprobadas o abre una rechazada para justificar y enviarla a revalidación." title="Ideas listas para gestionar" />
         {!ideas.length ? <EmptyState title="Todo está al día" description="Las ideas aprobadas por las áreas de soporte aparecerán aquí." /> : null}
         <div className="grid gap-4">
           {ideas.map((idea) => (
@@ -50,7 +50,7 @@ export default async function MejoraContinuaPage() {
               </div>
 
               <div className="mt-5 grid gap-3 lg:grid-cols-2">
-                <details className="details-panel" open={!idea.classification}>
+                <details className="details-panel" open={!idea.classification && !["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status)}>
                   <summary>1. Clasificar y priorizar</summary>
                   <form action={classifyIdeaAction} className="grid gap-3 p-4">
                     <input name="ideaId" type="hidden" value={idea.id} />
@@ -63,7 +63,7 @@ export default async function MejoraContinuaPage() {
                   </form>
                 </details>
 
-                <details className="details-panel" open={Boolean(idea.classification && !idea.implementationOwnerId)}>
+                <details className="details-panel" open={Boolean(idea.classification && !idea.implementationOwnerId && !["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status))}>
                   <summary>2. Asignar implementación</summary>
                   <form action={assignImplementationAction} className="grid gap-3 p-4">
                     <input name="ideaId" type="hidden" value={idea.id} />

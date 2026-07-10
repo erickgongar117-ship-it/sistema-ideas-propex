@@ -2,7 +2,7 @@ import type { Area, Idea, User } from "@prisma/client";
 import Link from "next/link";
 import { ArrowUpRight, CalendarDays, UserRound } from "lucide-react";
 import { StatusPill } from "@/components/status-pill";
-import { isOverdue } from "@/lib/domain";
+import { ideaCategoryLabels, isOverdue } from "@/lib/domain";
 
 type IdeaWithBasics = Idea & {
   area: Area;
@@ -22,6 +22,7 @@ export function IdeaCard({ idea }: { idea: IdeaWithBasics }) {
         <ArrowUpRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-slate-900" aria-hidden />
       </div>
       <p className="mt-3 line-clamp-3 text-sm font-semibold leading-5 text-slate-800">{idea.problem}</p>
+      <p className="mt-2 text-[10px] font-extrabold uppercase text-emerald-700">{ideaCategoryLabels[idea.category]}</p>
       <div className="mt-4">
         <StatusPill status={idea.status} />
       </div>

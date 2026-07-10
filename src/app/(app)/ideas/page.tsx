@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
 import { requireUser } from "@/lib/auth";
-import { classificationLabels, priorityLabels, statusLabels } from "@/lib/domain";
+import { classificationLabels, ideaCategoryLabels, priorityLabels, statusLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 type IdeasPageProps = {
@@ -95,6 +95,7 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
                 <div>
                   <p className="text-base font-extrabold text-brand-700">{idea.folio}</p>
                   <p className="mt-0.5 text-xs font-bold text-slate-500">{idea.area.code} · {idea.collaboratorName}</p>
+                  <p className="mt-1 text-[11px] font-extrabold text-emerald-700">{ideaCategoryLabels[idea.category]}</p>
                 </div>
                 <StatusPill status={idea.status} />
               </div>
@@ -114,7 +115,7 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Folio</th><th>Fecha</th><th>Área</th><th>Colaborador</th><th>Problema</th><th>Supervisor</th><th>Estatus</th><th>Prioridad</th><th>Clasificación</th><th>Compromiso</th><th>Días</th><th>Puntos</th><th><span className="sr-only">Acción</span></th>
+                <th>Folio</th><th>Fecha</th><th>Área</th><th>Categoría</th><th>Colaborador</th><th>Problema</th><th>Supervisor</th><th>Estatus</th><th>Prioridad</th><th>Clasificación</th><th>Compromiso</th><th>Días</th><th>Puntos</th><th><span className="sr-only">Acción</span></th>
               </tr>
             </thead>
             <tbody>
@@ -125,6 +126,7 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
                     <td><Link className="font-extrabold text-brand-700 hover:underline" href={`/ideas/${idea.id}`}>{idea.folio}</Link></td>
                     <td className="whitespace-nowrap">{idea.createdAt.toLocaleDateString("es-MX")}</td>
                     <td className="font-extrabold text-ink">{idea.area.code}</td>
+                    <td className="min-w-44 text-xs font-bold">{ideaCategoryLabels[idea.category]}</td>
                     <td className="whitespace-nowrap">{idea.collaboratorName}</td>
                     <td className="min-w-64 max-w-sm"><p className="line-clamp-2">{idea.problem}</p></td>
                     <td className="whitespace-nowrap">{idea.supervisor?.name ?? "Sin supervisor"}</td>

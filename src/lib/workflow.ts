@@ -34,6 +34,10 @@ export async function createValidationApprovals(ideaId: string) {
   });
   const required = requiredApprovalTypes(idea);
 
+  await prisma.approval.deleteMany({
+    where: { ideaId, type: { in: validationOrder.filter((type) => !required.includes(type)) } }
+  });
+
   for (const type of required) {
     const supportUsers = await supportUsersFor(type);
     const assignedTo = supportUsers[0] ?? null;
@@ -41,7 +45,10 @@ export async function createValidationApprovals(ideaId: string) {
       where: { ideaId_type: { ideaId, type } },
       update: {
         assignedToId: assignedTo?.id,
-        status: "PENDING"
+        status: "PENDING",
+        decision: null,
+        comments: null,
+        decidedAt: null
       },
       create: {
         ideaId,

@@ -11,6 +11,7 @@ import {
   ImageIcon,
   MessageSquare,
   MessageSquareMore,
+  RotateCcw,
   Save,
   Send,
   ShieldCheck,
@@ -28,6 +29,7 @@ import {
   closeIdeaAction,
   implementationUpdateAction,
   removeIdeaPointsAction,
+  reopenRejectedIdeaAction,
   supervisorDecisionAction,
   validationDecisionAction
 } from "@/app/actions";
@@ -40,6 +42,7 @@ import {
   approvalTypeForRole,
   approvalTypeLabels,
   classificationLabels,
+  ideaCategoryLabels,
   parseImpactTypes,
   priorityLabels,
   roleHomePath,
@@ -114,6 +117,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
   const canReviewClose = canMC && (["IMPLEMENTADA", "EN_VALIDACION_FINAL", "CERRADA"].includes(idea.status));
   const canAssign = canMC && !["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
   const canClassify = canMC && !["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
+  const canReopen = canMC && ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
   const impacts = parseImpactTypes(idea.impactTypes);
   const returnPath = roleHomePath(user.role);
 
@@ -171,8 +175,10 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
               </div>
             </div>
             <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-800">{ideaCategoryLabels[idea.category]}</span>
               {impacts.length ? impacts.map((impact) => <span className="rounded-full border border-line bg-panel px-3 py-1 text-xs font-bold text-slate-700" key={impact}>{impact}</span>) : <span className="text-sm text-slate-500">Sin impactos seleccionados.</span>}
             </div>
+            {idea.requiresExternalSupport ? <div className="mt-4 border-l-4 border-slate-900 bg-slate-50 p-3"><p className="text-xs font-extrabold uppercase text-slate-600">Compra, cotización o apoyo externo</p><p className="mt-1 text-sm leading-5 text-slate-700">{idea.externalSupportDetails}</p></div> : null}
           </article>
 
           <article className="surface rounded-lg p-5 sm:p-6">
@@ -258,6 +264,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                 ["Área", `${idea.area.code} · ${idea.area.name}`],
                 ["Colaborador", idea.collaboratorName],
                 ["Turno", idea.shift],
+                ["Categoría", ideaCategoryLabels[idea.category]],
                 ["Supervisor", idea.supervisor?.name ?? "Sin supervisor"],
                 ["Responsable", idea.implementationOwner?.name ?? "Sin responsable"],
                 ["Fecha compromiso", idea.dueDate ? idea.dueDate.toLocaleDateString("es-MX") : "Sin fecha"],
@@ -281,6 +288,15 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                 <p className="mt-1 text-xs leading-5 text-slate-500">El comentario es obligatorio al rechazar o solicitar información.</p>
                 <form action={supervisorDecisionAction} className="mt-4 grid gap-2">
                   <input name="ideaId" type="hidden" value={idea.id} />
+                  <fieldset className="rounded-lg border border-line bg-panel p-3">
+                    <legend className="px-1 text-xs font-extrabold text-ink">Apoyo requerido</legend>
+                    <p className="mb-2 text-xs leading-5 text-slate-500">Puedes agregar o quitar áreas antes de aprobar.</p>
+                    <div className="grid gap-2">
+                      <label className="flex items-center gap-2 text-xs font-bold"><input defaultChecked={idea.impactsQuality} name="impactsQuality" type="checkbox" />Calidad / Inocuidad</label>
+                      <label className="flex items-center gap-2 text-xs font-bold"><input defaultChecked={idea.impactsSafety} name="impactsSafety" type="checkbox" />Seguridad</label>
+                      <label className="flex items-center gap-2 text-xs font-bold"><input defaultChecked={idea.requiresMaintenance} name="requiresMaintenance" type="checkbox" />Mantenimiento</label>
+                    </div>
+                  </fieldset>
                   <textarea className="field min-h-20" name="comments" placeholder="Comentario de la decision" />
                   <button className="btn btn-success" name="decision" type="submit" value="APROBAR"><Check className="h-4 w-4" aria-hidden />Aprobar idea</button>
                   <button className="btn btn-secondary" name="decision" type="submit" value="SOLICITAR_INFORMACION"><MessageSquareMore className="h-4 w-4" aria-hidden />Solicitar información</button>
@@ -288,6 +304,26 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                 </form>
               </div>
             </article>
+          ) : null}
+
+          {canReopen ? (
+            <details className="details-panel border-slate-900" open>
+              <summary><span className="flex items-center gap-2 text-slate-950"><RotateCcw className="h-4 w-4" aria-hidden />Revalidar idea rechazada</span></summary>
+              <form action={reopenRejectedIdeaAction} className="grid gap-3 p-4">
+                <input name="ideaId" type="hidden" value={idea.id} />
+                <p className="text-xs leading-5 text-slate-600">Mejora Continua puede justificar la recuperación y enviarla nuevamente a las áreas que deban apoyar.</p>
+                <label><span className="label">Justificación de la revalidación *</span><textarea className="field min-h-24" name="justification" placeholder="Explica por qué debe continuar y qué cambió en la evaluación" required /></label>
+                <fieldset>
+                  <legend className="label">Solicitar apoyo a</legend>
+                  <div className="grid gap-2">
+                    <label className="flex items-center gap-2 rounded-lg border border-line p-3 text-xs font-bold"><input defaultChecked={idea.impactsQuality} name="impactsQuality" type="checkbox" />Calidad / Inocuidad</label>
+                    <label className="flex items-center gap-2 rounded-lg border border-line p-3 text-xs font-bold"><input defaultChecked={idea.impactsSafety} name="impactsSafety" type="checkbox" />Seguridad</label>
+                    <label className="flex items-center gap-2 rounded-lg border border-line p-3 text-xs font-bold"><input defaultChecked={idea.requiresMaintenance} name="requiresMaintenance" type="checkbox" />Mantenimiento</label>
+                  </div>
+                </fieldset>
+                <button className="btn btn-primary" type="submit"><RotateCcw className="h-4 w-4" aria-hidden />Reabrir y enviar a validación</button>
+              </form>
+            </details>
           ) : null}
 
           {validationTypes.map((type) => {

@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { approvalStatusLabels, approvalTypeLabels, classificationLabels, parseImpactTypes, priorityLabels, statusLabels } from "@/lib/domain";
+import { approvalStatusLabels, approvalTypeLabels, classificationLabels, ideaCategoryLabels, parseImpactTypes, priorityLabels, statusLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 export async function buildIdeasWorkbook() {
@@ -24,12 +24,14 @@ export async function buildIdeasWorkbook() {
     { header: "Folio", key: "folio", width: 16 },
     { header: "Fecha", key: "createdAt", width: 22 },
     { header: "Area", key: "area", width: 12 },
+    { header: "Categoria", key: "category", width: 34 },
     { header: "Colaborador", key: "collaboratorName", width: 28 },
     { header: "Empleado", key: "employeeNumber", width: 16 },
     { header: "Problema", key: "problem", width: 45 },
     { header: "Propuesta", key: "proposal", width: 45 },
     { header: "Beneficio", key: "expectedBenefit", width: 34 },
     { header: "Impactos", key: "impactTypes", width: 32 },
+    { header: "Apoyo externo / cotizacion", key: "externalSupportDetails", width: 42 },
     { header: "Supervisor", key: "supervisor", width: 24 },
     { header: "Estatus", key: "status", width: 28 },
     { header: "Prioridad", key: "priority", width: 14 },
@@ -46,12 +48,14 @@ export async function buildIdeasWorkbook() {
       folio: idea.folio,
       createdAt: idea.createdAt,
       area: idea.area.code,
+      category: ideaCategoryLabels[idea.category],
       collaboratorName: idea.collaboratorName,
       employeeNumber: idea.employeeNumber ?? "",
       problem: idea.problem,
       proposal: idea.proposal,
       expectedBenefit: idea.expectedBenefit,
       impactTypes: parseImpactTypes(idea.impactTypes).join(", "),
+      externalSupportDetails: idea.externalSupportDetails ?? "",
       supervisor: idea.supervisor?.name ?? "",
       status: statusLabels[idea.status],
       priority: idea.priority ? priorityLabels[idea.priority] : "",
