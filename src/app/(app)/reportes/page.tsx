@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Download, FileSpreadsheet } from "lucide-react";
+import { AlertTriangle, Bell, Download, FileSpreadsheet, Play } from "lucide-react";
 import { runRemindersAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
@@ -13,37 +13,28 @@ export default async function ReportsPage() {
     prisma.idea.count({ where: { status: "VENCIDA" } })
   ]);
 
+  const tools = [
+    { title: "Base completa de ideas", value: ideaCount, detail: "Incluye validaciones, responsables, fechas, puntos y comentarios.", icon: FileSpreadsheet, color: "bg-emerald-50 text-emerald-700", action: <Link className="btn btn-primary w-full" href="/api/export"><Download className="h-4 w-4" aria-hidden />Descargar Excel</Link> },
+    { title: "Notificaciones pendientes", value: notificationCount, detail: "Mensajes pendientes o que requieren un nuevo intento.", icon: Bell, color: "bg-blue-50 text-blue-700", action: <Link className="btn btn-secondary w-full" href="/notificaciones">Abrir notificaciones</Link> },
+    { title: "Compromisos vencidos", value: overdueCount, detail: "Ejecuta la revisión para actualizar semáforos y generar avisos.", icon: AlertTriangle, color: "bg-rose-50 text-rose-700", action: <form action={runRemindersAction}><button className="btn btn-secondary w-full" type="submit"><Play className="h-4 w-4" aria-hidden />Revisar vencimientos</button></form> }
+  ];
+
   return (
     <>
-      <PageHeader title="Reportes y exportacion" description="Excel completo, notificaciones pendientes y recordatorios." />
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="surface rounded-lg p-5">
-          <FileSpreadsheet className="h-8 w-8 text-brand-500" aria-hidden />
-          <h2 className="mt-3 text-lg font-black text-ink">Base completa</h2>
-          <p className="mt-1 text-sm text-slate-600">{ideaCount} ideas disponibles para exportar.</p>
-          <Link className="btn btn-primary mt-4 w-full" href="/api/export">
-            <Download className="h-4 w-4" aria-hidden />
-            Exportar Excel
-          </Link>
-        </div>
-        <div className="surface rounded-lg p-5">
-          <h2 className="text-lg font-black text-ink">Notificaciones</h2>
-          <p className="mt-2 text-4xl font-black text-ink">{notificationCount}</p>
-          <p className="text-sm text-slate-600">Pendientes o con error.</p>
-          <Link className="btn btn-secondary mt-4 w-full" href="/notificaciones">
-            Ver pendientes
-          </Link>
-        </div>
-        <div className="surface rounded-lg p-5">
-          <h2 className="text-lg font-black text-ink">Vencimientos</h2>
-          <p className="mt-2 text-4xl font-black text-ink">{overdueCount}</p>
-          <p className="text-sm text-slate-600">Ideas con semaforo rojo.</p>
-          <form action={runRemindersAction} className="mt-4">
-            <button className="btn btn-secondary w-full" type="submit">
-              Ejecutar recordatorios
-            </button>
-          </form>
-        </div>
+      <PageHeader eyebrow="Herramientas · Información y control" title="Reportes y automatizaciones" description="Descarga la información del programa y ejecuta tareas de seguimiento." />
+      <section className="grid gap-4 lg:grid-cols-3">
+        {tools.map((tool) => {
+          const Icon = tool.icon;
+          return (
+            <article className="surface flex min-h-[270px] flex-col rounded-lg p-5" key={tool.title}>
+              <span className={`flex h-11 w-11 items-center justify-center rounded-lg ${tool.color}`}><Icon className="h-5 w-5" aria-hidden /></span>
+              <h2 className="mt-5 text-base font-extrabold text-ink">{tool.title}</h2>
+              <p className="mt-2 text-4xl font-extrabold text-ink">{tool.value}</p>
+              <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{tool.detail}</p>
+              <div className="mt-5">{tool.action}</div>
+            </article>
+          );
+        })}
       </section>
     </>
   );

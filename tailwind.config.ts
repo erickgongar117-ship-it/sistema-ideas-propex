@@ -5,30 +5,30 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#17202a",
-        line: "#d9e2ea",
-        panel: "#f7fafc",
+        ink: "#171a18",
+        line: "#dce2de",
+        panel: "#f7f9f8",
         brand: {
-          50: "#f2fbf8",
-          100: "#d9f2e8",
-          500: "#1f8f63",
-          700: "#146246",
-          900: "#0b1714"
+          50: "#fff3f4",
+          100: "#ffe0e3",
+          500: "#e21d2b",
+          700: "#b5121d",
+          900: "#620b12"
         },
         dept: {
-          supervisor: "#1f8f63",
-          calidad: "#d31f32",
-          seguridad: "#6b7280",
-          mantenimiento: "#1976d2",
-          mejora: "#111827"
+          supervisor: "#14835f",
+          calidad: "#d32236",
+          seguridad: "#626a70",
+          mantenimiento: "#176fc1",
+          mejora: "#171a18"
         },
-        warn: "#f4b942",
-        danger: "#d1495b",
-        info: "#2d7dd2",
+        warn: "#b7791f",
+        danger: "#d32236",
+        info: "#176fc1",
         grape: "#7768ae"
       },
       boxShadow: {
-        soft: "0 12px 30px rgba(23, 32, 42, 0.08)"
+        soft: "0 10px 28px rgba(23, 26, 24, 0.08)"
       }
     }
   },

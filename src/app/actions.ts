@@ -622,7 +622,8 @@ export async function createUserAction(formData: FormData) {
   const email = text(formData, "email").toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) redirect("/configuracion?error=correo");
-  const password = text(formData, "password") || "admin123";
+  const password = text(formData, "password");
+  if (password.length < 8) redirect("/configuracion?error=contrasena");
   const user = await prisma.user.create({
     data: {
       name: text(formData, "name"),
@@ -646,6 +647,7 @@ export async function updateUserAction(formData: FormData) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing && existing.id !== userId) redirect("/configuracion?error=correo");
   const password = text(formData, "password");
+  if (password && password.length < 8) redirect("/configuracion?error=contrasena");
   const data = {
     name: text(formData, "name"),
     email,

@@ -19,19 +19,19 @@ export const roleLabels: Record<Role, string> = {
 
 export const statusLabels: Record<IdeaStatus, string> = {
   REGISTRADA: "Registrada",
-  EN_REVISION_SUPERVISOR: "En revision de supervisor",
+  EN_REVISION_SUPERVISOR: "En revisión de supervisor",
   RECHAZADA_SUPERVISOR: "Rechazada por supervisor",
-  SOLICITUD_INFORMACION: "Solicitud de informacion",
+  SOLICITUD_INFORMACION: "Solicitud de información",
   APROBADA_SUPERVISOR: "Aprobada por supervisor",
-  EN_VALIDACION_CALIDAD: "En validacion Calidad/Inocuidad",
-  EN_VALIDACION_SEGURIDAD: "En validacion Seguridad",
-  EN_VALIDACION_MANTENIMIENTO: "En validacion Mantenimiento",
-  RECHAZADA_VALIDACION: "Rechazada en validacion",
+  EN_VALIDACION_CALIDAD: "En validación Calidad/Inocuidad",
+  EN_VALIDACION_SEGURIDAD: "En validación Seguridad",
+  EN_VALIDACION_MANTENIMIENTO: "En validación Mantenimiento",
+  RECHAZADA_VALIDACION: "Rechazada en validación",
   APROBADA_PARA_IMPLEMENTAR: "Aprobada para implementar",
-  CLASIFICACION_MEJORA_CONTINUA: "Clasificacion Mejora Continua",
-  EN_IMPLEMENTACION: "En implementacion",
+  CLASIFICACION_MEJORA_CONTINUA: "Clasificación Mejora Continua",
+  EN_IMPLEMENTACION: "En implementación",
   IMPLEMENTADA: "Implementada",
-  EN_VALIDACION_FINAL: "En validacion final",
+  EN_VALIDACION_FINAL: "En validación final",
   CERRADA: "Cerrada",
   CANCELADA: "Cancelada",
   VENCIDA: "Vencida"
@@ -61,15 +61,15 @@ export const priorityLabels: Record<Priority, string> = {
   BAJA: "Baja",
   MEDIA: "Media",
   ALTA: "Alta",
-  CRITICA: "Critica"
+  CRITICA: "Crítica"
 };
 
 export const classificationLabels: Record<Classification, string> = {
-  IDEA_RAPIDA: "Idea rapida",
-  ACCION_MANTENIMIENTO: "Accion de mantenimiento",
+  IDEA_RAPIDA: "Idea rápida",
+  ACCION_MANTENIMIENTO: "Acción de mantenimiento",
   KAIZEN: "Kaizen",
   PROYECTO_DMAIC: "Proyecto DMAIC",
-  CINCO_S_GESTION_VISUAL: "5S / Gestion visual",
+  CINCO_S_GESTION_VISUAL: "5S / Gestión visual",
   SEGURIDAD: "Seguridad",
   CALIDAD_INOCUIDAD: "Calidad/Inocuidad",
   NO_VIABLE: "No viable"
@@ -87,7 +87,7 @@ export const approvalStatusLabels: Record<ApprovalStatus, string> = {
   PENDING: "Pendiente",
   APPROVED: "Aprobada",
   REJECTED: "Rechazada",
-  MORE_INFO: "Mas informacion"
+  MORE_INFO: "Más información"
 };
 
 export const impactOptions = [
@@ -171,14 +171,14 @@ export function isOverdue(input: { dueDate: Date | null; status: IdeaStatus }): 
 }
 
 export const kanbanColumns: Array<{ title: string; statuses: IdeaStatus[] }> = [
-  { title: "En revision de supervisor", statuses: ["REGISTRADA", "EN_REVISION_SUPERVISOR"] },
+  { title: "En revisión de supervisor", statuses: ["REGISTRADA", "EN_REVISION_SUPERVISOR"] },
   {
-    title: "En validacion",
+    title: "En validación",
     statuses: ["APROBADA_SUPERVISOR", "EN_VALIDACION_CALIDAD", "EN_VALIDACION_SEGURIDAD", "EN_VALIDACION_MANTENIMIENTO"]
   },
   { title: "Aprobada para implementar", statuses: ["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA"] },
-  { title: "En implementacion", statuses: ["EN_IMPLEMENTACION"] },
-  { title: "Validacion final", statuses: ["IMPLEMENTADA", "EN_VALIDACION_FINAL"] },
+  { title: "En implementación", statuses: ["EN_IMPLEMENTACION"] },
+  { title: "Validación final", statuses: ["IMPLEMENTADA", "EN_VALIDACION_FINAL"] },
   { title: "Cerrada", statuses: ["CERRADA"] },
   { title: "Rechazada / Cancelada", statuses: ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION", "CANCELADA", "VENCIDA"] }
 ];

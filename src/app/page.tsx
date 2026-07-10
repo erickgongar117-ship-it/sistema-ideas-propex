@@ -1,141 +1,102 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BarChart3, ClipboardCheck, Factory, Lightbulb, QrCode, ShieldCheck } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, LogIn, QrCode } from "lucide-react";
+import { prisma } from "@/lib/prisma";
 
-const pillars = [
-  {
-    title: "Captura sencilla",
-    text: "Cada colaborador puede registrar una idea por area con problema, propuesta, beneficio esperado y evidencia inicial.",
-    icon: Lightbulb
-  },
-  {
-    title: "Validacion por rol",
-    text: "Supervisor, Calidad, Seguridad, Mantenimiento y Mejora Continua revisan lo necesario antes de implementar.",
-    icon: ShieldCheck
-  },
-  {
-    title: "Seguimiento completo",
-    text: "El sistema concentra estatus, responsables, vencimientos, puntos, reportes, auditoria y notificaciones.",
-    icon: BarChart3
-  }
-];
+export const dynamic = "force-dynamic";
 
-const flow = ["Registrar", "Revisar", "Validar", "Implementar", "Cerrar"];
+export default async function HomePage() {
+  const areas = await prisma.area.findMany({ where: { active: true }, orderBy: { code: "asc" } });
 
-export default function HomePage() {
   return (
-    <main className="min-h-screen text-ink">
-      <section className="relative min-h-[86vh] overflow-hidden">
-        <img
-          alt="Servicios Proboca"
-          className="absolute inset-0 h-full w-full object-cover"
-          src="/brand/proboca-servicios.jpg"
-        />
-        <div className="absolute inset-0 bg-slate-950/78" />
-        <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-14 w-28 items-center justify-center rounded-lg bg-white p-2">
-              <img alt="Proboca" className="max-h-10 max-w-full object-contain" src="/brand/proboca-logo.png" />
+    <main className="min-h-screen bg-white text-ink">
+      <section className="relative flex min-h-[72svh] flex-col overflow-hidden bg-slate-950 text-white">
+        <Image alt="Personal y equipo de proceso en Proboca" className="object-cover" fill priority sizes="100vw" src="/brand/proboca-servicios.jpg" />
+        <div className="absolute inset-0 bg-slate-950/75" />
+        <header className="relative z-10 border-t-4 border-brand-500">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-24 items-center justify-center bg-white p-2">
+                <Image alt="Proboca" className="h-auto w-full object-contain" height={72} width={216} src="/brand/proboca-logo.png" />
+              </span>
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-red-300">PROpEx</p>
+                <p className="text-sm font-extrabold">Ideas de Mejora</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-black uppercase text-brand-100">PROpEx</p>
-              <p className="text-lg font-black text-white">Ideas de Mejora</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link className="btn border-white/25 bg-white/10 text-white hover:bg-white/20" href="/captura/P1">
-              Capturar idea
-            </Link>
-            <Link className="btn btn-primary" href="/login">
-              Entrar
-              <ArrowRight className="h-4 w-4" aria-hidden />
+            <Link className="btn border-white/30 bg-white/10 text-white hover:bg-white/20" href="/login">
+              <LogIn className="h-4 w-4" aria-hidden />
+              <span className="hidden sm:inline">Entrar al panel</span>
+              <span className="sm:hidden">Entrar</span>
             </Link>
           </div>
-        </nav>
+        </header>
 
-        <div className="relative z-10 mx-auto flex min-h-[68vh] max-w-7xl items-center px-4 pb-10 pt-8 sm:px-6 lg:px-8">
-          <div className="max-w-3xl text-white">
-            <p className="text-sm font-black uppercase text-brand-100">Productora de Bocados Carnicos</p>
-            <h1 className="mt-4 text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">PROpEx convierte ideas de planta en mejoras visibles.</h1>
+        <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 items-center px-4 py-10 sm:px-6 lg:px-8">
+          <div className="max-w-3xl">
+            <div className="mb-4 flex items-center gap-2 text-sm font-bold text-red-200">
+              <span className="h-px w-9 bg-brand-500" />
+              Mejora Continua Proboca
+            </div>
+            <h1 className="text-4xl font-extrabold leading-[1.08] sm:text-5xl lg:text-6xl">PROpEx Ideas de Mejora</h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-100 sm:text-lg">
-              Captura por QR, seguimiento por rol, evidencia antes/despues y puntos automaticos en un flujo simple para piso, soporte y Mejora Continua.
+              Tu experiencia en planta puede hacer el trabajo más seguro, simple y eficiente. Registra la oportunidad y sigue su avance en un solo lugar.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link className="btn btn-primary" href="/captura/P1">
+            <div className="mt-7 flex flex-wrap gap-3">
+              <a className="btn btn-brand" href="#areas">
                 <QrCode className="h-4 w-4" aria-hidden />
-                Captura publica
+                Registrar una idea
+              </a>
+              <Link className="btn border-white/30 bg-white text-slate-950" href="/login">
+                Consultar seguimientos
+                <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
-              <Link className="btn btn-secondary" href="/login">
-                Ver sistema
-              </Link>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-slate-200">
+              {[
+                "Sin iniciar sesión",
+                "Desde cualquier celular",
+                "Folio inmediato"
+              ].map((item) => (
+                <span className="flex items-center gap-1.5" key={item}>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" aria-hidden />
+                  {item}
+                </span>
+              ))}
             </div>
           </div>
         </div>
-        <div className="absolute bottom-0 left-0 right-0 z-10 h-3 bg-brand-500" />
+        <div className="relative z-10 h-2 bg-brand-500" />
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
-        <div>
-          <p className="text-sm font-black uppercase text-brand-700">Que contiene</p>
-          <h2 className="mt-2 text-3xl font-black">Un flujo completo para mejora continua</h2>
-          <p className="mt-4 leading-7 text-slate-700">
-            Proboca centraliza la participacion de colaboradores y da visibilidad al avance de cada idea. La pagina no es solo un
-            formulario: tambien permite priorizar, auditar decisiones, consultar tableros, revisar vencimientos y descargar reportes.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            {flow.map((item) => (
-              <span className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-black text-slate-700" key={item}>
-                {item}
-              </span>
+      <section className="scroll-mt-6 bg-white" id="areas">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
+          <div className="max-w-2xl">
+            <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-brand-700">Captura directa</p>
+            <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">¿En qué área viste la oportunidad?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Selecciona el área. El sistema enviará la idea al supervisor correcto automáticamente.</p>
+          </div>
+          <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {areas.map((area) => (
+              <Link className="surface surface-interactive group flex min-h-24 items-center gap-4 rounded-lg p-4" href={`/captura/${area.code}`} key={area.id}>
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-lg font-extrabold text-white">{area.code}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-extrabold text-ink">{area.name}</span>
+                  <span className="mt-1 block text-xs text-slate-500">Abrir formulario</span>
+                </span>
+                <ArrowRight className="h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden />
+              </Link>
             ))}
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {pillars.map((pillar) => {
-            const Icon = pillar.icon;
-            return (
-              <article className="surface rounded-lg p-5" key={pillar.title}>
-                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-                  <Icon className="h-5 w-5" aria-hidden />
-                </div>
-                <h3 className="mt-4 text-lg font-black">{pillar.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{pillar.text}</p>
-              </article>
-            );
-          })}
-        </div>
       </section>
 
-      <section className="bg-white py-12">
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-3 lg:px-8">
-          {[
-            ["Supervisor", "bg-emerald-600", "Revision rapida y clara"],
-            ["Calidad", "bg-red-600", "Validacion de inocuidad"],
-            ["Mantenimiento", "bg-blue-600", "Ejecucion y evidencia"]
-          ].map(([title, color, text]) => (
-            <article className="rounded-lg border border-line bg-panel p-6 shadow-soft" key={title}>
-              <div className={`h-2 w-20 rounded-full ${color}`} />
-              <h3 className="mt-5 text-2xl font-black">{title}</h3>
-              <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{text}</p>
-            </article>
-          ))}
+      <footer className="border-t border-line bg-panel">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+          <p className="flex items-center gap-2 font-bold text-slate-700"><Building2 className="h-4 w-4" aria-hidden /> Productora de Bocados Carnicos</p>
+          <p>PROpEx · Sistema interno de Ideas de Mejora</p>
         </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            ["SQDCM", "Impactos en seguridad, calidad, entrega, costo y moral."],
-            ["QR por area", "Captura publica rapida para cada zona de trabajo."],
-            ["Evidencia", "Archivos antes y despues para comprobar la mejora."],
-            ["Reportes", "Excel, auditoria, kanban y tablero ejecutivo."]
-          ].map(([title, text]) => (
-            <article className="border-t-4 border-brand-500 bg-white p-5 shadow-soft" key={title}>
-              <h3 className="text-xl font-black">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+      </footer>
     </main>
   );
 }

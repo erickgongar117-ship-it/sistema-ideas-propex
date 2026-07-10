@@ -14,7 +14,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       : { status: { in: pendingStatuses }, to: { contains: user.email } };
   const pendingNotifications = await prisma.notificationOutbox.count({ where: notificationWhere });
   return (
-    <AppShell pendingNotifications={pendingNotifications} user={user}>
+    <AppShell
+      pendingNotifications={pendingNotifications}
+      user={{ name: user.name, email: user.email, role: user.role }}
+    >
       {children}
     </AppShell>
   );
