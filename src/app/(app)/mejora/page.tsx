@@ -50,6 +50,12 @@ export default async function MejoraContinuaPage() {
               </div>
 
               <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status) ? (
+                  <div className="alert alert-warning lg:col-span-2">
+                    Esta idea requiere una justificación de Mejora Continua. Ábrela en el detalle para revalidarla y elegir las áreas de apoyo.
+                  </div>
+                ) : (
+                  <>
                 <details className="details-panel" open={!idea.classification && !["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status)}>
                   <summary>1. Clasificar y priorizar</summary>
                   <form action={classifyIdeaAction} className="grid gap-3 p-4">
@@ -76,6 +82,8 @@ export default async function MejoraContinuaPage() {
                     <button className="btn btn-primary w-full sm:w-fit" type="submit">Asignar implementación</button>
                   </form>
                 </details>
+                  </>
+                )}
               </div>
 
               <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-3">

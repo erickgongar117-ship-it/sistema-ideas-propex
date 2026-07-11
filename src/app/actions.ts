@@ -378,6 +378,8 @@ export async function classifyIdeaAction(formData: FormData) {
   const classification = text(formData, "classification") as Classification;
   const priority = text(formData, "priority") as Priority;
   const mcComments = text(formData, "mcComments");
+  const currentIdea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { status: true } });
+  if (["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(currentIdea.status)) redirect(`/ideas/${ideaId}?error=justificacion`);
 
   await prisma.idea.update({
     where: { id: ideaId },
@@ -400,6 +402,8 @@ export async function assignImplementationAction(formData: FormData) {
   const dueDateText = text(formData, "dueDate");
   const priority = text(formData, "priority") as Priority;
   if (!ownerId || !dueDateText) redirect(`/ideas/${ideaId}?error=asignacion`);
+  const currentIdea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { status: true } });
+  if (["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(currentIdea.status)) redirect(`/ideas/${ideaId}?error=justificacion`);
 
   const idea = await prisma.idea.update({
     where: { id: ideaId },
