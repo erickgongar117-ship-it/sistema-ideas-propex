@@ -80,6 +80,7 @@ export default async function MejoraContinuaPage() {
                     </div>
                     <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input defaultChecked={idea.requiresEvidence} name="requiresEvidence" type="checkbox" />Solicitar evidencia final</label>
                     <button className="btn btn-primary w-full sm:w-fit" type="submit">Asignar implementación</button>
+                    {idea.classification === "KAIZEN" ? <p className="text-xs font-bold leading-5 text-amber-800">Al asignar al responsable se generará automáticamente la carpeta del proyecto Kaizen y su número consecutivo.</p> : null}
                   </form>
                 </details>
                   </>

@@ -83,7 +83,8 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
         approvals: { include: { assignedTo: true }, orderBy: { createdAt: "asc" } },
         attachments: { orderBy: { createdAt: "asc" } },
         comments: { include: { user: true }, orderBy: { createdAt: "asc" } },
-        pointRuleSelections: { include: { pointRule: true } }
+        pointRuleSelections: { include: { pointRule: true } },
+        kaizenProject: true
       }
     }),
     prisma.user.findMany({ where: { role: { in: ["MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR", "ADMIN"] }, active: true }, orderBy: { name: "asc" } }),
@@ -158,6 +159,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
         <div className="mt-6 border-t border-line pt-5">
           <IdeaProgress status={idea.status} />
         </div>
+        {idea.kaizenProject ? <div className="mt-5 flex flex-col gap-3 border-l-4 border-amber-500 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-extrabold uppercase text-amber-800">Convertida en proyecto Kaizen</p><p className="mt-1 text-sm font-bold text-amber-950">{idea.kaizenProject.folio} · {idea.kaizenProject.title}</p></div><Link className="btn bg-amber-500 text-slate-950 hover:bg-amber-400" href={`/kaizen/${idea.kaizenProject.id}`}>Abrir proyecto Kaizen</Link></div> : null}
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">

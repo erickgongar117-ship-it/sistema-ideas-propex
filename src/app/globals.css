@@ -116,6 +116,47 @@ summary:focus-visible {
   backdrop-filter: blur(14px);
 }
 
+.mobile-module-strip {
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+  padding: 0.45rem 1rem;
+}
+
+.module-switcher {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-subtle);
+  padding: 0.22rem;
+}
+
+.module-switcher-link {
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  border-radius: 5px;
+  color: #68716c;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.module-switcher-link.is-active {
+  background: #ffffff;
+  color: var(--role-accent);
+  box-shadow: 0 1px 4px rgba(23, 26, 24, 0.1);
+}
+
+.module-switcher.is-compact .module-switcher-link {
+  min-height: 36px;
+  font-size: 0.68rem;
+}
+
 .mobile-bottom-nav {
   position: fixed;
   z-index: 40;
@@ -349,6 +390,54 @@ summary:focus-visible {
 .step-surface {
   border: 1px solid var(--line);
   background: #ffffff;
+}
+
+.gantt-grid {
+  position: relative;
+  display: grid;
+  min-width: max-content;
+}
+
+.gantt-header {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  min-height: 52px;
+  background: #f7f9f8;
+}
+
+.gantt-project-row {
+  min-height: 102px;
+}
+
+.gantt-sticky-cell {
+  position: sticky;
+  z-index: 10;
+  left: 0;
+  box-shadow: 8px 0 14px rgba(23, 26, 24, 0.06);
+}
+
+.gantt-bar {
+  z-index: 5;
+  align-self: center;
+  min-width: 24px;
+  height: 30px;
+  margin: 0 3px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(23, 26, 24, 0.18);
+}
+
+.gantt-bar span {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .field {
@@ -676,6 +765,7 @@ input[type="file"]::file-selector-button {
   }
 
   .mobile-topbar,
+  .mobile-module-strip,
   .mobile-bottom-nav,
   .mobile-drawer-layer {
     display: none;
@@ -710,6 +800,7 @@ input[type="file"]::file-selector-button {
 
   .app-sidebar,
   .mobile-topbar,
+  .mobile-module-strip,
   .mobile-bottom-nav,
   .no-print {
     display: none !important;

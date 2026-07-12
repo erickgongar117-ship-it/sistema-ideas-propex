@@ -41,7 +41,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
 
   return (
     <>
-      <PageHeader eyebrow="Administración · Directorio y reglas" title="Configuración" description="Controla quiénes pueden entrar, a qué departamento pertenecen y cómo funciona la asignación de puntos." />
+      <PageHeader eyebrow="Administración · Directorio y reglas" title="Configuración" description="Controla accesos, correos, módulos disponibles, áreas y reglas de puntos." />
 
       {errorMessage ? <div className="alert alert-danger mb-5"><KeyRound className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
 
@@ -67,6 +67,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
             <label><span className="label">Departamento / rol</span><select className="field" name="role" defaultValue="MEJORA_CONTINUA">{configurableRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></label>
             <label><span className="label">Contraseña temporal</span><input autoComplete="new-password" className="field" minLength={8} name="password" placeholder="Minimo 8 caracteres" required type="password" /></label>
             <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked name="active" type="checkbox" />Acceso activo</label>
+            <fieldset className="rounded-lg border border-line bg-panel p-3"><legend className="px-1 text-xs font-extrabold text-ink">Módulos adicionales</legend><div className="mt-2 flex flex-wrap gap-4 text-sm font-bold text-slate-700"><label className="flex items-center gap-2"><input name="kaizenAccess" type="checkbox" />Kaizen</label><label className="flex items-center gap-2"><input name="genbaAccess" type="checkbox" />GENBA</label></div></fieldset>
             <div className="flex items-end"><button className="btn btn-primary w-full" type="submit"><Plus className="h-4 w-4" aria-hidden />Crear usuario</button></div>
           </form>
         </details>
@@ -88,6 +89,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
                 <label><span className="label">Departamento / rol</span><select className="field" name="role" defaultValue={user.role}>{configurableRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></label>
                 <label><span className="label">Cambiar contraseña</span><input autoComplete="new-password" className="field" minLength={8} name="password" placeholder="Dejar vacio para conservar" type="password" /></label>
                 <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked={user.active} name="active" type="checkbox" />Acceso activo</label>
+                <fieldset className="rounded-lg border border-line bg-panel p-3"><legend className="px-1 text-xs font-extrabold text-ink">Módulos adicionales</legend><div className="mt-2 flex flex-wrap gap-4 text-sm font-bold text-slate-700"><label className="flex items-center gap-2"><input defaultChecked={user.kaizenAccess} name="kaizenAccess" type="checkbox" />Kaizen</label><label className="flex items-center gap-2"><input defaultChecked={user.genbaAccess} name="genbaAccess" type="checkbox" />GENBA</label></div></fieldset>
                 <div className="flex items-end"><button className="btn btn-secondary w-full" type="submit"><UserCog className="h-4 w-4" aria-hidden />Guardar cambios</button></div>
               </form>
             </details>

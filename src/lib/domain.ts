@@ -4,8 +4,11 @@ import {
   Classification,
   IdeaStatus,
   IdeaCategory,
+  GenbaStatus,
+  KaizenStatus,
   Priority,
-  Role
+  Role,
+  WorkItemStatus
 } from "@prisma/client";
 
 export const ideaCategoryLabels: Record<IdeaCategory, string> = {
@@ -13,6 +16,40 @@ export const ideaCategoryLabels: Record<IdeaCategory, string> = {
   B: "Categoría B · Apoyo interno",
   C: "Categoría C · Externo o cotización"
 };
+
+export const kaizenStatusLabels: Record<KaizenStatus, string> = {
+  PENDIENTE_CHARTER: "Pendiente de Project Charter",
+  PLANIFICACION: "En planificación",
+  EN_CURSO: "En curso",
+  EN_PAUSA: "En pausa",
+  COMPLETADO: "Completado",
+  CANCELADO: "Cancelado"
+};
+
+export const genbaStatusLabels: Record<GenbaStatus, string> = {
+  ABIERTO: "Abierto",
+  CERRADO: "Cerrado",
+  CANCELADO: "Cancelado"
+};
+
+export const workItemStatusLabels: Record<WorkItemStatus, string> = {
+  PENDIENTE: "Pendiente",
+  EN_PROCESO: "En proceso",
+  BLOQUEADA: "Bloqueada",
+  COMPLETADA: "Completada",
+  CANCELADA: "Cerrada sin ejecutar",
+  COMBINADA: "Combinada"
+};
+
+export const genbaDepartments = [
+  "Calidad / Inocuidad",
+  "Mantenimiento",
+  "Producción",
+  "Seguridad",
+  "Mejora Continua",
+  "Almacén",
+  "Supervisión"
+];
 
 export const roleLabels: Record<Role, string> = {
   ADMIN: "Administrador",
@@ -124,6 +161,38 @@ export function parseImpactTypes(value: string | null | undefined): string[] {
       .map((item) => item.trim())
       .filter(Boolean);
   }
+}
+
+export function parseStringArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+}
+
+export function workProgress(items: Array<{ status: WorkItemStatus }>) {
+  const relevant = items.filter((item) => item.status !== "COMBINADA");
+  const closed = relevant.filter((item) => item.status === "COMPLETADA" || item.status === "CANCELADA").length;
+  return {
+    total: relevant.length,
+    closed,
+    open: relevant.length - closed,
+    percent: relevant.length ? Math.round((closed / relevant.length) * 100) : 0
+  };
+}
+
+export function attendancePercent(expectedValue: string, attendedValue: string) {
+  const expected = parseStringArray(expectedValue);
+  const attended = new Set(parseStringArray(attendedValue));
+  if (!expected.length) return 0;
+  return Math.round((expected.filter((department) => attended.has(department)).length / expected.length) * 100);
+}
+
+export function isWorkItemOverdue(item: { dueDate: Date | null; status: WorkItemStatus }) {
+  return Boolean(item.dueDate && item.dueDate < new Date() && !["COMPLETADA", "CANCELADA", "COMBINADA"].includes(item.status));
 }
 
 export function requiredApprovalTypes(input: {

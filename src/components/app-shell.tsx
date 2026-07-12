@@ -9,15 +9,19 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Bell,
+  CalendarRange,
   ClipboardCheck,
   ClipboardList,
   Download,
+  Footprints,
+  FolderKanban,
   Gauge,
   KanbanSquare,
   LayoutDashboard,
   ListChecks,
   LogOut,
   Menu,
+  Plus,
   QrCode,
   Settings,
   ShieldCheck,
@@ -32,6 +36,8 @@ type ShellUser = {
   name: string;
   email: string;
   role: Role;
+  kaizenAccess: boolean;
+  genbaAccess: boolean;
 };
 
 type NavItem = {
@@ -43,7 +49,7 @@ type NavItem = {
   group: "work" | "control" | "system";
 };
 
-const nav: NavItem[] = [
+const ideaNav: NavItem[] = [
   { href: "/dashboard", label: "Panel general", shortLabel: "Inicio", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
   { href: "/supervisor", label: "Bandeja de supervisor", shortLabel: "Bandeja", icon: UserCheck, roles: ["ADMIN", "SUPERVISOR"], group: "work" },
   { href: "/validaciones/calidad", label: "Calidad e inocuidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "work" },
@@ -59,6 +65,19 @@ const nav: NavItem[] = [
   { href: "/notificaciones", label: "Notificaciones", shortLabel: "Avisos", icon: Bell, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"], group: "system" },
   { href: "/auditoria", label: "Auditoría", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
   { href: "/configuracion", label: "Configuración", shortLabel: "Ajustes", icon: Settings, roles: ["ADMIN"], group: "system" }
+];
+
+const kaizenNav: NavItem[] = [
+  { href: "/kaizen", label: "Panel de proyectos", shortLabel: "Kaizen", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "work" },
+  { href: "/kaizen/nuevo", label: "Nuevo proyecto", shortLabel: "Nuevo", icon: Plus, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/kaizen/gantt", label: "Calendario Gantt", shortLabel: "Gantt", icon: CalendarRange, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" },
+  { href: "/kaizen/kanban", label: "Kanban de actividades", shortLabel: "Kanban", icon: FolderKanban, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" }
+];
+
+const genbaNav: NavItem[] = [
+  { href: "/genba", label: "Panel de recorridos", shortLabel: "GENBA", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "work" },
+  { href: "/genba/nuevo", label: "Nuevo recorrido", shortLabel: "Nuevo", icon: Plus, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/genba/kanban", label: "Kanban de actividades", shortLabel: "Kanban", icon: FolderKanban, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" }
 ];
 
 const roleTheme: Record<Role, { accent: string; soft: string; home: string; context: string }> = {
@@ -114,21 +133,51 @@ function BrandBlock({ compact = false }: { compact?: boolean }) {
       </span>
       <span className="min-w-0">
         <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-red-600">PROpEx</span>
-        <span className="block truncate text-sm font-extrabold text-slate-950">Ideas de Mejora</span>
+        <span className="block truncate text-sm font-extrabold text-slate-950">Mejora Operativa</span>
       </span>
     </Link>
   );
 }
 
-export function AppShell({ user, children, pendingNotifications }: { user: ShellUser; children: ReactNode; pendingNotifications: number }) {
+function ModuleSwitcher({ home, access, compact = false, onNavigate }: { home: string; access: { kaizen: boolean; genba: boolean }; compact?: boolean; onNavigate?: () => void }) {
+  const pathname = usePathname();
+  const modules = [
+    { href: home, label: "Ideas", icon: ClipboardList, active: !pathname.startsWith("/kaizen") && !pathname.startsWith("/genba"), visible: true },
+    { href: "/kaizen", label: "Kaizen", icon: FolderKanban, active: pathname.startsWith("/kaizen"), visible: access.kaizen },
+    { href: "/genba", label: "GENBA", icon: Footprints, active: pathname.startsWith("/genba"), visible: access.genba }
+  ].filter((item) => item.visible);
+  return (
+    <nav aria-label="Cambiar de módulo" className={`module-switcher ${compact ? "is-compact" : ""}`}>
+      {modules.map((item) => {
+        const Icon = item.icon;
+        return <Link aria-current={item.active ? "page" : undefined} className={`module-switcher-link ${item.active ? "is-active" : ""}`} href={item.href} key={item.label} onClick={onNavigate}><Icon className="h-4 w-4" aria-hidden /><span>{item.label}</span></Link>;
+      })}
+    </nav>
+  );
+}
+
+export function AppShell({ user, children, pendingNotifications, moduleAccess }: { user: ShellUser; children: ReactNode; pendingNotifications: number; moduleAccess: { kaizen: boolean; genba: boolean } }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const theme = roleTheme[user.role];
-  const visibleNav = useMemo(() => nav.filter((item) => item.roles.includes(user.role)), [user.role]);
+  const roleBaseTheme = roleTheme[user.role];
+  const currentModule = pathname.startsWith("/kaizen") ? "kaizen" : pathname.startsWith("/genba") ? "genba" : "ideas";
+  const theme = currentModule === "kaizen"
+    ? { ...roleBaseTheme, accent: "#a16207", soft: "#fff7d6", context: "Proyectos Kaizen", home: "/kaizen" }
+    : currentModule === "genba"
+      ? { ...roleBaseTheme, accent: "#c81e2d", soft: "#fff0f2", context: "Recorridos GENBA", home: "/genba" }
+      : roleBaseTheme;
+  const visibleNav = useMemo(() => {
+    const source = currentModule === "kaizen" ? kaizenNav : currentModule === "genba" ? genbaNav : ideaNav;
+    return source.filter((item) => item.roles.includes(user.role));
+  }, [currentModule, user.role]);
   const mobileItems = useMemo(() => {
-    const preferred = [theme.home, user.role === "ADMIN" || user.role === "MEJORA_CONTINUA" ? "/ideas" : "/implementacion", "/notificaciones"];
+    const preferred = currentModule === "ideas"
+      ? [theme.home, user.role === "ADMIN" || user.role === "MEJORA_CONTINUA" ? "/ideas" : "/implementacion", "/notificaciones"]
+      : currentModule === "kaizen"
+        ? ["/kaizen", "/kaizen/gantt", "/kaizen/kanban"]
+        : ["/genba", "/genba/kanban"];
     return preferred.map((href) => visibleNav.find((item) => item.href === href)).filter((item): item is NavItem => Boolean(item)).filter((item, index, items) => items.findIndex((candidate) => candidate.href === item.href) === index).slice(0, 3);
-  }, [theme.home, user.role, visibleNav]);
+  }, [currentModule, theme.home, user.role, visibleNav]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -170,6 +219,7 @@ export function AppShell({ user, children, pendingNotifications }: { user: Shell
       <aside className="app-sidebar">
         <div className="app-sidebar-brand">
           <BrandBlock />
+          <div className="mt-4"><ModuleSwitcher access={moduleAccess} home={roleBaseTheme.home} /></div>
         </div>
         <div className="app-sidebar-scroll">{navigation()}</div>
         <div className="app-sidebar-footer">
@@ -205,6 +255,8 @@ export function AppShell({ user, children, pendingNotifications }: { user: Shell
             </button>
           </div>
         </header>
+
+        <div className="mobile-module-strip"><ModuleSwitcher access={moduleAccess} compact home={roleBaseTheme.home} /></div>
 
         <main className="app-main">{children}</main>
       </div>
@@ -242,6 +294,7 @@ export function AppShell({ user, children, pendingNotifications }: { user: Shell
             <div className="border-b border-slate-200 p-4">
               <p className="text-sm font-extrabold text-slate-950">{user.name}</p>
               <p className="mt-0.5 text-xs text-slate-500">{roleLabels[user.role]} · {theme.context}</p>
+              <div className="mt-3"><ModuleSwitcher access={moduleAccess} compact home={roleBaseTheme.home} onNavigate={() => setMenuOpen(false)} /></div>
             </div>
             <div className="flex-1 overflow-y-auto p-4">{navigation(() => setMenuOpen(false))}</div>
             <form action={logoutAction} className="border-t border-slate-200 p-4">
