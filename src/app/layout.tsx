@@ -11,8 +11,8 @@ export const metadata: Metadata = {
   title: "PROpEx Ideas de Mejora",
   description: "Sistema de Ideas de Mejora PROpEx",
   icons: {
-    icon: "/brand/mejora-continua-icon.png",
-    apple: "/brand/mejora-continua-icon.png"
+    icon: "/brand/mejora-continua-logo-rojo.png",
+    apple: "/brand/mejora-continua-logo-rojo.png"
   }
 };
 
