@@ -9,7 +9,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "PROpEx Ideas de Mejora",
-  description: "Sistema de Ideas de Mejora PROpEx"
+  description: "Sistema de Ideas de Mejora PROpEx",
+  icons: {
+    icon: "/brand/mejora-continua-icon.png",
+    apple: "/brand/mejora-continua-icon.png"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
