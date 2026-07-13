@@ -81,13 +81,13 @@ const genbaNav: NavItem[] = [
 ];
 
 const roleTheme: Record<Role, { accent: string; soft: string; home: string; context: string }> = {
-  ADMIN: { accent: "#171a18", soft: "#eef0ef", home: "/dashboard", context: "Control del sistema" },
-  MEJORA_CONTINUA: { accent: "#171a18", soft: "#eef0ef", home: "/dashboard", context: "Seguimiento global" },
+  ADMIN: { accent: "#171717", soft: "#f0f0f0", home: "/dashboard", context: "Control del sistema" },
+  MEJORA_CONTINUA: { accent: "#171717", soft: "#f0f0f0", home: "/dashboard", context: "Seguimiento global" },
   SUPERVISOR: { accent: "#14835f", soft: "#e9f6f0", home: "/supervisor", context: "Seguimiento de tu área" },
   CALIDAD: { accent: "#d32236", soft: "#fff0f2", home: "/validaciones/calidad", context: "Calidad e inocuidad" },
   SEGURIDAD: { accent: "#626a70", soft: "#f0f2f3", home: "/validaciones/seguridad", context: "Seguridad industrial" },
   MANTENIMIENTO: { accent: "#176fc1", soft: "#edf5fc", home: "/validaciones/mantenimiento", context: "Factibilidad técnica" },
-  COLABORADOR: { accent: "#e21d2b", soft: "#fff1f2", home: "/", context: "Captura pública" }
+  COLABORADOR: { accent: "#ea0029", soft: "#fff1f4", home: "/", context: "Captura pública" }
 };
 
 const groupLabels = {
@@ -132,7 +132,7 @@ function BrandBlock({ compact = false }: { compact?: boolean }) {
         <Image alt="Proboca" className="h-auto w-full object-contain" height={72} priority width={216} src="/brand/proboca-logo.png" />
       </span>
       <span className="min-w-0">
-        <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-red-600">PROpEx</span>
+        <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-700">PROpEx</span>
         <span className="block truncate text-sm font-extrabold text-slate-950">Mejora Operativa</span>
       </span>
     </Link>
@@ -164,7 +164,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
   const theme = currentModule === "kaizen"
     ? { ...roleBaseTheme, accent: "#a16207", soft: "#fff7d6", context: "Proyectos Kaizen", home: "/kaizen" }
     : currentModule === "genba"
-      ? { ...roleBaseTheme, accent: "#c81e2d", soft: "#fff0f2", context: "Recorridos GENBA", home: "/genba" }
+      ? { ...roleBaseTheme, accent: "#ea0029", soft: "#fff1f4", context: "Recorridos GENBA", home: "/genba" }
       : roleBaseTheme;
   const visibleNav = useMemo(() => {
     const source = currentModule === "kaizen" ? kaizenNav : currentModule === "genba" ? genbaNav : ideaNav;

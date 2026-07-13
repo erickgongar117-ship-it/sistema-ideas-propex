@@ -5,15 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#171a18",
-        line: "#dce2de",
-        panel: "#f7f9f8",
+        ink: "#171717",
+        line: "#dedede",
+        panel: "#f7f7f7",
         brand: {
-          50: "#fff3f4",
-          100: "#ffe0e3",
-          500: "#e21d2b",
-          700: "#b5121d",
-          900: "#620b12"
+          50: "#fff1f4",
+          100: "#ffe0e7",
+          500: "#ea0029",
+          700: "#b50020",
+          900: "#620011"
         },
         dept: {
           supervisor: "#14835f",

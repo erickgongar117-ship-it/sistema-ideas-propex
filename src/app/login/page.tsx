@@ -30,7 +30,7 @@ export default async function LoginPage({ searchParams }: LoginProps) {
               <Image alt="Proboca" className="h-auto w-full object-contain" height={72} priority width={216} src="/brand/proboca-logo.png" />
             </span>
             <span>
-              <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-red-300">PROpEx</span>
+              <span className="block text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-100">PROpEx</span>
               <span className="block text-sm font-extrabold">Mejora Operativa</span>
             </span>
           </Link>
@@ -42,7 +42,7 @@ export default async function LoginPage({ searchParams }: LoginProps) {
 
         <section className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[1fr_430px] lg:py-14">
           <div className="max-w-2xl">
-            <p className="text-sm font-extrabold uppercase tracking-[0.08em] text-red-200">Portal PROpEx</p>
+            <p className="text-sm font-extrabold uppercase tracking-[0.08em] text-brand-100">Portal PROpEx</p>
             <h1 className="mt-3 text-4xl font-extrabold leading-tight sm:text-5xl">Un acceso para mejorar cada día.</h1>
             <p className="mt-4 max-w-xl text-base leading-7 text-slate-200">
               Ideas de Mejora, Proyectos Kaizen y Recorridos GENBA en un mismo espacio de trabajo.
@@ -53,8 +53,8 @@ export default async function LoginPage({ searchParams }: LoginProps) {
                 ["2", "Kaizen"],
                 ["3", "GENBA"]
               ].map(([number, label]) => (
-                <div className="border-l-2 border-red-500 pl-3" key={number}>
-                  <p className="text-xs font-extrabold text-red-200">PASO {number}</p>
+                <div className="border-l-2 border-brand-500 pl-3" key={number}>
+                  <p className="text-xs font-extrabold text-brand-100">PASO {number}</p>
                   <p className="mt-1 text-sm font-extrabold">{label}</p>
                 </div>
               ))}

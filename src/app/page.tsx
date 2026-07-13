@@ -20,7 +20,7 @@ export default async function HomePage() {
                 <Image alt="Proboca" className="h-auto w-full object-contain" height={72} width={216} src="/brand/proboca-logo.png" />
               </span>
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-red-300">PROpEx</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-100">PROpEx</p>
                 <p className="text-sm font-extrabold">Ideas de Mejora</p>
               </div>
             </div>
@@ -34,7 +34,7 @@ export default async function HomePage() {
 
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 items-center px-4 py-10 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
-            <div className="mb-4 flex items-center gap-2 text-sm font-bold text-red-200">
+            <div className="mb-4 flex items-center gap-2 text-sm font-bold text-brand-100">
               <span className="h-px w-9 bg-brand-500" />
               Mejora Continua Proboca
             </div>

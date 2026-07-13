@@ -3,21 +3,23 @@
 @tailwind utilities;
 
 :root {
-  --background: #f3f5f4;
-  --foreground: #171a18;
+  --background: #f6f6f6;
+  --foreground: #171717;
   --surface: #ffffff;
-  --surface-subtle: #f7f9f8;
-  --muted: #66716b;
-  --line: #dce2de;
-  --line-strong: #c9d1cc;
-  --brand-red: #e21d2b;
-  --brand-red-dark: #b5121d;
+  --surface-subtle: #f8f8f8;
+  --muted: #6c6c6c;
+  --line: #dedede;
+  --line-strong: #c8c8c8;
+  --brand-red: #ea0029;
+  --brand-red-dark: #b50020;
+  --brand-black: #171717;
+  --brand-gray: #8a8a8a;
   --supervisor: #14835f;
   --quality: #d32236;
   --safety: #626a70;
   --maintenance: #176fc1;
-  --role-accent: #171a18;
-  --role-soft: #eef0ef;
+  --role-accent: #171717;
+  --role-soft: #f0f0f0;
 }
 
 .capture-theme {
@@ -242,7 +244,7 @@ summary:focus-visible {
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 0.48rem 0.6rem;
-  color: #4f5953;
+  color: #4f4f4f;
   font-size: 0.84rem;
   font-weight: 750;
   transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
@@ -251,7 +253,7 @@ summary:focus-visible {
 .app-nav-link:hover {
   border-color: var(--line);
   background: var(--surface-subtle);
-  color: #171a18;
+  color: var(--brand-black);
 }
 
 .app-nav-link.is-active {
@@ -289,7 +291,7 @@ summary:focus-visible {
 
 .nav-group-label {
   padding: 0 0.65rem;
-  color: #8a928e;
+  color: var(--brand-gray);
   font-size: 0.66rem;
   font-weight: 850;
   letter-spacing: 0.08em;
@@ -331,14 +333,14 @@ summary:focus-visible {
   border: 1px solid var(--line-strong);
   border-radius: 7px;
   background: #ffffff;
-  color: #38413c;
+  color: #3d3d3d;
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .icon-button:hover {
-  border-color: #aeb8b2;
+  border-color: #b5b5b5;
   background: var(--surface-subtle);
-  color: #171a18;
+  color: var(--brand-black);
 }
 
 .user-summary {
@@ -443,16 +445,16 @@ summary:focus-visible {
 .field {
   width: 100%;
   min-height: 46px;
-  border: 1px solid #cbd3ce;
+  border: 1px solid #cdcdcd;
   border-radius: 6px;
   background: #ffffff;
   padding: 0.72rem 0.82rem;
-  color: #171a18;
+  color: var(--brand-black);
   transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
 }
 
 .field:hover {
-  border-color: #aeb8b2;
+  border-color: #b5b5b5;
 }
 
 .field:focus {
@@ -462,12 +464,12 @@ summary:focus-visible {
 }
 
 .field::placeholder {
-  color: #929a96;
+  color: #8d8d8d;
 }
 
 .field:disabled {
-  background: #edf0ee;
-  color: #69736d;
+  background: #eeeeee;
+  color: #707070;
 }
 
 textarea.field {
@@ -493,14 +495,14 @@ input[type="file"]::file-selector-button {
   border-radius: 5px;
   background: var(--surface-subtle);
   padding: 0.35rem 0.7rem;
-  color: #2f3732;
+  color: #303030;
   font-weight: 750;
 }
 
 .label {
   display: block;
   margin-bottom: 0.38rem;
-  color: #3f4943;
+  color: #404040;
   font-size: 0.76rem;
   font-weight: 800;
 }
@@ -558,11 +560,11 @@ input[type="file"]::file-selector-button {
 .btn-secondary {
   border-color: var(--line-strong);
   background: #ffffff;
-  color: #252c28;
+  color: #292929;
 }
 
 .btn-secondary:hover {
-  border-color: #a8b2ac;
+  border-color: #b5b5b5;
   background: var(--surface-subtle);
 }
 
@@ -613,15 +615,15 @@ input[type="file"]::file-selector-button {
 
 .data-table th,
 .data-table td {
-  border-bottom: 1px solid #e8ece9;
+  border-bottom: 1px solid #e6e6e6;
   padding: 0.78rem 0.85rem;
   text-align: left;
   vertical-align: middle;
 }
 
 .data-table th {
-  background: #f5f7f6;
-  color: #5b655f;
+  background: #f5f5f5;
+  color: #5f5f5f;
   font-size: 0.68rem;
   font-weight: 850;
   letter-spacing: 0.045em;
@@ -634,7 +636,7 @@ input[type="file"]::file-selector-button {
 }
 
 .data-table tbody tr:hover {
-  background: #fafbfa;
+  background: #fafafa;
 }
 
 .data-table tr:last-child td {
@@ -642,7 +644,7 @@ input[type="file"]::file-selector-button {
 }
 
 .data-table td {
-  color: #3f4943;
+  color: #404040;
 }
 
 .alert {
