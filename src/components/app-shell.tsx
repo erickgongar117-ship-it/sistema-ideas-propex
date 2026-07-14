@@ -21,6 +21,7 @@ import {
   ListChecks,
   LogOut,
   Menu,
+  Network,
   Plus,
   QrCode,
   Settings,
@@ -64,6 +65,7 @@ const ideaNav: NavItem[] = [
   { href: "/reportes", label: "Reportes", icon: Download, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
   { href: "/notificaciones", label: "Notificaciones", shortLabel: "Avisos", icon: Bell, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"], group: "system" },
   { href: "/auditoria", label: "Auditoría", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
+  { href: "/configuracion/estructura", label: "Estructura organizacional", shortLabel: "Estructura", icon: Network, roles: ["ADMIN"], group: "system" },
   { href: "/configuracion", label: "Configuración", shortLabel: "Ajustes", icon: Settings, roles: ["ADMIN"], group: "system" }
 ];
 

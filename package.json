@@ -13,6 +13,7 @@
     "db:push:production": "tsx scripts/db-push.ts --schema prisma/schema.production.prisma",
     "db:seed": "prisma db seed",
     "db:seed:production": "prisma db seed --schema prisma/schema.production.prisma",
+    "db:seed:organization": "tsx scripts/seed-organization.ts",
     "reminders": "tsx scripts/reminders.ts",
     "export-demo": "tsx scripts/export-demo.ts"
   },

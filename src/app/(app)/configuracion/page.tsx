@@ -1,4 +1,4 @@
-import { Building2, KeyRound, Mail, Plus, SlidersHorizontal, UserCog, UsersRound } from "lucide-react";
+import { Building2, CircleCheck, KeyRound, Mail, Network, Plus, SlidersHorizontal, UserCog, UsersRound } from "lucide-react";
 import { createPointRuleAction, createUserAction, updateAreaAction, updatePointRuleAction, updateUserAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
 import { SectionHeading } from "@/components/section-heading";
@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 const configurableRoles = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"] as const;
 
 type ConfigPageProps = {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; user?: string }>;
 };
 
 const roleTone = {
@@ -24,30 +24,43 @@ const roleTone = {
 export default async function ConfigPage({ searchParams }: ConfigPageProps) {
   await requireUser(["ADMIN"]);
   const query = await searchParams;
-  const [areas, supervisors, users, pointRules] = await Promise.all([
+  const [areas, assignableUsers, users, pointRules] = await Promise.all([
     prisma.area.findMany({ include: { supervisor: true }, orderBy: { code: "asc" } }),
-    prisma.user.findMany({ where: { role: "SUPERVISOR", active: true }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({ where: { role: { in: [...configurableRoles] }, active: true }, orderBy: [{ role: "asc" }, { name: "asc" }] }),
     prisma.user.findMany({ where: { role: { in: [...configurableRoles] } }, orderBy: [{ role: "asc" }, { name: "asc" }] }),
     prisma.pointRule.findMany({ orderBy: { createdAt: "asc" } })
   ]);
 
   const errorMessage = query.error === "correo"
     ? "Ese correo ya pertenece a otro usuario."
+    : query.error === "correo_invalido"
+      ? "Escribe un correo valido, por ejemplo nombre@proboca.net."
     : query.error === "contrasena"
       ? "La contraseña debe tener al menos 8 caracteres."
+      : query.error === "usuario"
+        ? "El usuario que intentas modificar ya no existe."
       : query.error
         ? "Revisa la información capturada."
         : null;
+  const successMessage = query.success === "usuario_actualizado"
+    ? "Los datos y el correo se actualizaron correctamente. Los avisos pendientes ahora usan el correo nuevo."
+    : query.success === "usuario_creado"
+      ? "El usuario fue creado y ya puede usar su correo para iniciar sesion."
+      : query.success === "area_actualizada"
+        ? "El area y su responsable se actualizaron en la estructura, los QR y las rutas de seguimiento."
+      : null;
 
   return (
     <>
       <PageHeader eyebrow="Administración · Directorio y reglas" title="Configuración" description="Controla accesos, correos, módulos disponibles, áreas y reglas de puntos." />
 
       {errorMessage ? <div className="alert alert-danger mb-5"><KeyRound className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
+      {successMessage ? <div className="alert alert-success mb-5"><CircleCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{successMessage}</span></div> : null}
 
       <nav aria-label="Secciones de configuración" className="no-print mb-6 flex gap-2 overflow-x-auto border-b border-line pb-3">
         <a className="btn btn-secondary shrink-0" href="#usuarios"><UsersRound className="h-4 w-4" aria-hidden />Usuarios</a>
         <a className="btn btn-secondary shrink-0" href="#areas"><Building2 className="h-4 w-4" aria-hidden />Áreas</a>
+        <a className="btn btn-secondary shrink-0" href="/configuracion/estructura"><Network className="h-4 w-4" aria-hidden />Estructura organizacional</a>
         <a className="btn btn-secondary shrink-0" href="#puntos"><SlidersHorizontal className="h-4 w-4" aria-hidden />Reglas de puntos</a>
       </nav>
 
@@ -59,7 +72,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
       <section className="scroll-mt-6" id="usuarios">
         <SectionHeading count={users.length} description="Solo el administrador puede crear accesos, cambiar correos o desactivar cuentas." title="Usuarios y correos" />
 
-        <details className="details-panel mb-4 border-dashed border-slate-400" open={Boolean(query.error)}>
+        <details className="details-panel mb-4 border-dashed border-slate-400" open={Boolean(query.error && !query.user)}>
           <summary><span className="flex items-center gap-2 text-brand-700"><Plus className="h-4 w-4" aria-hidden />Agregar una persona</span></summary>
           <form action={createUserAction} className="grid gap-4 p-4 lg:grid-cols-2 xl:grid-cols-3">
             <label><span className="label">Nombre completo</span><input className="field" name="name" placeholder="Nombre y apellidos" required /></label>
@@ -74,7 +87,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
 
         <div className="grid gap-3">
           {users.map((user) => (
-            <details className="details-panel" key={user.id}>
+            <details className="details-panel" data-user-email={user.email.toLowerCase()} data-testid={`user-${user.id}`} key={user.id} open={query.user === user.id}>
               <summary>
                 <span className="flex min-w-0 items-center gap-3">
                   <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-extrabold ${roleTone[user.role as keyof typeof roleTone]}`}>{user.name.charAt(0).toUpperCase()}</span>
@@ -106,7 +119,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
               <form action={updateAreaAction} className="grid gap-4 p-4 md:grid-cols-[1fr_1fr_140px_auto]">
                 <input name="areaId" type="hidden" value={area.id} />
                 <label><span className="label">Nombre del área</span><input className="field" name="name" defaultValue={area.name} required /></label>
-                <label><span className="label">Supervisor asignado</span><select className="field" name="supervisorId" defaultValue={area.supervisorId ?? ""}><option value="">Sin supervisor</option>{supervisors.map((supervisor) => <option key={supervisor.id} value={supervisor.id}>{supervisor.name}</option>)}</select></label>
+                <label><span className="label">Responsable de recibir ideas</span><select className="field" name="supervisorId" defaultValue={area.supervisorId ?? ""}><option value="">Sin responsable</option>{assignableUsers.map((person) => <option key={person.id} value={person.id}>{person.name} · {roleLabels[person.role]}</option>)}</select></label>
                 <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked={area.active} name="active" type="checkbox" />Área activa</label>
                 <div className="flex items-end"><button className="btn btn-secondary w-full" type="submit">Guardar</button></div>
               </form>

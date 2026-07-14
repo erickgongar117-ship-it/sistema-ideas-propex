@@ -136,6 +136,18 @@ enum GenbaAttachmentType {
   OTHER
 }
 
+enum PlantCode {
+  APO
+  CAR
+}
+
+enum OrgUnitType {
+  MACROPROCESO
+  DEPARTAMENTO
+  AREA
+  PROCESO
+}
+
 model User {
   id                    String           @id @default(cuid())
   name                  String
@@ -161,18 +173,55 @@ model User {
   createdGenbaWalks     GenbaWalk[]      @relation("GenbaCreator")
   ownedGenbaActivities  GenbaActivity[]  @relation("GenbaActivityOwner")
   genbaUpdates          GenbaUpdate[]
+  routedOrgUnits        OrgUnit[]        @relation("OrgUnitRoutingUser")
 }
 
 model Area {
-  id           String   @id @default(cuid())
-  code         String   @unique
-  name         String
-  supervisorId String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  supervisor   User?    @relation("AreaSupervisor", fields: [supervisorId], references: [id])
-  ideas        Idea[]
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  supervisorId     String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  supervisor       User?    @relation("AreaSupervisor", fields: [supervisorId], references: [id])
+  ideas            Idea[]
+  organizationUnit OrgUnit? @relation("OrgUnitCaptureArea")
+}
+
+model Plant {
+  id        String    @id @default(cuid())
+  code      PlantCode @unique
+  name      String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  orgUnits  OrgUnit[]
+}
+
+model OrgUnit {
+  id            String      @id @default(cuid())
+  plantId       String
+  parentId      String?
+  type          OrgUnitType
+  code          String      @unique
+  name          String
+  responsible   String
+  manager       String
+  routingUserId String?
+  captureAreaId String?     @unique
+  qrEnabled     Boolean     @default(false)
+  active        Boolean     @default(true)
+  sortOrder     Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  plant         Plant       @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  parent        OrgUnit?    @relation("OrgUnitTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children      OrgUnit[]   @relation("OrgUnitTree")
+  routingUser   User?       @relation("OrgUnitRoutingUser", fields: [routingUserId], references: [id], onDelete: SetNull)
+  captureArea   Area?       @relation("OrgUnitCaptureArea", fields: [captureAreaId], references: [id], onDelete: SetNull)
+
+  @@index([plantId, parentId, sortOrder])
 }
 
 model Idea {

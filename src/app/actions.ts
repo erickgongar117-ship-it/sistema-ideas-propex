@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import type { ApprovalType, Classification, GenbaStatus, IdeaCategory, KaizenStatus, Priority, Role, WorkItemStatus } from "@prisma/client";
+import { Prisma, type ApprovalType, type Classification, type GenbaStatus, type IdeaCategory, type KaizenStatus, type Priority, type Role, type WorkItemStatus } from "@prisma/client";
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
 import { approvalTypeForRole, genbaDepartments, impactOptions, nextValidationStatus, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
@@ -41,6 +41,12 @@ const ideaSchema = z.object({
 });
 
 const userRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"];
+const emailSchema = z.string().trim().toLowerCase().email();
+
+async function userWithNormalizedEmail(email: string) {
+  const users = await prisma.user.findMany({ select: { id: true, email: true } });
+  return users.find((user) => user.email.trim().toLowerCase() === email) ?? null;
+}
 
 async function notifyModuleAssignment(input: { to?: string | null; subject: string; lines: string[]; path: string }) {
   await notify({
@@ -1261,16 +1267,23 @@ export async function promoteGenbaActivityToKaizenAction(formData: FormData) {
 export async function updateAreaAction(formData: FormData) {
   const user = await requireUser(["ADMIN"]);
   const areaId = text(formData, "areaId");
-  await prisma.area.update({
-    where: { id: areaId },
-    data: {
-      name: text(formData, "name"),
-      supervisorId: text(formData, "supervisorId") || null,
-      active: checked(formData, "active")
-    }
+  const supervisorId = text(formData, "supervisorId") || null;
+  const active = checked(formData, "active");
+  await prisma.$transaction(async (tx) => {
+    await tx.area.update({
+      where: { id: areaId },
+      data: { name: text(formData, "name"), supervisorId, active }
+    });
+    await tx.orgUnit.updateMany({
+      where: { captureAreaId: areaId },
+      data: { routingUserId: supervisorId, active, qrEnabled: active }
+    });
   });
   await auditLog({ entity: "Area", entityId: areaId, action: "AREA_UPDATED", userId: user.id });
   revalidatePath("/configuracion");
+  revalidatePath("/configuracion/estructura");
+  revalidatePath("/qr");
+  redirect(`/configuracion?success=area_actualizada#areas`);
 }
 
 export async function updatePointRuleAction(formData: FormData) {
@@ -1325,37 +1338,52 @@ export async function createUserAction(formData: FormData) {
   const role = text(formData, "role") as Role;
   if (!userRoles.includes(role)) redirect("/configuracion?error=rol");
 
-  const email = text(formData, "email").toLowerCase();
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) redirect("/configuracion?error=correo");
+  const parsedEmail = emailSchema.safeParse(text(formData, "email"));
+  if (!parsedEmail.success) redirect("/configuracion?error=correo_invalido#usuarios");
+  const email = parsedEmail.data;
+  const existing = await userWithNormalizedEmail(email);
+  if (existing) redirect("/configuracion?error=correo#usuarios");
   const password = text(formData, "password");
-  if (password.length < 8) redirect("/configuracion?error=contrasena");
-  const user = await prisma.user.create({
-    data: {
-      name: text(formData, "name"),
-      email,
-      role,
-      active: checked(formData, "active"),
-      kaizenAccess: checked(formData, "kaizenAccess"),
-      genbaAccess: checked(formData, "genbaAccess"),
-      passwordHash: await bcrypt.hash(password, 10)
+  if (password.length < 8) redirect("/configuracion?error=contrasena#usuarios");
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        name: text(formData, "name"),
+        email,
+        role,
+        active: checked(formData, "active"),
+        kaizenAccess: checked(formData, "kaizenAccess"),
+        genbaAccess: checked(formData, "genbaAccess"),
+        passwordHash: await bcrypt.hash(password, 10)
+      }
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      redirect("/configuracion?error=correo#usuarios");
     }
-  });
+    throw error;
+  }
   await auditLog({ entity: "User", entityId: user.id, action: "USER_CREATED", userId: admin.id, details: { email, role } });
   revalidatePath("/configuracion");
+  redirect(`/configuracion?success=usuario_creado&user=${encodeURIComponent(user.id)}#usuarios`);
 }
 
 export async function updateUserAction(formData: FormData) {
   const admin = await requireUser(["ADMIN"]);
   const userId = text(formData, "userId");
   const role = text(formData, "role") as Role;
-  if (!userRoles.includes(role)) redirect("/configuracion?error=rol");
+  if (!userRoles.includes(role)) redirect(`/configuracion?error=rol&user=${encodeURIComponent(userId)}#usuarios`);
 
-  const email = text(formData, "email").toLowerCase();
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing && existing.id !== userId) redirect("/configuracion?error=correo");
+  const parsedEmail = emailSchema.safeParse(text(formData, "email"));
+  if (!parsedEmail.success) redirect(`/configuracion?error=correo_invalido&user=${encodeURIComponent(userId)}#usuarios`);
+  const email = parsedEmail.data;
+  const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+  if (!currentUser) redirect("/configuracion?error=usuario#usuarios");
+  const existing = await userWithNormalizedEmail(email);
+  if (existing && existing.id !== userId) redirect(`/configuracion?error=correo&user=${encodeURIComponent(userId)}#usuarios`);
   const password = text(formData, "password");
-  if (password && password.length < 8) redirect("/configuracion?error=contrasena");
+  if (password && password.length < 8) redirect(`/configuracion?error=contrasena&user=${encodeURIComponent(userId)}#usuarios`);
   const data = {
     name: text(formData, "name"),
     email,
@@ -1366,9 +1394,36 @@ export async function updateUserAction(formData: FormData) {
     ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {})
   };
 
-  const user = await prisma.user.update({ where: { id: userId }, data });
-  await auditLog({ entity: "User", entityId: user.id, action: "USER_UPDATED", userId: admin.id, details: { email: user.email, role } });
+  let user;
+  try {
+    user = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({ where: { id: userId }, data });
+      if (currentUser.email !== updated.email) {
+        await tx.notificationOutbox.updateMany({
+          where: { to: currentUser.email, status: { in: ["PENDING", "ERROR"] } },
+          data: { to: updated.email }
+        });
+      }
+      return updated;
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      redirect(`/configuracion?error=correo&user=${encodeURIComponent(userId)}#usuarios`);
+    }
+    throw error;
+  }
+  if (admin.id === user.id) await setSession(user);
+  await auditLog({
+    entity: "User",
+    entityId: user.id,
+    action: "USER_UPDATED",
+    userId: admin.id,
+    details: { previousEmail: currentUser.email, email: user.email, role }
+  });
   revalidatePath("/configuracion");
+  revalidatePath("/configuracion/estructura");
+  revalidatePath("/notificaciones");
+  redirect(`/configuracion?success=usuario_actualizado&user=${encodeURIComponent(user.id)}#usuarios`);
 }
 
 export async function markNotificationAction(formData: FormData) {
