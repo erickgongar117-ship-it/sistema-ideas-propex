@@ -63,8 +63,9 @@ function workStatus(index: number, total: number, completion: number, variant: n
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL ?? "";
-  if (!databaseUrl.startsWith("file:")) {
-    throw new Error("La carga de ejemplos solo puede ejecutarse contra la base SQLite local.");
+  const explicitProductionSeed = process.env.ALLOW_PRODUCTION_DEMO_SEED === "1";
+  if (!databaseUrl.startsWith("file:") && !explicitProductionSeed) {
+    throw new Error("La carga en una base en línea requiere ALLOW_PRODUCTION_DEMO_SEED=1.");
   }
 
   const users = await prisma.user.findMany({ where: { active: true }, orderBy: { createdAt: "asc" } });

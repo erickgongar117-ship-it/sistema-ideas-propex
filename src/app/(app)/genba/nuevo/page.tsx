@@ -40,11 +40,14 @@ export default async function NewGenbaPage({ searchParams }: NewGenbaProps) {
 
         <section>
           <SectionHeading count={5} description="Puedes agregar actividades adicionales después de crear el recorrido." title="Cinco actividades principales" tone="red" />
-          <div className="grid gap-4">
-            {Array.from({ length: 5 }, (_, index) => {
-              const number = index + 1;
-              return <article className="surface rounded-lg p-4 sm:p-5" key={number}><div className="mb-4 flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-700 text-sm font-extrabold text-white">{number}</span><h2 className="text-sm font-extrabold text-ink">Hallazgo y acción</h2></div><div className="grid gap-3 lg:grid-cols-2"><label><span className="label">Problemática *</span><textarea className="field min-h-24" name={`problem-${number}`} placeholder="Qué condición o problema se observó" required /></label><label><span className="label">Acción propuesta</span><textarea className="field min-h-24" name={`action-${number}`} placeholder="Qué debe hacerse para atenderla" /></label><label><span className="label">Responsable</span><select className="field" defaultValue="" name={`ownerId-${number}`}><option value="">Sin asignar</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label><label><span className="label">Fecha compromiso</span><input className="field" defaultValue={due.toISOString().slice(0, 10)} name={`dueDate-${number}`} type="date" /></label></div></article>;
-            })}
+          <div className="table-wrap">
+            <table className="data-table min-w-[1120px]">
+              <thead><tr><th className="w-14 text-center">#</th><th className="min-w-72">Problemática *</th><th className="min-w-72">Acción propuesta</th><th className="min-w-56">Responsable</th><th className="min-w-44">Fecha compromiso</th></tr></thead>
+              <tbody>{Array.from({ length: 5 }, (_, index) => {
+                const number = index + 1;
+                return <tr key={number}><td className="text-center"><span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-700 text-xs font-extrabold text-white">{number}</span></td><td><label className="sr-only" htmlFor={`problem-${number}`}>Problemática {number}</label><textarea className="field min-h-20 resize-y" id={`problem-${number}`} name={`problem-${number}`} placeholder="Condición o problema observado" required /></td><td><label className="sr-only" htmlFor={`action-${number}`}>Acción {number}</label><textarea className="field min-h-20 resize-y" id={`action-${number}`} name={`action-${number}`} placeholder="Qué debe hacerse" /></td><td><label className="sr-only" htmlFor={`owner-${number}`}>Responsable {number}</label><select className="field" defaultValue="" id={`owner-${number}`} name={`ownerId-${number}`}><option value="">Sin asignar</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></td><td><label className="sr-only" htmlFor={`due-${number}`}>Fecha compromiso {number}</label><input className="field" defaultValue={due.toISOString().slice(0, 10)} id={`due-${number}`} name={`dueDate-${number}`} type="date" /></td></tr>;
+              })}</tbody>
+            </table>
           </div>
         </section>
 

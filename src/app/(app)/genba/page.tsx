@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ListTodo, Plus } from "lucide-react";
+import { Download, ListTodo, Plus } from "lucide-react";
 import { GenbaCommandCenter, type GenbaDashboardWalk } from "@/components/genba-command-center";
 import { PageHeader } from "@/components/page-header";
 import { parseStringArray } from "@/lib/domain";
@@ -53,6 +53,7 @@ export default async function GenbaDashboardPage() {
         description="Recurrencia, asistencia, vencimientos y velocidad de cierre para dirigir el seguimiento en piso."
         actions={
           <>
+            <Link className="btn btn-secondary" href="/api/export/genba"><Download className="h-4 w-4" aria-hidden />Excel</Link>
             <Link className="btn btn-secondary" href="/genba/kanban"><ListTodo className="h-4 w-4" aria-hidden />Kanban</Link>
             {canManage ? <Link className="btn btn-primary" href="/genba/nuevo"><Plus className="h-4 w-4" aria-hidden />Nuevo recorrido</Link> : null}
           </>
