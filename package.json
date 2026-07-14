@@ -14,6 +14,7 @@
     "db:seed": "prisma db seed",
     "db:seed:production": "prisma db seed --schema prisma/schema.production.prisma",
     "db:seed:organization": "tsx scripts/seed-organization.ts",
+    "db:seed:dashboards": "tsx scripts/seed-dashboard-examples.ts",
     "reminders": "tsx scripts/reminders.ts",
     "export-demo": "tsx scripts/export-demo.ts"
   },
