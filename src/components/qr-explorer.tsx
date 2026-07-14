@@ -64,7 +64,11 @@ function departmentGroups(nodes: OrganizationNode[]) {
   }
 
   nodes.forEach((node) => visit(node, [], null));
-  return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name, "es"));
+  return [...groups.values()].sort((left, right) => {
+    const leftPriority = left.code.endsWith("-PROD") ? 0 : 1;
+    const rightPriority = right.code.endsWith("-PROD") ? 0 : 1;
+    return leftPriority - rightPriority || left.name.localeCompare(right.name, "es");
+  });
 }
 
 function contactsFor(group: DepartmentGroup) {
@@ -193,14 +197,15 @@ export function QrExplorer({ structure, baseUrl }: { structure: OrganizationStru
           {visibleGroups.map((group) => {
             const contacts = contactsFor(group);
             const isOpen = normalizedQuery ? true : openGroups.has(group.id);
+            const isProduction = group.code.endsWith("-PROD");
             return (
               <section key={group.id}>
-                <button className="grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-panel sm:px-5" type="button" onClick={() => toggleGroup(group.id)} aria-expanded={isOpen}>
-                  <span className={`flex h-11 w-11 items-center justify-center ${isOpen ? "bg-brand-500 text-white" : "bg-panel text-slate-600"}`}>
+                <button className={`grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 border-l-4 px-4 py-4 text-left transition-colors sm:px-5 ${isProduction ? "border-brand-500 bg-brand-50 hover:bg-red-100" : "border-transparent hover:bg-panel"}`} type="button" onClick={() => toggleGroup(group.id)} aria-expanded={isOpen}>
+                  <span className={`flex h-11 w-11 items-center justify-center ${isOpen || isProduction ? "bg-brand-500 text-white" : "bg-panel text-slate-600"}`}>
                     <Building2 className="h-5 w-5" aria-hidden />
                   </span>
                   <span className="min-w-0">
-                    <span className="flex flex-wrap items-center gap-2"><strong className="break-words text-base text-ink">{group.name}</strong><code className="text-[10px] font-bold text-brand-700">{group.code}</code></span>
+                    <span className="flex flex-wrap items-center gap-2"><strong className="break-words text-base text-ink">{group.name}</strong><code className="text-[10px] font-bold text-brand-700">{group.code}</code>{isProduction ? <span className="bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase text-brand-700">Principal</span> : null}</span>
                     <span className="mt-1 block text-xs leading-5 text-slate-500">{group.items.length} {group.items.length === 1 ? "area con QR" : "areas con QR"} · {contacts.length ? `${contacts.length} ${contacts.length === 1 ? "correo registrado" : "correos registrados"}` : "Correos pendientes"}</span>
                   </span>
                   <span className="flex h-9 w-9 items-center justify-center text-slate-500">{isOpen ? <ChevronDown className="h-5 w-5" aria-hidden /> : <ChevronRight className="h-5 w-5" aria-hidden />}</span>
