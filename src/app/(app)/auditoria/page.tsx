@@ -16,8 +16,8 @@ const actionLabels: Record<string, string> = {
   IDEA_CANCELLED: "Idea cancelada",
   COMMENT_ADDED: "Comentario agregado",
   AREA_UPDATED: "Área actualizada",
-  POINT_RULE_UPDATED: "Regla de puntos actualizada",
-  POINT_RULE_CREATED: "Regla de puntos creada",
+  POINT_RULE_UPDATED: "Regla de ProbocaCoins actualizada",
+  POINT_RULE_CREATED: "Regla de ProbocaCoins creada",
   USER_CREATED: "Usuario creado",
   USER_UPDATED: "Usuario actualizado"
 };

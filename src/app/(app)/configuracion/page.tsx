@@ -53,7 +53,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
 
   return (
     <>
-      <PageHeader eyebrow="Administración · Directorio y reglas" title="Configuración" description="Controla accesos, correos, módulos disponibles, áreas y reglas de puntos." />
+      <PageHeader eyebrow="Administración · Directorio y reglas" title="Configuración" description="Controla accesos, correos, módulos disponibles, áreas y reglas de ProbocaCoins." />
 
       {errorMessage ? <div className="alert alert-danger mb-5"><KeyRound className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
       {successMessage ? <div className="alert alert-success mb-5"><CircleCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{successMessage}</span></div> : null}
@@ -62,7 +62,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
         <a className="btn btn-secondary shrink-0" href="#usuarios"><UsersRound className="h-4 w-4" aria-hidden />Usuarios</a>
         <a className="btn btn-secondary shrink-0" href="#areas"><Building2 className="h-4 w-4" aria-hidden />Áreas</a>
         <a className="btn btn-secondary shrink-0" href="/configuracion/estructura"><Network className="h-4 w-4" aria-hidden />Estructura organizacional</a>
-        <a className="btn btn-secondary shrink-0" href="#puntos"><SlidersHorizontal className="h-4 w-4" aria-hidden />Reglas de puntos</a>
+        <a className="btn btn-secondary shrink-0" href="#puntos"><SlidersHorizontal className="h-4 w-4" aria-hidden />Reglas de ProbocaCoins</a>
       </nav>
 
       <div className="alert alert-info mb-7">
@@ -130,14 +130,14 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
       </section>
 
       <section className="mt-10 scroll-mt-6" id="puntos">
-        <SectionHeading count={pointRules.length} description="Estas reglas aparecen como sugerencia automatica y pueden ajustarse antes del cierre." title="Reglas de puntos" />
+        <SectionHeading count={pointRules.length} description="Estas reglas aparecen como sugerencia automatica y pueden ajustarse antes del cierre." title="Reglas de ProbocaCoins" />
 
         <details className="details-panel mb-4 border-dashed border-slate-400">
           <summary><span className="flex items-center gap-2 text-brand-700"><Plus className="h-4 w-4" aria-hidden />Crear una regla</span></summary>
           <form action={createPointRuleAction} className="grid gap-4 p-4 md:grid-cols-[1fr_1.5fr_110px_auto]">
             <label><span className="label">Nombre</span><input className="field" name="name" required /></label>
             <label><span className="label">Descripcion</span><input className="field" name="description" required /></label>
-            <label><span className="label">Puntos</span><input className="field" name="points" min={0} required type="number" /></label>
+            <label><span className="label">ProbocaCoins</span><input className="field" name="points" min={0} required type="number" /></label>
             <div className="flex items-end"><button className="btn btn-primary w-full" type="submit">Crear</button></div>
           </form>
         </details>
@@ -152,7 +152,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
                 <input name="pointRuleId" type="hidden" value={rule.id} />
                 <label><span className="label">Regla</span><input className="field" name="name" defaultValue={rule.name} required /></label>
                 <label><span className="label">Descripcion</span><input className="field" name="description" defaultValue={rule.description} required /></label>
-                <label><span className="label">{managerial ? "Puntos maximos" : "Puntos"}</span><input className="field" name="points" defaultValue={rule.points} min={0} readOnly={managerial} type="number" required /></label>
+                <label><span className="label">{managerial ? "ProbocaCoins maximas" : "ProbocaCoins"}</span><input className="field" name="points" defaultValue={rule.points} min={0} readOnly={managerial} type="number" required /></label>
                 <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked={rule.active} name="active" type="checkbox" />Regla activa</label>
                 <div className="flex items-end"><button className="btn btn-secondary w-full" type="submit">Guardar</button></div>
               </form>

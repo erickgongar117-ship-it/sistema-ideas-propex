@@ -170,7 +170,7 @@ export async function notifyIdeaClosed(ideaId: string) {
         area: idea.area.code,
         problem: idea.problem,
         proposal: idea.proposal,
-        action: `Idea cerrada con ${idea.pointsAssigned} puntos`,
+        action: `Idea cerrada con ${idea.pointsAssigned} ProbocaCoins`,
         ideaId
       })
     });

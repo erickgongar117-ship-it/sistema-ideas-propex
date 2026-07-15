@@ -2,6 +2,216 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ProbocaCoins keep the official Mejora Continua mark inside a distinct reward token. */
+.proboca-coin {
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 2px solid #755815;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #fff0a5 0%, #d8a82f 42%, #9b7316 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.5),
+    inset -4px -5px 8px rgba(82, 55, 4, 0.28),
+    0 3px 8px rgba(23, 23, 23, 0.2);
+}
+
+.proboca-coin::after {
+  position: absolute;
+  top: 8%;
+  left: 18%;
+  width: 25%;
+  height: 56%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  content: "";
+  filter: blur(1px);
+  pointer-events: none;
+  transform: rotate(34deg);
+}
+
+.proboca-coin-sm { width: 20px; }
+.proboca-coin-md { width: 34px; }
+.proboca-coin-lg { width: 64px; }
+.proboca-coin-xl { width: 112px; border-width: 4px; }
+
+.proboca-coin-face {
+  position: absolute;
+  inset: 12%;
+  overflow: hidden;
+  border: 1px solid rgba(117, 88, 21, 0.72);
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
+}
+
+.proboca-coin-face img {
+  object-fit: cover;
+  transform: scale(1.08);
+}
+
+.proboca-coins-celebration {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: rgba(10, 10, 10, 0.72);
+  padding: 1rem;
+  animation: proboca-coins-overlay-in 220ms ease-out both;
+  backdrop-filter: blur(6px);
+}
+
+.proboca-coins-rain {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.proboca-coins-falling {
+  position: absolute;
+  top: -88px;
+  left: var(--coin-left);
+  display: block;
+  animation: proboca-coin-fall var(--coin-duration) linear var(--coin-delay) both;
+  transform: translate3d(0, -80px, 0) scale(var(--coin-scale));
+  will-change: transform;
+}
+
+.proboca-coins-dialog {
+  position: relative;
+  width: min(92vw, 430px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-top: 5px solid var(--brand-red);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 2rem 1.5rem 1.5rem;
+  text-align: center;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.34);
+  animation: proboca-coins-dialog-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 90ms both;
+}
+
+.proboca-coins-dialog::before {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 6px;
+  background: linear-gradient(90deg, #171717 0 34%, #d8a82f 34% 66%, #ea0029 66%);
+  content: "";
+}
+
+.proboca-coins-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.proboca-coins-close:hover { background: #f6f6f6; color: #171717; }
+
+.proboca-coins-hero-coin {
+  display: inline-flex;
+  margin-bottom: 1rem;
+  animation: proboca-coin-award 680ms cubic-bezier(0.2, 0.9, 0.2, 1.25) 220ms both;
+}
+
+.proboca-coins-eyebrow {
+  color: var(--brand-red);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.proboca-coins-dialog h2 {
+  margin: 0.35rem 0 0;
+  color: #171717;
+  font-size: clamp(1.45rem, 6vw, 2rem);
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.proboca-coins-amount {
+  margin-top: 0.5rem;
+  color: #8a6412;
+  font-size: clamp(2.5rem, 12vw, 4rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.proboca-coins-message {
+  max-width: 32ch;
+  margin: 0.9rem auto 0;
+  color: #5f6368;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.proboca-coins-sound {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.2rem;
+  border: 1px solid #171717;
+  border-radius: 6px;
+  background: #171717;
+  padding: 0.65rem 1rem;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.proboca-coins-sound:hover { background: #333333; }
+
+@keyframes proboca-coins-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes proboca-coins-dialog-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes proboca-coin-award {
+  0% { opacity: 0; transform: translateY(-26px) rotate(-18deg) scale(0.55); }
+  70% { opacity: 1; transform: translateY(3px) rotate(4deg) scale(1.08); }
+  100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+}
+
+@keyframes proboca-coin-fall {
+  0% { opacity: 0; transform: translate3d(0, -80px, 0) rotateY(0) rotateZ(0) scale(var(--coin-scale)); }
+  12% { opacity: 1; }
+  100% { opacity: 0.95; transform: translate3d(var(--coin-drift), calc(100vh + 150px), 0) rotateY(var(--coin-spin)) rotateZ(520deg) scale(var(--coin-scale)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proboca-coins-celebration,
+  .proboca-coins-dialog,
+  .proboca-coins-hero-coin { animation: none; }
+  .proboca-coins-falling { display: none; }
+}
+
 :root {
   --background: #f6f6f6;
   --foreground: #171717;

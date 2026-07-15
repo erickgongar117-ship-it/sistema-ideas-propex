@@ -102,7 +102,7 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
               <p className="mt-3 line-clamp-2 text-sm font-semibold leading-5 text-slate-800">{idea.problem}</p>
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3 text-xs text-slate-500">
                 <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" aria-hidden />{daysOpen} dias abierta</span>
-                <span className="font-extrabold text-slate-700">{idea.pointsAssigned} pts</span>
+                <span className="font-extrabold text-slate-700">{idea.pointsAssigned} ProbocaCoins</span>
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </div>
             </Link>
@@ -115,7 +115,7 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Folio</th><th>Fecha</th><th>Área</th><th>Categoría</th><th>Colaborador</th><th>Problema</th><th>Supervisor</th><th>Estatus</th><th>Prioridad</th><th>Clasificación</th><th>Compromiso</th><th>Días</th><th>Puntos</th><th><span className="sr-only">Acción</span></th>
+                <th>Folio</th><th>Fecha</th><th>Área</th><th>Categoría</th><th>Colaborador</th><th>Problema</th><th>Supervisor</th><th>Estatus</th><th>Prioridad</th><th>Clasificación</th><th>Compromiso</th><th>Días</th><th>ProbocaCoins</th><th><span className="sr-only">Acción</span></th>
               </tr>
             </thead>
             <tbody>

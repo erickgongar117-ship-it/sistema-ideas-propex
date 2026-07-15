@@ -60,14 +60,14 @@ export async function buildIdeasWorkbook() {
   addSummaryMetric(summary, 1, 9, "VALIDACIONES PENDIENTES", pendingApprovals, pendingApprovals ? COLORS.amberSoft : COLORS.greenSoft);
   addSummaryMetric(summary, 3, 9, "VENCIDAS", overdue, overdue ? COLORS.roseSoft : COLORS.greenSoft);
   addSummaryMetric(summary, 5, 9, "CLASIFICADAS KAIZEN", kaizenClassified, COLORS.blueSoft);
-  addSummaryMetric(summary, 7, 9, "PUNTOS ASIGNADOS", totalPoints, COLORS.greenSoft);
+  addSummaryMetric(summary, 7, 9, "PROBOCACOINS ASIGNADAS", totalPoints, COLORS.greenSoft);
   summary.mergeCells("A14:H14");
-  summary.getCell("A14").value = `Trazabilidad Kaizen: ${kaizenLinked} proyectos vinculados. El archivo incluye base maestra, validaciones, comentarios, puntos y flujo automatico hacia Kaizen.`;
+  summary.getCell("A14").value = `Trazabilidad Kaizen: ${kaizenLinked} proyectos vinculados. El archivo incluye base maestra, validaciones, comentarios, ProbocaCoins y flujo automatico hacia Kaizen.`;
   summary.getCell("A14").alignment = { wrapText: true, vertical: "middle" };
   summary.getCell("A14").font = { color: { argb: COLORS.gray }, italic: true, size: 10 };
   summary.getRow(14).height = 42;
 
-  const ideaSheet = createDataSheet(workbook, "Ideas", "BASE MAESTRA DE IDEAS", "Una fila por idea con origen, flujo, responsables, fechas, puntos y proyecto relacionado.", [
+  const ideaSheet = createDataSheet(workbook, "Ideas", "BASE MAESTRA DE IDEAS", "Una fila por idea con origen, flujo, responsables, fechas, ProbocaCoins y proyecto relacionado.", [
     { header: "Folio", key: "folio", width: 18 },
     { header: "Registro", key: "createdAt", width: 18 },
     { header: "Planta", key: "plant", width: 16 },
@@ -96,7 +96,7 @@ export async function buildIdeasWorkbook() {
     { header: "Compromiso", key: "dueDate", width: 15 },
     { header: "Implementada", key: "implementedAt", width: 15 },
     { header: "Cerrada", key: "closedAt", width: 15 },
-    { header: "Puntos", key: "points", width: 10 },
+    { header: "ProbocaCoins", key: "points", width: 16 },
     { header: "Kaizen", key: "kaizen", width: 18 },
     { header: "Estatus Kaizen", key: "kaizenStatus", width: 24 },
     { header: "Comentario MC", key: "mcComments", width: 38 }
@@ -208,14 +208,14 @@ export async function buildIdeasWorkbook() {
   commentsSheet.getColumn("createdAt").numFmt = "dd/mm/yyyy hh:mm";
   finalizeDataSheet(commentsSheet);
 
-  const pointsSheet = createDataSheet(workbook, "Puntos", "DETALLE DE PUNTOS", "Reglas sugeridas o aprobadas que forman el total de cada idea.", [
+  const pointsSheet = createDataSheet(workbook, "ProbocaCoins", "DETALLE DE PROBOCACOINS", "Reglas sugeridas o aprobadas que forman la recompensa total de cada idea.", [
     { header: "Folio", key: "folio", width: 18 },
     { header: "Colaborador", key: "collaborator", width: 28 },
     { header: "Area", key: "area", width: 18 },
     { header: "Tipo", key: "type", width: 24 },
     { header: "Regla", key: "rule", width: 38 },
     { header: "Criterio seleccionado", key: "criterion", width: 56 },
-    { header: "Puntos", key: "points", width: 12 }
+    { header: "ProbocaCoins", key: "points", width: 16 }
   ]);
   ideas.forEach((idea) => idea.pointRuleSelections.forEach((selection) => pointsSheet.addRow({
     folio: idea.folio,

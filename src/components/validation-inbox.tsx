@@ -156,7 +156,7 @@ export async function ValidationInbox({ type, roles, title }: { type: ApprovalTy
                 </div>
 
                 <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-3">
-                  <p className="text-xs font-extrabold text-slate-600">{approval.idea.pointsAssigned} puntos</p>
+                  <p className="text-xs font-extrabold text-slate-600">{approval.idea.pointsAssigned} ProbocaCoins</p>
                   <Link className="btn btn-secondary" href={`/ideas/${approval.idea.id}`}><Eye className="h-4 w-4" aria-hidden />Ver seguimiento</Link>
                 </div>
               </article>

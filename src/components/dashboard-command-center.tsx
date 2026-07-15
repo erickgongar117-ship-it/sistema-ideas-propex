@@ -25,6 +25,7 @@ import {
   TrendingUp,
   XCircle
 } from "lucide-react";
+import { ProbocaCoin } from "@/components/proboca-coin";
 import { StatusPill } from "@/components/status-pill";
 
 const DynamicChart = dynamic(() => import("@/components/premium-chart"), {
@@ -155,7 +156,7 @@ function ChartPanel({ eyebrow, title, description, children, action }: { eyebrow
   );
 }
 
-function MetricCard({ label, value, detail, change, icon: Icon, tone = "dark" }: { label: string; value: string | number; detail: string; change?: number | null; icon: typeof Lightbulb; tone?: "dark" | "green" | "red" | "amber" | "blue" }) {
+function MetricCard({ label, value, detail, change, icon: Icon, visual, tone = "dark" }: { label: string; value: string | number; detail: string; change?: number | null; icon: typeof Lightbulb; visual?: React.ReactNode; tone?: "dark" | "green" | "red" | "amber" | "blue" }) {
   const colors = {
     dark: "bg-slate-950 text-white",
     green: "bg-emerald-50 text-emerald-700",
@@ -169,7 +170,7 @@ function MetricCard({ label, value, detail, change, icon: Icon, tone = "dark" }:
     <article className="surface min-h-[150px] rounded-lg p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <p className="text-[11px] font-extrabold uppercase tracking-[0.05em] text-slate-500">{label}</p>
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors[tone]}`}><Icon className="h-[18px] w-[18px]" aria-hidden /></span>
+        {visual ?? <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors[tone]}`}><Icon className="h-[18px] w-[18px]" aria-hidden /></span>}
       </div>
       <div className="mt-4 flex items-end justify-between gap-3">
         <p className="text-3xl font-extrabold leading-none text-ink">{value}</p>
@@ -381,7 +382,7 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
         <MetricCard label="Tasa de cierre" value={`${metrics.closeRate}%`} detail={`${metrics.closed} ideas cerradas`} change={periodDays && previousIdeas.length ? metrics.closeRate - metrics.previousCloseRate : null} icon={Target} tone="green" />
         <MetricCard label="Ciclo promedio" value={`${metrics.cycleDays} d`} detail="Desde registro hasta cierre" change={periodDays && metrics.previousCycleDays ? -delta(metrics.cycleDays, metrics.previousCycleDays) : null} icon={TimerReset} tone="blue" />
         <MetricCard label="Compromisos vencidos" value={metrics.overdue} detail="Requieren escalamiento o nueva fecha" icon={AlertTriangle} tone="red" />
-        <MetricCard label="Puntos otorgados" value={metrics.points} detail={`${metrics.approved} aprobadas · ${metrics.rejected} rechazadas`} icon={Gauge} tone="amber" />
+        <MetricCard label="ProbocaCoins otorgadas" value={metrics.points} detail={`${metrics.approved} aprobadas · ${metrics.rejected} rechazadas`} icon={Gauge} visual={<ProbocaCoin size="md" />} tone="amber" />
       </section>
 
       <section className="mt-5 grid gap-3 lg:grid-cols-3">

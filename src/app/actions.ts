@@ -685,7 +685,7 @@ export async function closeIdeaAction(formData: FormData) {
   await notifyIdeaClosed(ideaId);
   revalidatePath("/dashboard");
   revalidatePath(`/ideas/${ideaId}`);
-  redirect(`/ideas/${ideaId}`);
+  redirect(`/ideas/${ideaId}?coins=${totalPoints}`);
 }
 
 export async function removeIdeaPointsAction(formData: FormData) {
@@ -705,7 +705,7 @@ export async function removeIdeaPointsAction(formData: FormData) {
     data: {
       ideaId,
       userId: user.id,
-      comment: `Mejora Continua retiro los puntos automaticos. Motivo: ${reason}`
+      comment: `Mejora Continua retiro las ProbocaCoins. Motivo: ${reason}`
     }
   });
   await auditLog({
