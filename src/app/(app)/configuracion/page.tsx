@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { SectionHeading } from "@/components/section-heading";
 import { requireUser } from "@/lib/auth";
 import { roleLabels } from "@/lib/domain";
+import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
 import { prisma } from "@/lib/prisma";
 
 const configurableRoles = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"] as const;
@@ -142,19 +143,22 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
         </details>
 
         <div className="grid gap-3">
-          {pointRules.map((rule) => (
+          {pointRules.map((rule) => {
+            const managerial = isManagerialEvaluationRule(rule.id);
+            return (
             <details className="details-panel" key={rule.id}>
               <summary><span className="min-w-0"><span className="block truncate text-sm font-extrabold text-ink">{rule.name}</span><span className="block truncate text-xs font-normal text-slate-500">{rule.description}</span></span><span className="ml-auto mr-2 flex items-center gap-2"><span className="text-sm font-extrabold text-emerald-700">+{rule.points}</span><span className={`hidden rounded-full px-2 py-1 text-[10px] font-extrabold sm:inline-flex ${rule.active ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{rule.active ? "Activa" : "Inactiva"}</span></span></summary>
               <form action={updatePointRuleAction} className="grid gap-4 p-4 md:grid-cols-[1fr_1.5fr_110px_120px_auto]">
                 <input name="pointRuleId" type="hidden" value={rule.id} />
                 <label><span className="label">Regla</span><input className="field" name="name" defaultValue={rule.name} required /></label>
                 <label><span className="label">Descripcion</span><input className="field" name="description" defaultValue={rule.description} required /></label>
-                <label><span className="label">Puntos</span><input className="field" name="points" defaultValue={rule.points} min={0} type="number" required /></label>
+                <label><span className="label">{managerial ? "Puntos maximos" : "Puntos"}</span><input className="field" name="points" defaultValue={rule.points} min={0} readOnly={managerial} type="number" required /></label>
                 <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked={rule.active} name="active" type="checkbox" />Regla activa</label>
                 <div className="flex items-end"><button className="btn btn-secondary w-full" type="submit">Guardar</button></div>
               </form>
             </details>
-          ))}
+            );
+          })}
         </div>
       </section>
     </>

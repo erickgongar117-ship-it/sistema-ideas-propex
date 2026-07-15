@@ -49,7 +49,8 @@ import {
   roleLabels
 } from "@/lib/domain";
 import { requireUser } from "@/lib/auth";
-import { automaticPointRules } from "@/lib/points";
+import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
+import { automaticManagerialEvaluation, automaticPointRules } from "@/lib/points";
 import { prisma } from "@/lib/prisma";
 
 type DetailProps = {
@@ -113,6 +114,9 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
   const canMC = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
   const hasAfterEvidence = idea.attachments.some((attachment) => attachment.type === "AFTER");
   const automaticPoints = automaticPointRules(idea, pointRules);
+  const standardPointRules = pointRules.filter((rule) => !isManagerialEvaluationRule(rule.id));
+  const managerialSuggestions = automaticManagerialEvaluation(idea);
+  const managerialSuggestionTotal = managerialSuggestions.reduce((sum, suggestion) => sum + suggestion.points, 0);
   const isClosed = idea.status === "CERRADA";
   const canUpdateProgress = ["EN_IMPLEMENTACION", "IMPLEMENTADA", "VENCIDA"].includes(idea.status);
   const canReviewClose = canMC && (["IMPLEMENTADA", "EN_VALIDACION_FINAL", "CERRADA"].includes(idea.status));
@@ -395,8 +399,8 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
               <summary><span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-slate-500" aria-hidden />{isClosed ? "Puntos otorgados" : "Cierre y puntos"}</span></summary>
               <div className="p-4">
                 <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
-                  <div><p className="text-xs font-extrabold uppercase text-slate-500">{isClosed ? "Total final" : "Sugerencia automatica"}</p><p className="mt-1 text-xs text-slate-500">Puedes ajustar cada regla antes de cerrar.</p></div>
-                  <p className="text-3xl font-extrabold text-ink">{isClosed ? idea.pointsAssigned : automaticPoints.totalPoints}</p>
+                  <div><p className="text-xs font-extrabold uppercase text-slate-500">{isClosed ? "Total final" : "Sugerencia automatica"}</p><p className="mt-1 text-xs text-slate-500">Base {automaticPoints.totalPoints} + evaluacion gerencial {managerialSuggestionTotal}. Todo puede ajustarse.</p></div>
+                  <p className="text-3xl font-extrabold text-ink">{isClosed ? idea.pointsAssigned : automaticPoints.totalPoints + managerialSuggestionTotal}</p>
                 </div>
                 {!hasAfterEvidence && idea.requiresEvidence ? <div className="alert alert-warning mt-3">Falta evidencia despues para cerrar.</div> : null}
 
@@ -408,7 +412,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                   <form action={closeIdeaAction} className="mt-3 grid gap-3">
                     <input name="ideaId" type="hidden" value={idea.id} />
                     <div className="space-y-2">
-                      {pointRules.map((rule) => {
+                      {standardPointRules.map((rule) => {
                         const suggested = automaticPoints.selectedRules.some((item) => item.id === rule.id);
                         return (
                           <label className="grid gap-2 rounded-lg border border-line bg-panel p-3 text-sm sm:grid-cols-[1fr_82px]" key={rule.id}>
@@ -418,6 +422,31 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                         );
                       })}
                     </div>
+                    <fieldset className="border-t border-line pt-4">
+                      <legend className="mb-3 flex w-full items-center justify-between gap-3 text-sm font-extrabold text-ink">
+                        <span>Evaluacion gerencial complementaria</span>
+                        <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] text-white">Hasta 500 pts</span>
+                      </legend>
+                      <p className="mb-3 text-xs leading-5 text-slate-500">Los niveles aparecen sugeridos con los datos de la idea. Selecciona otra opcion o elige No incluir.</p>
+                      <div className="space-y-3">
+                        {managerialSuggestions.map(({ factor, points, criterion }) => {
+                          const rule = pointRules.find((item) => item.id === factor.ruleId);
+                          if (!rule) return null;
+                          return (
+                            <label className="grid gap-2 border-l-4 border-slate-900 bg-slate-50 p-3 text-sm" key={factor.ruleId}>
+                              <span>
+                                <span className="font-extrabold text-ink">{factor.ruleName}</span>
+                                <span className="mt-1 block text-xs leading-5 text-slate-500">Sugerida: {criterion} ({points} pts)</span>
+                              </span>
+                              <select className="field" defaultValue={String(points)} name={`managerial-${factor.ruleId}`}>
+                                <option value="">No incluir este factor</option>
+                                {factor.options.map((option) => <option key={option.points} value={option.points}>{option.points} pts - {option.label}</option>)}
+                              </select>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
                     <button className="btn btn-success" type="submit"><CheckCircle2 className="h-4 w-4" aria-hidden />Cerrar con puntos revisados</button>
                   </form>
                 )}

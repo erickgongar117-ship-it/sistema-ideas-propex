@@ -9,9 +9,10 @@ import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
 import { approvalTypeForRole, genbaDepartments, impactOptions, nextValidationStatus, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
 import { saveUpload } from "@/lib/files";
+import { createKaizenFromIdea } from "@/lib/kaizen-from-idea";
+import { managerialFactorForRule } from "@/lib/managerial-evaluation";
 import { userModuleAccess } from "@/lib/module-access";
 import { ideaMailBody, notify } from "@/lib/notifications";
-import { automaticPointRules } from "@/lib/points";
 import { prisma } from "@/lib/prisma";
 import { appBaseUrl } from "@/lib/url";
 import { approveSupervisor, createValidationApprovals, markOverdueIdeas, nextFolio, notifyIdeaClosed, updateStatusAfterValidations } from "@/lib/workflow";
@@ -82,38 +83,6 @@ async function refreshGenbaWalk(walkId: string) {
   await prisma.genbaWalk.update({
     where: { id: walkId },
     data: complete ? { status: "CERRADO", closedAt: new Date() } : { status: "ABIERTO", closedAt: null }
-  });
-}
-
-async function createKaizenFromIdea(input: { ideaId: string; leaderId: string; startDate: Date; endDate: Date; createdById: string }) {
-  const endDate = input.endDate < input.startDate ? new Date(input.startDate.getTime() + 30 * 86400000) : input.endDate;
-  const existing = await prisma.kaizenProject.findUnique({ where: { sourceIdeaId: input.ideaId } });
-  if (existing) {
-    return prisma.kaizenProject.update({
-      where: { id: existing.id },
-      data: { leaderId: input.leaderId, startDate: input.startDate, endDate }
-    });
-  }
-  const idea = await prisma.idea.findUniqueOrThrow({ where: { id: input.ideaId }, include: { area: true } });
-  return prisma.$transaction(async (tx) => {
-    const maximum = await tx.kaizenProject.aggregate({ _max: { number: true } });
-    const number = (maximum._max.number ?? 0) + 1;
-    return tx.kaizenProject.create({
-      data: {
-        number,
-        folio: `KZN-${String(number).padStart(3, "0")}`,
-        title: idea.problem,
-        area: `${idea.area.code} · ${idea.area.name}`,
-        objective: idea.expectedBenefit,
-        scope: idea.proposal,
-        status: "PENDIENTE_CHARTER",
-        startDate: input.startDate,
-        endDate,
-        leaderId: input.leaderId,
-        createdById: input.createdById,
-        sourceIdeaId: idea.id
-      }
-    });
   });
 }
 
@@ -483,6 +452,25 @@ export async function classifyIdeaAction(formData: FormData) {
     }
   });
   await auditLog({ entity: "Idea", entityId: ideaId, action: "MC_CLASSIFIED", userId: user.id, details: { classification, priority } });
+  if (classification === "KAIZEN") {
+    const startDate = new Date();
+    const kaizenProject = await createKaizenFromIdea({
+      ideaId,
+      leaderId: user.id,
+      startDate,
+      endDate: new Date(startDate.getTime() + 90 * 86_400_000),
+      createdById: user.id,
+      updateExisting: false
+    });
+    await auditLog({
+      entity: "KaizenProject",
+      entityId: kaizenProject.id,
+      action: "AUTO_CREATED_FROM_CLASSIFICATION",
+      userId: user.id,
+      details: { ideaId, folio: kaizenProject.folio }
+    });
+    revalidatePath("/kaizen");
+  }
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}`);
 }
@@ -624,12 +612,24 @@ export async function closeIdeaAction(formData: FormData) {
   const hasAfterEvidence = idea.attachments.some((attachment) => attachment.type === "AFTER");
   if (idea.requiresEvidence && !hasAfterEvidence) redirect(`/ideas/${ideaId}?error=evidencia`);
 
-  const selectedRules = await prisma.pointRule.findMany({
-    where: { id: { in: [...selectedRuleIds] }, active: true },
+  const activeRules = await prisma.pointRule.findMany({
+    where: { active: true },
     orderBy: { createdAt: "asc" }
   });
   const pointAdjustments = new Map<string, number>();
+  for (const rule of activeRules) {
+    const factor = managerialFactorForRule(rule.id);
+    if (!factor) continue;
+    const rawValue = text(formData, `managerial-${rule.id}`);
+    if (!rawValue) continue;
+    const value = Number(rawValue);
+    if (!factor.options.some((option) => option.points === value)) continue;
+    selectedRuleIds.add(rule.id);
+    pointAdjustments.set(rule.id, value);
+  }
+  const selectedRules = activeRules.filter((rule) => selectedRuleIds.has(rule.id));
   for (const rule of selectedRules) {
+    if (pointAdjustments.has(rule.id)) continue;
     const value = Number(text(formData, `points-${rule.id}`));
     pointAdjustments.set(rule.id, Number.isFinite(value) ? Math.max(0, value) : rule.points);
   }

@@ -15,6 +15,8 @@
     "db:seed:production": "prisma db seed --schema prisma/schema.production.prisma",
     "db:seed:organization": "tsx scripts/seed-organization.ts",
     "db:seed:dashboards": "tsx scripts/seed-dashboard-examples.ts",
+    "db:seed:managerial-points": "tsx scripts/seed-managerial-point-rules.ts",
+    "db:backfill:kaizen-ideas": "tsx scripts/backfill-kaizen-ideas.ts",
     "reminders": "tsx scripts/reminders.ts",
     "export-demo": "tsx scripts/export-demo.ts"
   },

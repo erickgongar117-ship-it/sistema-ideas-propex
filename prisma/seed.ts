@@ -1,5 +1,6 @@
 import { PrismaClient, ApprovalStatus, IdeaStatus, Priority } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { managerialEvaluationFactors } from "../src/lib/managerial-evaluation";
 
 const prisma = new PrismaClient();
 
@@ -106,6 +107,14 @@ async function main() {
       where: { id: name },
       update: {},
       create: { id: name, name, description, points, active: true }
+    });
+  }
+
+  for (const factor of managerialEvaluationFactors) {
+    await prisma.pointRule.upsert({
+      where: { id: factor.ruleId },
+      update: { name: factor.ruleName, description: factor.description, points: factor.maxPoints },
+      create: { id: factor.ruleId, name: factor.ruleName, description: factor.description, points: factor.maxPoints, active: true }
     });
   }
 

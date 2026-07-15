@@ -15,7 +15,7 @@ export default async function MejoraContinuaPage() {
   const [ideas, owners] = await Promise.all([
     prisma.idea.findMany({
       where: { status: { in: ["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA", "IMPLEMENTADA", "EN_VALIDACION_FINAL", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"] } },
-      include: { area: true, implementationOwner: true },
+      include: { area: true, implementationOwner: true, kaizenProject: true },
       orderBy: { updatedAt: "desc" }
     }),
     prisma.user.findMany({ where: { role: { in: ["MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR", "ADMIN"] }, active: true }, orderBy: { name: "asc" } })
@@ -80,7 +80,7 @@ export default async function MejoraContinuaPage() {
                     </div>
                     <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input defaultChecked={idea.requiresEvidence} name="requiresEvidence" type="checkbox" />Solicitar evidencia final</label>
                     <button className="btn btn-primary w-full sm:w-fit" type="submit">Asignar implementación</button>
-                    {idea.classification === "KAIZEN" ? <p className="text-xs font-bold leading-5 text-amber-800">Al asignar al responsable se generará automáticamente la carpeta del proyecto Kaizen y su número consecutivo.</p> : null}
+                    {idea.classification === "KAIZEN" ? <p className="text-xs font-bold leading-5 text-amber-800">{idea.kaizenProject ? `El proyecto ${idea.kaizenProject.folio} ya fue transferido a Kaizen. Esta asignación actualizará su líder y fechas.` : "El proyecto Kaizen se generará automáticamente al guardar la clasificación."}</p> : null}
                   </form>
                 </details>
                   </>
