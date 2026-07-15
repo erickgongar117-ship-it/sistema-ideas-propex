@@ -146,7 +146,7 @@ export async function approveSupervisor(ideaId: string, userId: string) {
   if (!required.length) await updateStatusAfterValidations(ideaId);
 }
 
-export async function notifyIdeaClosed(ideaId: string) {
+export async function notifyIdeaClosed(ideaId: string, options: { coinsUpdated?: boolean } = {}) {
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
     include: { area: true, supervisor: true, approvals: { include: { assignedTo: true } } }
@@ -164,13 +164,15 @@ export async function notifyIdeaClosed(ideaId: string) {
     await notify({
       ideaId,
       to,
-      subject: `Idea de mejora cerrada - Folio ${idea.folio} - Area ${idea.area.code}`,
+      subject: `${options.coinsUpdated ? "ProbocaCoins actualizadas" : "Idea de mejora cerrada"} - Folio ${idea.folio} - Area ${idea.area.code}`,
       body: ideaMailBody({
         folio: idea.folio,
         area: idea.area.code,
         problem: idea.problem,
         proposal: idea.proposal,
-        action: `Idea cerrada con ${idea.pointsAssigned} ProbocaCoins`,
+        action: options.coinsUpdated
+          ? `Mejora Continua actualizo la recompensa a ${idea.pointsAssigned} ProbocaCoins`
+          : `Idea cerrada con ${idea.pointsAssigned} ProbocaCoins`,
         ideaId
       })
     });

@@ -26,7 +26,6 @@ import {
   assignImplementationAction,
   cancelIdeaAction,
   classifyIdeaAction,
-  closeIdeaAction,
   implementationUpdateAction,
   removeIdeaPointsAction,
   reopenRejectedIdeaAction,
@@ -36,6 +35,7 @@ import {
 import { IdeaProgress } from "@/components/idea-progress";
 import { PageHeader } from "@/components/page-header";
 import { ProbocaCoin } from "@/components/proboca-coin";
+import { ManagerialCriteriaTable, ProbocaCoinsAwardForm } from "@/components/proboca-coins-award-form";
 import { ProbocaCoinsCelebration } from "@/components/proboca-coins-celebration";
 import { SectionHeading } from "@/components/section-heading";
 import { StatusPill } from "@/components/status-pill";
@@ -118,7 +118,10 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
   const automaticPoints = automaticPointRules(idea, pointRules);
   const standardPointRules = pointRules.filter((rule) => !isManagerialEvaluationRule(rule.id));
   const managerialSuggestions = automaticManagerialEvaluation(idea);
+  const activeManagerialSuggestions = managerialSuggestions.filter(({ factor }) => pointRules.some((rule) => rule.id === factor.ruleId));
   const managerialSuggestionTotal = managerialSuggestions.reduce((sum, suggestion) => sum + suggestion.points, 0);
+  const currentCoinSelections = idea.pointRuleSelections.map((selection) => ({ pointRuleId: selection.pointRuleId, points: selection.points }));
+  const suggestedStandardRuleIds = automaticPoints.selectedRules.map((rule) => rule.id);
   const isClosed = idea.status === "CERRADA";
   const canUpdateProgress = ["EN_IMPLEMENTACION", "IMPLEMENTADA", "VENCIDA"].includes(idea.status);
   const canReviewClose = canMC && (["IMPLEMENTADA", "EN_VALIDACION_FINAL", "CERRADA"].includes(idea.status));
@@ -400,60 +403,35 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
           ) : null}
 
           {canReviewClose ? (
-            <details className="details-panel" open={!isClosed}>
+            <details className="details-panel" open>
               <summary><span className="flex items-center gap-2"><ProbocaCoin size="sm" />{isClosed ? "ProbocaCoins otorgadas" : "Cierre y ProbocaCoins"}</span></summary>
               <div className="p-4">
                 <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
                   <div><p className="text-xs font-extrabold uppercase text-slate-500">{isClosed ? "Total de ProbocaCoins" : "ProbocaCoins sugeridas"}</p><p className="mt-1 text-xs text-slate-500">Base {automaticPoints.totalPoints} + evaluacion gerencial {managerialSuggestionTotal}. Todo puede ajustarse.</p></div>
                   <p className="flex items-center gap-2 text-3xl font-extrabold text-ink"><ProbocaCoin size="md" />{isClosed ? idea.pointsAssigned : automaticPoints.totalPoints + managerialSuggestionTotal}</p>
                 </div>
-                {!hasAfterEvidence && idea.requiresEvidence ? <div className="alert alert-warning mt-3">Falta evidencia despues para cerrar.</div> : null}
+                {!isClosed && !hasAfterEvidence && idea.requiresEvidence ? <div className="alert alert-warning mt-3">Falta evidencia despues para cerrar.</div> : null}
 
-                {isClosed ? (
+                {isClosed && idea.pointRuleSelections.length ? (
                   <div className="mt-3 space-y-2">
                     {idea.pointRuleSelections.map((item) => <div className="flex items-start justify-between gap-3 border-b border-line py-2 text-sm last:border-0" key={item.id}><span><span className="block font-extrabold text-ink">{item.pointRule.name}</span><span className="block text-xs text-slate-500">{item.pointRule.description}</span></span><span className="flex items-center gap-1 font-extrabold text-emerald-700"><ProbocaCoin size="sm" />+{item.points}</span></div>)}
                   </div>
+                ) : null}
+
+                {!isClosed ? (
+                  <div className="mt-3">
+                    <ProbocaCoinsAwardForm currentSelections={[]} ideaId={idea.id} managerialSuggestions={activeManagerialSuggestions} mode="close" standardRules={standardPointRules} suggestedStandardRuleIds={suggestedStandardRuleIds} />
+                  </div>
+                ) : idea.pointsAssigned === 0 ? (
+                  <div className="mt-4">
+                    <div className="alert alert-warning mb-3">Esta idea no tiene ProbocaCoins. Puedes revisar la sugerencia y otorgarlas nuevamente.</div>
+                    <ProbocaCoinsAwardForm currentSelections={currentCoinSelections} ideaId={idea.id} managerialSuggestions={activeManagerialSuggestions} mode="restore" standardRules={standardPointRules} suggestedStandardRuleIds={suggestedStandardRuleIds} />
+                  </div>
                 ) : (
-                  <form action={closeIdeaAction} className="mt-3 grid gap-3">
-                    <input name="ideaId" type="hidden" value={idea.id} />
-                    <div className="space-y-2">
-                      {standardPointRules.map((rule) => {
-                        const suggested = automaticPoints.selectedRules.some((item) => item.id === rule.id);
-                        return (
-                          <label className="grid gap-2 rounded-lg border border-line bg-panel p-3 text-sm sm:grid-cols-[1fr_82px]" key={rule.id}>
-                            <span className="flex items-start gap-2"><input defaultChecked={suggested} className="mt-1" name="pointRuleIds" type="checkbox" value={rule.id} /><span><span className="font-extrabold text-ink">{rule.name}</span>{suggested ? <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700">Sugerida</span> : null}<span className="mt-0.5 block text-xs text-slate-500">{rule.description}</span></span></span>
-                            <span><span className="label mb-1">ProbocaCoins</span><input className="field min-h-10 py-2" defaultValue={rule.points} min={0} name={`points-${rule.id}`} type="number" /></span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <fieldset className="border-t border-line pt-4">
-                      <legend className="mb-3 flex w-full items-center justify-between gap-3 text-sm font-extrabold text-ink">
-                        <span>Evaluacion gerencial complementaria</span>
-                        <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] text-white">Hasta 500 ProbocaCoins</span>
-                      </legend>
-                      <p className="mb-3 text-xs leading-5 text-slate-500">Los niveles aparecen sugeridos con los datos de la idea. Selecciona otra opcion o elige No incluir.</p>
-                      <div className="space-y-3">
-                        {managerialSuggestions.map(({ factor, points, criterion }) => {
-                          const rule = pointRules.find((item) => item.id === factor.ruleId);
-                          if (!rule) return null;
-                          return (
-                            <label className="grid gap-2 border-l-4 border-slate-900 bg-slate-50 p-3 text-sm" key={factor.ruleId}>
-                              <span>
-                                <span className="font-extrabold text-ink">{factor.ruleName}</span>
-                                <span className="mt-1 block text-xs leading-5 text-slate-500">Sugerida: {criterion} ({points} ProbocaCoins)</span>
-                              </span>
-                              <select className="field" defaultValue={String(points)} name={`managerial-${factor.ruleId}`}>
-                                <option value="">No incluir este factor</option>
-                                {factor.options.map((option) => <option key={option.points} value={option.points}>{option.points} ProbocaCoins - {option.label}</option>)}
-                              </select>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </fieldset>
-                    <button className="btn btn-success" type="submit"><CheckCircle2 className="h-4 w-4" aria-hidden />Cerrar y entregar ProbocaCoins</button>
-                  </form>
+                  <details className="mt-4 border-t border-line pt-4">
+                    <summary className="cursor-pointer text-sm font-extrabold text-ink">Modificar ProbocaCoins otorgadas</summary>
+                    <div className="mt-3"><ProbocaCoinsAwardForm currentSelections={currentCoinSelections} ideaId={idea.id} managerialSuggestions={activeManagerialSuggestions} mode="adjust" standardRules={standardPointRules} suggestedStandardRuleIds={suggestedStandardRuleIds} /></div>
+                  </details>
                 )}
 
                 {isClosed && idea.pointsAssigned > 0 ? (
@@ -479,6 +457,12 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
           ) : null}
         </aside>
       </section>
+
+      {canReviewClose ? (
+        <article className="surface mt-6 rounded-lg p-5 sm:p-6">
+          <ManagerialCriteriaTable currentSelections={currentCoinSelections} managerialSuggestions={managerialSuggestions} />
+        </article>
+      ) : null}
     </>
   );
 }

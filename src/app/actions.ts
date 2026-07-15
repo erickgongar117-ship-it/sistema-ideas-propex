@@ -608,9 +608,10 @@ export async function closeIdeaAction(formData: FormData) {
     where: { id: ideaId },
     include: { approvals: true, attachments: true }
   });
+  const wasClosed = idea.status === "CERRADA";
 
   const hasAfterEvidence = idea.attachments.some((attachment) => attachment.type === "AFTER");
-  if (idea.requiresEvidence && !hasAfterEvidence) redirect(`/ideas/${ideaId}?error=evidencia`);
+  if (!wasClosed && idea.requiresEvidence && !hasAfterEvidence) redirect(`/ideas/${ideaId}?error=evidencia`);
 
   const activeRules = await prisma.pointRule.findMany({
     where: { active: true },
@@ -647,7 +648,7 @@ export async function closeIdeaAction(formData: FormData) {
 
   await prisma.approval.upsert({
     where: { ideaId_type: { ideaId, type: "MEJORA_CONTINUA_FINAL" } },
-    update: { assignedToId: user.id, status: "APPROVED", decision: "APROBAR", decidedAt: new Date(), comments: "Cierre final validado." },
+    update: { assignedToId: user.id, status: "APPROVED", decision: "APROBAR", decidedAt: new Date(), comments: wasClosed ? "ProbocaCoins revisadas y otorgadas nuevamente." : "Cierre final validado." },
     create: {
       ideaId,
       type: "MEJORA_CONTINUA_FINAL",
@@ -655,7 +656,7 @@ export async function closeIdeaAction(formData: FormData) {
       status: "APPROVED",
       decision: "APROBAR",
       decidedAt: new Date(),
-      comments: "Cierre final validado."
+      comments: wasClosed ? "ProbocaCoins revisadas y otorgadas nuevamente." : "Cierre final validado."
     }
   });
 
@@ -663,14 +664,23 @@ export async function closeIdeaAction(formData: FormData) {
     where: { id: ideaId },
     data: {
       status: "CERRADA",
-      closedAt: new Date(),
+      closedAt: idea.closedAt ?? new Date(),
       pointsAssigned: totalPoints
     }
   });
+  if (wasClosed) {
+    await prisma.comment.create({
+      data: {
+        ideaId,
+        userId: user.id,
+        comment: `Mejora Continua otorgo o ajusto ${totalPoints} ProbocaCoins.`
+      }
+    });
+  }
   await auditLog({
     entity: "Idea",
     entityId: ideaId,
-    action: "IDEA_CLOSED_REVIEWED_POINTS",
+    action: wasClosed ? "PROBOCACOINS_REASSIGNED" : "IDEA_CLOSED_REVIEWED_POINTS",
     userId: user.id,
     details: {
       totalPoints,
@@ -682,7 +692,7 @@ export async function closeIdeaAction(formData: FormData) {
       }))
     }
   });
-  await notifyIdeaClosed(ideaId);
+  await notifyIdeaClosed(ideaId, { coinsUpdated: wasClosed });
   revalidatePath("/dashboard");
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}?coins=${totalPoints}`);
