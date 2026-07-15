@@ -11,7 +11,7 @@ const columnColors = ["bg-amber-500", "bg-red-500", "bg-emerald-600", "bg-blue-6
 export default async function KanbanPage() {
   await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const ideas = await prisma.idea.findMany({
-    include: { area: true, supervisor: true, implementationOwner: true },
+    include: { area: true, supervisor: true, implementationOwner: true, approvals: true },
     orderBy: { updatedAt: "desc" }
   });
 

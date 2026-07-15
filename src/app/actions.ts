@@ -1008,7 +1008,9 @@ export async function createGenbaWalkAction(formData: FormData) {
   const coordinatorId = text(formData, "coordinatorId");
   const expectedDepartments = formData.getAll("expectedDepartments").map(String).filter((value) => genbaDepartments.includes(value));
   const attendedDepartments = formData.getAll("attendedDepartments").map(String).filter((value) => expectedDepartments.includes(value));
-  const activityInputs = Array.from({ length: 5 }, (_, index) => ({
+  const requestedActivityCount = Number.parseInt(text(formData, "activityCount") || "5", 10);
+  const activityCount = Number.isFinite(requestedActivityCount) ? Math.min(25, Math.max(5, requestedActivityCount)) : 5;
+  const activityInputs = Array.from({ length: activityCount }, (_, index) => ({
     number: index + 1,
     problem: text(formData, `problem-${index + 1}`),
     action: text(formData, `action-${index + 1}`) || null,
@@ -1085,6 +1087,8 @@ export async function addGenbaActivityAction(formData: FormData) {
   const walkId = text(formData, "walkId");
   const problem = text(formData, "problem");
   if (!problem) redirect(`/genba/${walkId}?error=actividad`);
+  const walk = await prisma.genbaWalk.findUniqueOrThrow({ where: { id: walkId } });
+  if (walk.status !== "ABIERTO") redirect(`/genba/${walkId}?error=cerrado`);
   const activity = await prisma.$transaction(async (tx) => {
     const maximum = await tx.genbaActivity.aggregate({ where: { walkId }, _max: { number: true } });
     return tx.genbaActivity.create({

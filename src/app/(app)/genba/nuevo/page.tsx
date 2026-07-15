@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Footprints, Save } from "lucide-react";
 import { createGenbaWalkAction } from "@/app/actions";
+import { GenbaActivityEntryTable } from "@/components/genba-activity-entry-table";
 import { PageHeader } from "@/components/page-header";
 import { SectionHeading } from "@/components/section-heading";
 import { genbaDepartments } from "@/lib/domain";
@@ -39,16 +40,8 @@ export default async function NewGenbaPage({ searchParams }: NewGenbaProps) {
         </section>
 
         <section>
-          <SectionHeading count={5} description="Puedes agregar actividades adicionales después de crear el recorrido." title="Cinco actividades principales" tone="red" />
-          <div className="table-wrap">
-            <table className="data-table min-w-[1120px]">
-              <thead><tr><th className="w-14 text-center">#</th><th className="min-w-72">Problemática *</th><th className="min-w-72">Acción propuesta</th><th className="min-w-56">Responsable</th><th className="min-w-44">Fecha compromiso</th></tr></thead>
-              <tbody>{Array.from({ length: 5 }, (_, index) => {
-                const number = index + 1;
-                return <tr key={number}><td className="text-center"><span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-700 text-xs font-extrabold text-white">{number}</span></td><td><label className="sr-only" htmlFor={`problem-${number}`}>Problemática {number}</label><textarea className="field min-h-20 resize-y" id={`problem-${number}`} name={`problem-${number}`} placeholder="Condición o problema observado" required /></td><td><label className="sr-only" htmlFor={`action-${number}`}>Acción {number}</label><textarea className="field min-h-20 resize-y" id={`action-${number}`} name={`action-${number}`} placeholder="Qué debe hacerse" /></td><td><label className="sr-only" htmlFor={`owner-${number}`}>Responsable {number}</label><select className="field" defaultValue="" id={`owner-${number}`} name={`ownerId-${number}`}><option value="">Sin asignar</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></td><td><label className="sr-only" htmlFor={`due-${number}`}>Fecha compromiso {number}</label><input className="field" defaultValue={due.toISOString().slice(0, 10)} id={`due-${number}`} name={`dueDate-${number}`} type="date" /></td></tr>;
-              })}</tbody>
-            </table>
-          </div>
+          <SectionHeading description="Captura las cinco principales y agrega las adicionales que requiera el recorrido antes de guardarlo." title="Plan de acción inicial" tone="red" />
+          <GenbaActivityEntryTable initialDueDate={due.toISOString().slice(0, 10)} users={users.map(({ id, name }) => ({ id, name }))} />
         </section>
 
         <footer className="flex flex-col gap-3 rounded-lg bg-slate-950 p-5 text-white sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><Footprints className="h-5 w-5 text-red-300" aria-hidden /><p className="text-sm font-bold">Se asignará automáticamente el siguiente número GENBA.</p></div><button className="btn btn-brand" type="submit"><Save className="h-4 w-4" aria-hidden />Crear recorrido</button></footer>

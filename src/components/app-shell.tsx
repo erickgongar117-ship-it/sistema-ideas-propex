@@ -73,13 +73,13 @@ const kaizenNav: NavItem[] = [
   { href: "/kaizen", label: "Panel de proyectos", shortLabel: "Kaizen", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "work" },
   { href: "/kaizen/nuevo", label: "Nuevo proyecto", shortLabel: "Nuevo", icon: Plus, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
   { href: "/kaizen/gantt", label: "Calendario Gantt", shortLabel: "Gantt", icon: CalendarRange, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" },
-  { href: "/kaizen/kanban", label: "Kanban de actividades", shortLabel: "Kanban", icon: FolderKanban, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" }
+  { href: "/kaizen/kanban", label: "Kanban por proyecto", shortLabel: "Kanban", icon: FolderKanban, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" }
 ];
 
 const genbaNav: NavItem[] = [
   { href: "/genba", label: "Panel de recorridos", shortLabel: "GENBA", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "work" },
   { href: "/genba/nuevo", label: "Nuevo recorrido", shortLabel: "Nuevo", icon: Plus, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
-  { href: "/genba/kanban", label: "Kanban de actividades", shortLabel: "Kanban", icon: FolderKanban, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" }
+  { href: "/genba/kanban", label: "Kanban por recorrido", shortLabel: "Kanban", icon: FolderKanban, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" }
 ];
 
 const roleTheme: Record<Role, { accent: string; soft: string; home: string; context: string }> = {
