@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Download, Plus, QrCode } from "lucide-react";
-import { DashboardCommandCenter, type DashboardIdea } from "@/components/dashboard-command-center";
+import { DashboardCommandCenter, type DashboardArea, type DashboardIdea } from "@/components/dashboard-command-center";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
 import { attendancePercent, isWorkItemOverdue, parseImpactTypes, workProgress } from "@/lib/domain";
@@ -17,34 +17,61 @@ export default async function DashboardPage() {
   await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const [ideas, areas, supervisorApprovals, validationApprovals, kaizenProjects, genbaWalks] = await Promise.all([
     prisma.idea.findMany({
-      include: { area: true, supervisor: true },
+      include: {
+        area: { include: { organizationUnit: { include: { plant: true } } } },
+        supervisor: true
+      },
       orderBy: { createdAt: "desc" }
     }),
-    prisma.area.findMany({ where: { active: true }, orderBy: { code: "asc" } }),
+    prisma.area.findMany({
+      where: { active: true },
+      include: { organizationUnit: { include: { plant: true } } },
+      orderBy: { code: "asc" }
+    }),
     prisma.approval.findMany({ where: { type: "SUPERVISOR" }, include: { idea: true } }),
     prisma.approval.findMany({ where: { type: { in: ["CALIDAD", "SEGURIDAD", "MANTENIMIENTO"] } }, include: { idea: true } }),
     prisma.kaizenProject.findMany({ include: { activities: true } }),
     prisma.genbaWalk.findMany({ include: { activities: true } })
   ]);
 
-  const dashboardIdeas: DashboardIdea[] = ideas.map((idea) => ({
-    id: idea.id,
-    folio: idea.folio,
-    areaCode: idea.area.code,
-    collaboratorName: idea.collaboratorName,
-    supervisorName: idea.supervisor?.name ?? null,
-    problem: idea.problem,
-    status: idea.status,
-    category: idea.category,
-    createdAt: idea.createdAt.toISOString(),
-    closedAt: idea.closedAt?.toISOString() ?? null,
-    dueDate: idea.dueDate?.toISOString() ?? null,
-    pointsAssigned: idea.pointsAssigned,
-    impactTypes: parseImpactTypes(idea.impactTypes),
-    impactsQuality: idea.impactsQuality,
-    impactsSafety: idea.impactsSafety,
-    requiresMaintenance: idea.requiresMaintenance
-  }));
+  const plantFor = (areaCode: string, linkedPlant?: { code: "APO" | "CAR"; name: string } | null) => ({
+    code: linkedPlant?.code ?? (areaCode.startsWith("CAR-") ? "CAR" : "APO"),
+    name: linkedPlant?.name ?? (areaCode.startsWith("CAR-") ? "Planta El Carmen" : "Planta Apodaca")
+  });
+
+  const dashboardIdeas: DashboardIdea[] = ideas.map((idea) => {
+    const plant = plantFor(idea.area.code, idea.area.organizationUnit?.plant);
+    return {
+      id: idea.id,
+      folio: idea.folio,
+      areaCode: idea.area.code,
+      areaName: idea.area.name,
+      plantCode: plant.code,
+      collaboratorName: idea.collaboratorName,
+      supervisorName: idea.supervisor?.name ?? null,
+      problem: idea.problem,
+      status: idea.status,
+      category: idea.category,
+      createdAt: idea.createdAt.toISOString(),
+      closedAt: idea.closedAt?.toISOString() ?? null,
+      dueDate: idea.dueDate?.toISOString() ?? null,
+      pointsAssigned: idea.pointsAssigned,
+      impactTypes: parseImpactTypes(idea.impactTypes),
+      impactsQuality: idea.impactsQuality,
+      impactsSafety: idea.impactsSafety,
+      requiresMaintenance: idea.requiresMaintenance
+    };
+  });
+
+  const dashboardAreas: DashboardArea[] = areas.map((area) => {
+    const plant = plantFor(area.code, area.organizationUnit?.plant);
+    return {
+      code: area.code,
+      name: area.name,
+      plantCode: plant.code,
+      plantName: plant.name
+    };
+  });
 
   const implementationRows = ideas.filter((idea) => idea.implementedAt);
   const implementationDays = implementationRows.length
@@ -84,7 +111,7 @@ export default async function DashboardPage() {
       />
 
       <DashboardCommandCenter
-        areas={areas.map((area) => area.code)}
+        areas={dashboardAreas}
         generatedAt={new Date().toISOString()}
         ideas={dashboardIdeas}
         portfolio={{
