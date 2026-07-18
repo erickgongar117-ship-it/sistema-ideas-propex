@@ -41,6 +41,7 @@ const DynamicChart = dynamic(() => import("@/components/premium-chart"), {
 });
 
 const DAY = 86_400_000;
+const PROPEX_TIME_ZONE = "America/Monterrey";
 
 const initialStatuses: IdeaStatus[] = ["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"];
 const validationStatuses: IdeaStatus[] = ["EN_VALIDACION_CALIDAD", "EN_VALIDACION_SEGURIDAD", "EN_VALIDACION_MANTENIMIENTO"];
@@ -144,8 +145,8 @@ function trendBuckets(ideas: DashboardIdea[], period: Period) {
       : new Date(date.getFullYear(), date.getMonth(), date.getDate() - ((date.getDay() + 6) % 7));
     const id = monthly ? `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}` : start.toISOString().slice(0, 10);
     const label = monthly
-      ? start.toLocaleDateString("es-MX", { month: "short", year: "2-digit" })
-      : start.toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+      ? start.toLocaleDateString("es-MX", { month: "short", year: "2-digit", timeZone: PROPEX_TIME_ZONE })
+      : start.toLocaleDateString("es-MX", { day: "numeric", month: "short", timeZone: PROPEX_TIME_ZONE });
     const bucket = bucketMap.get(id) ?? { label, created: 0, closed: 0, sort: start.getTime() };
     bucket[key] += 1;
     bucketMap.set(id, bucket);
@@ -403,7 +404,7 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
           <div>
             <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand-500" aria-hidden /><p className="text-xs font-extrabold uppercase tracking-[0.08em] text-slate-500">Vista analítica</p></div>
             <h2 className="mt-1 text-lg font-extrabold text-ink">Explora el desempeño sin salir del panel</h2>
-            <p className="mt-1 text-xs text-slate-500">Actualizado {new Date(generatedAt).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</p>
+            <p className="mt-1 text-xs text-slate-500">Actualizado {new Date(generatedAt).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: PROPEX_TIME_ZONE })}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label><span className="label">Periodo</span><select className="field min-w-36" value={period} onChange={(event) => updatePeriod(event.target.value as Period)}><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="365">Último año</option><option value="all">Todo el historial</option></select></label>
@@ -468,7 +469,7 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
 
         <article className="surface overflow-hidden rounded-lg">
           <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4"><div><p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-brand-700">Trazabilidad inmediata</p><h2 className="mt-1 text-lg font-extrabold text-ink">Ideas recientes en la selección</h2></div><Link className="text-xs font-extrabold text-brand-700 hover:underline" href="/ideas">Ver todas</Link></div>
-          {!recentIdeas.length ? <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><CheckCircle2 className="h-8 w-8 text-slate-300" aria-hidden /><p className="mt-3 text-sm font-extrabold text-slate-700">No hay ideas con estos filtros</p><button className="mt-3 text-xs font-extrabold text-brand-700" onClick={resetFilters} type="button">Restablecer filtros</button></div> : <div className="divide-y divide-line">{recentIdeas.map((idea) => <button aria-label={`Ver resumen de ${idea.folio}`} className="quick-view-row group grid w-full gap-3 px-5 py-4 text-left transition hover:bg-slate-50 sm:grid-cols-[110px_1fr_auto] sm:items-center" key={idea.id} onClick={() => setSelectedIdeaId(idea.id)} type="button"><span><span className="block text-xs font-extrabold text-brand-700">{idea.folio}</span><span className="mt-1 block text-[11px] font-bold text-slate-500">{idea.areaCode} · Cat. {idea.category}</span></span><span className="min-w-0"><span className="line-clamp-1 block text-sm font-bold text-slate-800">{idea.problem}</span><span className="mt-1 block text-xs text-slate-500">{idea.supervisorName ?? "Sin supervisor"} · {new Date(idea.createdAt).toLocaleDateString("es-MX")}</span></span><span className="flex items-center gap-3"><StatusPill status={idea.status} /><ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden /></span></button>)}</div>}
+          {!recentIdeas.length ? <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><CheckCircle2 className="h-8 w-8 text-slate-300" aria-hidden /><p className="mt-3 text-sm font-extrabold text-slate-700">No hay ideas con estos filtros</p><button className="mt-3 text-xs font-extrabold text-brand-700" onClick={resetFilters} type="button">Restablecer filtros</button></div> : <div className="divide-y divide-line">{recentIdeas.map((idea) => <button aria-label={`Ver resumen de ${idea.folio}`} className="quick-view-row group grid w-full gap-3 px-5 py-4 text-left transition hover:bg-slate-50 sm:grid-cols-[110px_1fr_auto] sm:items-center" key={idea.id} onClick={() => setSelectedIdeaId(idea.id)} type="button"><span><span className="block text-xs font-extrabold text-brand-700">{idea.folio}</span><span className="mt-1 block text-[11px] font-bold text-slate-500">{idea.areaCode} · Cat. {idea.category}</span></span><span className="min-w-0"><span className="line-clamp-1 block text-sm font-bold text-slate-800">{idea.problem}</span><span className="mt-1 block text-xs text-slate-500">{idea.supervisorName ?? "Sin supervisor"} · {new Date(idea.createdAt).toLocaleDateString("es-MX", { timeZone: PROPEX_TIME_ZONE })}</span></span><span className="flex items-center gap-3"><StatusPill status={idea.status} /><ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden /></span></button>)}</div>}
         </article>
       </section>
 
@@ -488,7 +489,7 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
               <section className="quick-view-section">
                 <p className="quick-view-label">Qué pasó</p>
                 <p className="mt-2 text-sm font-bold leading-6 text-ink">{selectedIdea.problem}</p>
-                <p className="mt-2 text-xs text-slate-500">Registrada por {selectedIdea.collaboratorName} el {new Date(selectedIdea.createdAt).toLocaleDateString("es-MX", { dateStyle: "medium" })}.</p>
+                <p className="mt-2 text-xs text-slate-500">Registrada por {selectedIdea.collaboratorName} el {new Date(selectedIdea.createdAt).toLocaleDateString("es-MX", { dateStyle: "medium", timeZone: PROPEX_TIME_ZONE })}.</p>
               </section>
               <section className="quick-view-next-step">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10"><ArrowRight className="h-4 w-4" aria-hidden /></span>
@@ -496,7 +497,7 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
               </section>
               <dl className="quick-view-facts">
                 <div><dt><UserRound className="h-4 w-4" aria-hidden />Responsable visible</dt><dd>{selectedIdea.supervisorName ?? "Pendiente de asignar"}</dd></div>
-                <div><dt><CalendarClock className="h-4 w-4" aria-hidden />Fecha compromiso</dt><dd>{selectedIdea.dueDate ? new Date(selectedIdea.dueDate).toLocaleDateString("es-MX", { dateStyle: "medium" }) : "Sin fecha definida"}</dd></div>
+                <div><dt><CalendarClock className="h-4 w-4" aria-hidden />Fecha compromiso</dt><dd>{selectedIdea.dueDate ? new Date(selectedIdea.dueDate).toLocaleDateString("es-MX", { dateStyle: "medium", timeZone: PROPEX_TIME_ZONE }) : "Sin fecha definida"}</dd></div>
                 <div><dt><Tag className="h-4 w-4" aria-hidden />Estado actual</dt><dd>{statusLabels[selectedIdea.status]}</dd></div>
               </dl>
               <section className="quick-view-section">
