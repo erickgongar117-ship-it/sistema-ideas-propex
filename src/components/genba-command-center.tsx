@@ -4,7 +4,7 @@ import type { GenbaStatus, WorkItemStatus } from "@prisma/client";
 import type { EChartsOption } from "echarts";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/empty-state";
 import { GenbaStatusPill, WorkStatusPill } from "@/components/module-status";
 import { EmptyChart, PortfolioAttention, PortfolioChartPanel, PortfolioMetric } from "@/components/portfolio-command-ui";
 import { ProgressMeter } from "@/components/progress-meter";
+import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
 import { genbaStatusLabels } from "@/lib/domain";
 
 const DynamicChart = dynamic(() => import("@/components/premium-chart"), {
@@ -31,7 +32,7 @@ const DynamicChart = dynamic(() => import("@/components/premium-chart"), {
 });
 
 const DAY = 86_400_000;
-type Period = "90" | "365" | "all";
+type Period = WorkspacePeriod;
 
 export type GenbaDashboardActivity = {
   id: string;
@@ -94,11 +95,19 @@ function bucketLabel(date: Date, monthly: boolean) {
 }
 
 export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboardWalk[]; generatedAt: string }) {
-  const [period, setPeriod] = useState<Period>("365");
+  const [period, setPeriod] = useState<Period>("90");
   const [area, setArea] = useState("all");
   const [status, setStatus] = useState<"all" | GenbaStatus>("all");
   const [coordinator, setCoordinator] = useState("all");
   const now = useMemo(() => new Date(generatedAt), [generatedAt]);
+
+  useEffect(() => {
+    const storedPeriod = window.localStorage.getItem(WORKSPACE_PERIOD_STORAGE);
+    if (["30", "90", "365", "all"].includes(storedPeriod ?? "")) setPeriod(storedPeriod as Period);
+    const onPeriodChange = (event: Event) => setPeriod((event as CustomEvent<WorkspacePeriod>).detail);
+    window.addEventListener(WORKSPACE_PERIOD_EVENT, onPeriodChange);
+    return () => window.removeEventListener(WORKSPACE_PERIOD_EVENT, onPeriodChange);
+  }, []);
   const areas = useMemo(() => [...new Set(walks.map((walk) => walk.areaName))].sort(), [walks]);
   const coordinators = useMemo(() => [...new Set(walks.map((walk) => walk.coordinatorName))].sort(), [walks]);
 
@@ -125,7 +134,7 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
   const promotedActivities = relevantActivities.filter((activity) => activity.promotedToKaizen).length;
   const openWalks = filteredWalks.filter((walk) => walk.status === "ABIERTO");
 
-  const monthly = period !== "90";
+  const monthly = period === "365" || period === "all";
   const trendRows = useMemo(() => {
     const map = new Map<string, { label: string; sort: number; walks: number; closed: number }>();
     const ensure = (date: Date) => {
@@ -218,8 +227,9 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
     if (!b.dueDate) return -1;
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   }).slice(0, 12);
-  const activeFilters = [period !== "365", area !== "all", status !== "all", coordinator !== "all"].filter(Boolean).length;
-  const resetFilters = () => { setPeriod("365"); setArea("all"); setStatus("all"); setCoordinator("all"); };
+  const activeFilters = [period !== "90", area !== "all", status !== "all", coordinator !== "all"].filter(Boolean).length;
+  const updatePeriod = (value: Period) => { setPeriod(value); window.localStorage.setItem(WORKSPACE_PERIOD_STORAGE, value); window.dispatchEvent(new CustomEvent<WorkspacePeriod>(WORKSPACE_PERIOD_EVENT, { detail: value })); };
+  const resetFilters = () => { updatePeriod("90"); setArea("all"); setStatus("all"); setCoordinator("all"); };
 
   return (
     <div className="dashboard-command-center">
@@ -227,7 +237,7 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand-500" aria-hidden /><p className="text-xs font-extrabold uppercase text-slate-500">Gestión visual de piso</p></div><h2 className="mt-1 text-lg font-extrabold text-ink">Convierte cada recorrido en acciones verificables</h2><p className="mt-1 text-xs text-slate-500">Actualizado {now.toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</p></div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <label><span className="label">Periodo</span><select className="field min-w-36" value={period} onChange={(event) => setPeriod(event.target.value as Period)}><option value="90">Últimos 90 días</option><option value="365">Último año</option><option value="all">Todo el historial</option></select></label>
+            <label><span className="label">Periodo</span><select className="field min-w-36" value={period} onChange={(event) => updatePeriod(event.target.value as Period)}><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="365">Último año</option><option value="all">Todo el historial</option></select></label>
             <label><span className="label">Área visitada</span><select className="field min-w-40" value={area} onChange={(event) => setArea(event.target.value)}><option value="all">Todas</option>{areas.map((value) => <option value={value} key={value}>{value}</option>)}</select></label>
             <label><span className="label">Estatus</span><select className="field min-w-36" value={status} onChange={(event) => setStatus(event.target.value as "all" | GenbaStatus)}><option value="all">Todos</option>{Object.entries(genbaStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
             <label><span className="label">Coordinador</span><select className="field min-w-40" value={coordinator} onChange={(event) => setCoordinator(event.target.value)}><option value="all">Todos</option>{coordinators.map((value) => <option value={value} key={value}>{value}</option>)}</select></label>

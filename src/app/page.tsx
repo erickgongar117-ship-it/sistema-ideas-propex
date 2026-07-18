@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Building2, CheckCircle2, LogIn, QrCode } from "lucide-react";
 import { CaptureAreaExplorer } from "@/components/capture-area-explorer";
+import { ThemeSelector } from "@/components/theme-selector";
 import { getOrganizationStructure } from "@/lib/organization";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export default async function HomePage() {
         <header className="relative z-10 border-t-4 border-brand-500">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3">
-              <span className="flex h-12 w-24 items-center justify-center bg-white p-2">
+              <span className="brand-logo-surface flex h-12 w-24 items-center justify-center bg-white p-2">
                 <Image alt="Proboca" className="h-auto w-full object-contain" height={72} width={216} src="/brand/proboca-logo.png" />
               </span>
               <div>
@@ -25,11 +26,14 @@ export default async function HomePage() {
                 <p className="text-sm font-extrabold">Ideas de Mejora</p>
               </div>
             </div>
-            <Link className="btn border-white/30 bg-white/10 text-white hover:bg-white/20" href="/login">
-              <LogIn className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">Entrar al panel</span>
-              <span className="sm:hidden">Entrar</span>
-            </Link>
+            <div className="flex items-center gap-2">
+              <ThemeSelector />
+              <Link className="btn border-white/30 bg-white/10 text-white hover:bg-white/20" href="/login">
+                <LogIn className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Entrar al panel</span>
+                <span className="sm:hidden">Entrar</span>
+              </Link>
+            </div>
           </div>
         </header>
 

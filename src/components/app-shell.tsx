@@ -10,6 +10,7 @@ import {
   BarChart3,
   Bell,
   CalendarRange,
+  ChevronDown,
   ClipboardCheck,
   ClipboardList,
   Download,
@@ -22,6 +23,8 @@ import {
   LogOut,
   Menu,
   Network,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   QrCode,
   Settings,
@@ -31,6 +34,8 @@ import {
   X
 } from "lucide-react";
 import { logoutAction } from "@/app/actions";
+import { ThemeSelector } from "@/components/theme-selector";
+import { WorkspacePeriodControl, WorkspaceSearch } from "@/components/workspace-controls";
 import { roleLabels } from "@/lib/domain";
 
 type ShellUser = {
@@ -51,7 +56,7 @@ type NavItem = {
 };
 
 const ideaNav: NavItem[] = [
-  { href: "/dashboard", label: "Panel general", shortLabel: "Inicio", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/dashboard", label: "Hoy", shortLabel: "Hoy", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
   { href: "/supervisor", label: "Bandeja de supervisor", shortLabel: "Bandeja", icon: UserCheck, roles: ["ADMIN", "SUPERVISOR"], group: "work" },
   { href: "/validaciones/calidad", label: "Calidad e inocuidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "work" },
   { href: "/validaciones/seguridad", label: "Seguridad industrial", shortLabel: "Seguridad", icon: ClipboardCheck, roles: ["ADMIN", "SEGURIDAD"], group: "work" },
@@ -99,7 +104,7 @@ const groupLabels = {
 };
 
 function isCurrentPath(pathname: string, href: string) {
-  if (href === "/dashboard") return pathname === href;
+  if (["/dashboard", "/kaizen", "/genba"].includes(href)) return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -108,7 +113,7 @@ function NotificationBadge({ count }: { count: number }) {
   return <span className="nav-count">{count > 99 ? "99+" : count}</span>;
 }
 
-function NavigationLink({ item, pathname, pendingNotifications, onNavigate }: { item: NavItem; pathname: string; pendingNotifications: number; onNavigate?: () => void }) {
+function NavigationLink({ item, pathname, pendingNotifications, collapsed = false, onNavigate }: { item: NavItem; pathname: string; pendingNotifications: number; collapsed?: boolean; onNavigate?: () => void }) {
   const Icon = item.icon;
   const active = isCurrentPath(pathname, item.href);
   return (
@@ -117,6 +122,7 @@ function NavigationLink({ item, pathname, pendingNotifications, onNavigate }: { 
       className={`app-nav-link ${active ? "is-active" : ""}`}
       href={item.href}
       onClick={onNavigate}
+      title={collapsed ? item.label : undefined}
     >
       <span className="app-nav-icon">
         <Icon className="h-[18px] w-[18px]" aria-hidden />
@@ -127,10 +133,17 @@ function NavigationLink({ item, pathname, pendingNotifications, onNavigate }: { 
   );
 }
 
-function BrandBlock({ compact = false }: { compact?: boolean }) {
+function BrandBlock({ compact = false, collapsed = false }: { compact?: boolean; collapsed?: boolean }) {
+  if (collapsed) {
+    return (
+      <Link aria-label="PROpEx - Inicio" className="collapsed-brand" href="/">
+        <Image alt="Mejora Continua" className="h-full w-full object-contain" height={64} priority width={64} src="/brand/mejora-continua-logo-rojo.png" />
+      </Link>
+    );
+  }
   return (
     <Link className="flex min-w-0 items-center gap-3" href="/">
-      <span className={`flex shrink-0 items-center justify-center border border-slate-200 bg-white ${compact ? "h-10 w-[84px] p-1.5" : "h-12 w-[102px] p-2"}`}>
+      <span className={`brand-logo-surface flex shrink-0 items-center justify-center border border-slate-200 bg-white ${compact ? "h-10 w-[84px] p-1.5" : "h-12 w-[102px] p-2"}`}>
         <Image alt="Proboca" className="h-auto w-full object-contain" height={72} priority width={216} src="/brand/proboca-logo.png" />
       </span>
       <span className="min-w-0">
@@ -161,6 +174,7 @@ function ModuleSwitcher({ home, access, compact = false, onNavigate }: { home: s
 export function AppShell({ user, children, pendingNotifications, moduleAccess }: { user: ShellUser; children: ReactNode; pendingNotifications: number; moduleAccess: { kaizen: boolean; genba: boolean } }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const roleBaseTheme = roleTheme[user.role];
   const currentModule = pathname.startsWith("/kaizen") ? "kaizen" : pathname.startsWith("/genba") ? "genba" : "ideas";
   const theme = currentModule === "kaizen"
@@ -180,6 +194,27 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
         : ["/genba", "/genba/kanban"];
     return preferred.map((href) => visibleNav.find((item) => item.href === href)).filter((item): item is NavItem => Boolean(item)).filter((item, index, items) => items.findIndex((candidate) => candidate.href === item.href) === index).slice(0, 3);
   }, [currentModule, theme.home, user.role, visibleNav]);
+  const activeItem = visibleNav.find((item) => isCurrentPath(pathname, item.href));
+  const searchItems = useMemo(() => {
+    const moduleSources = [
+      { label: "Ideas", visible: true, items: ideaNav },
+      { label: "Kaizen", visible: moduleAccess.kaizen, items: kaizenNav },
+      { label: "GENBA", visible: moduleAccess.genba, items: genbaNav }
+    ];
+    const seen = new Set<string>();
+    return moduleSources.flatMap((module) => module.visible
+      ? module.items
+        .filter((item) => item.roles.includes(user.role) && !seen.has(item.href))
+        .map((item) => {
+          seen.add(item.href);
+          return { href: item.href, label: item.label, group: `${module.label} · ${groupLabels[item.group]}` };
+        })
+      : []);
+  }, [moduleAccess.genba, moduleAccess.kaizen, user.role]);
+
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem("propex-sidebar-collapsed") === "true");
+  }, []);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -192,12 +227,20 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
     };
   }, [menuOpen]);
 
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem("propex-sidebar-collapsed", String(next));
+      return next;
+    });
+  };
+
   const shellStyle = {
     "--role-accent": theme.accent,
     "--role-soft": theme.soft
   } as CSSProperties;
 
-  const navigation = (onNavigate?: () => void) => (
+  const navigation = (onNavigate?: () => void, collapsed = false) => (
     <nav aria-label="Navegacion principal" className="space-y-5">
       {(["work", "control", "system"] as const).map((group) => {
         const items = visibleNav.filter((item) => item.group === group);
@@ -207,7 +250,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
             <p className="nav-group-label">{groupLabels[group]}</p>
             <div className="mt-1.5 space-y-1">
               {items.map((item) => (
-                <NavigationLink item={item} key={item.href} onNavigate={onNavigate} pathname={pathname} pendingNotifications={pendingNotifications} />
+                <NavigationLink collapsed={collapsed} item={item} key={item.href} onNavigate={onNavigate} pathname={pathname} pendingNotifications={pendingNotifications} />
               ))}
             </div>
           </div>
@@ -217,13 +260,24 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
   );
 
   return (
-    <div className="app-shell" style={shellStyle}>
+    <div className={`app-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`} data-module={currentModule} data-role={user.role} style={shellStyle}>
       <aside className="app-sidebar">
         <div className="app-sidebar-brand">
-          <BrandBlock />
+          <div className="sidebar-brand-row">
+            <BrandBlock collapsed={sidebarCollapsed} />
+            <button
+              aria-label={sidebarCollapsed ? "Expandir navegación" : "Contraer navegación"}
+              className="icon-button sidebar-collapse-button"
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? "Expandir navegación" : "Contraer navegación"}
+              type="button"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden /> : <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden />}
+            </button>
+          </div>
           <div className="mt-4"><ModuleSwitcher access={moduleAccess} home={roleBaseTheme.home} /></div>
         </div>
-        <div className="app-sidebar-scroll">{navigation()}</div>
+        <div className="app-sidebar-scroll">{navigation(undefined, sidebarCollapsed)}</div>
         <div className="app-sidebar-footer">
           <Link className="user-summary" href="/notificaciones">
             <span className="user-avatar">{user.name.charAt(0).toUpperCase()}</span>
@@ -245,6 +299,42 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
       </aside>
 
       <div className="app-content">
+        <header className="workspace-topbar">
+          <div className="workspace-topbar-context">
+            <span className="workspace-context-mark" />
+            <span className="min-w-0">
+              <span className="block text-[10px] font-extrabold uppercase text-slate-500">{theme.context}</span>
+              <span className="mt-0.5 block truncate text-sm font-extrabold text-ink">{activeItem?.label ?? "Espacio de trabajo"}</span>
+            </span>
+          </div>
+          <div className="workspace-topbar-actions">
+            <WorkspaceSearch items={searchItems} />
+            <WorkspacePeriodControl />
+            <ThemeSelector />
+            <Link aria-label={`${pendingNotifications} notificaciones pendientes`} className="icon-button relative" href="/notificaciones" title="Notificaciones">
+              <Bell className="h-[18px] w-[18px]" aria-hidden />
+              {pendingNotifications ? <span className="notification-dot" /> : null}
+            </Link>
+            <details className="workspace-profile">
+              <summary aria-label="Abrir perfil" title="Perfil de usuario">
+                <span className="user-avatar">{user.name.charAt(0).toUpperCase()}</span>
+                <span className="workspace-profile-copy">
+                  <span className="block max-w-36 truncate text-xs font-extrabold text-ink">{user.name}</span>
+                  <span className="mt-0.5 block text-[10px] text-slate-500">{roleLabels[user.role]}</span>
+                </span>
+                <ChevronDown className="h-4 w-4 text-slate-400" aria-hidden />
+              </summary>
+              <div className="workspace-profile-menu">
+                <p className="truncate text-sm font-extrabold text-ink">{user.name}</p>
+                <p className="mt-1 truncate text-xs text-slate-500">{user.email}</p>
+                <p className="mt-3 border-t border-line pt-3 text-[11px] font-bold text-slate-500">{theme.context}</p>
+                <form action={logoutAction} className="mt-3">
+                  <button className="btn btn-secondary w-full" type="submit"><LogOut className="h-4 w-4" aria-hidden />Cerrar sesión</button>
+                </form>
+              </div>
+            </details>
+          </div>
+        </header>
         <header className="mobile-topbar">
           <BrandBlock compact />
           <div className="flex items-center gap-2">
@@ -297,6 +387,11 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
               <p className="text-sm font-extrabold text-slate-950">{user.name}</p>
               <p className="mt-0.5 text-xs text-slate-500">{roleLabels[user.role]} · {theme.context}</p>
               <div className="mt-3"><ModuleSwitcher access={moduleAccess} compact home={roleBaseTheme.home} onNavigate={() => setMenuOpen(false)} /></div>
+              <div className="mobile-workspace-preferences">
+                <WorkspaceSearch fullWidth items={searchItems} />
+                <WorkspacePeriodControl fullWidth />
+                <ThemeSelector showLabel />
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4">{navigation(() => setMenuOpen(false))}</div>
             <form action={logoutAction} className="border-t border-slate-200 p-4">

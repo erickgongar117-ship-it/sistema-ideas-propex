@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Footprints, FolderKanban, Lightbulb, LockKeyhole, QrCode, ShieldCheck } from "lucide-react";
 import { loginAction } from "@/app/actions";
+import { ThemeSelector } from "@/components/theme-selector";
 
 type LoginProps = {
   searchParams: Promise<{ error?: string; modulo?: string }>;
@@ -26,7 +27,7 @@ export default async function LoginPage({ searchParams }: LoginProps) {
       <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between gap-4">
           <Link className="flex items-center gap-3" href="/">
-            <span className="flex h-12 w-24 items-center justify-center bg-white p-2">
+            <span className="brand-logo-surface flex h-12 w-24 items-center justify-center bg-white p-2">
               <Image alt="Proboca" className="h-auto w-full object-contain" height={72} priority width={216} src="/brand/proboca-logo.png" />
             </span>
             <span>
@@ -34,10 +35,13 @@ export default async function LoginPage({ searchParams }: LoginProps) {
               <span className="block text-sm font-extrabold">Mejora Operativa</span>
             </span>
           </Link>
-          <Link className="btn border-white/25 bg-white/10 text-white hover:bg-white/20" href="/">
-            <ArrowLeft className="h-4 w-4" aria-hidden />
-            Inicio
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeSelector />
+            <Link className="btn border-white/25 bg-white/10 text-white hover:bg-white/20" href="/">
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              Inicio
+            </Link>
+          </div>
         </header>
 
         <section className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[1fr_430px] lg:py-14">

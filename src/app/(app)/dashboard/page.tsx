@@ -63,9 +63,9 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Centro de mando PROpEx"
-        eyebrow="Mejora Continua · Inteligencia operativa"
-        description="Prioridades, tendencias y resultados conectados entre Ideas, Kaizen y GENBA."
+        title="Hoy en PROpEx"
+        eyebrow="Centro de mando · Inteligencia operativa"
+        description="Lo que requiere atención hoy y el desempeño conectado de Ideas, Kaizen y GENBA."
         actions={
           <>
             <Link aria-label="Ver códigos QR" className="icon-button" href="/qr" title="Códigos QR">

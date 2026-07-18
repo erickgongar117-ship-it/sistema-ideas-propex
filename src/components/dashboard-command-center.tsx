@@ -4,10 +4,12 @@ import type { IdeaCategory, IdeaStatus } from "@prisma/client";
 import type { EChartsOption } from "echarts";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowUpRight,
+  CalendarClock,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -20,13 +22,18 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  Tag,
   TimerReset,
   TrendingDown,
   TrendingUp,
+  UserRound,
+  X,
   XCircle
 } from "lucide-react";
 import { ProbocaCoin } from "@/components/proboca-coin";
 import { StatusPill } from "@/components/status-pill";
+import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
+import { statusLabels } from "@/lib/domain";
 
 const DynamicChart = dynamic(() => import("@/components/premium-chart"), {
   ssr: false,
@@ -41,7 +48,7 @@ const implementationStatuses: IdeaStatus[] = ["APROBADA_PARA_IMPLEMENTAR", "CLAS
 const approvedStatuses: IdeaStatus[] = ["APROBADA_SUPERVISOR", ...validationStatuses, ...implementationStatuses, "CERRADA"];
 const rejectedStatuses: IdeaStatus[] = ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"];
 
-type Period = "30" | "90" | "365" | "all";
+type Period = WorkspacePeriod;
 type Department = "all" | "quality" | "safety" | "maintenance";
 
 export type DashboardIdea = {
@@ -114,6 +121,18 @@ function averageCycleDays(ideas: DashboardIdea[]) {
   return Math.round(closed.reduce((sum, idea) => sum + (new Date(idea.closedAt!).getTime() - new Date(idea.createdAt).getTime()) / DAY, 0) / closed.length);
 }
 
+function nextStepFor(status: IdeaStatus) {
+  if (["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"].includes(status)) return "Revisión y decisión del supervisor";
+  if (["EN_VALIDACION_CALIDAD", "EN_VALIDACION_SEGURIDAD", "EN_VALIDACION_MANTENIMIENTO"].includes(status)) return "Completar la validación del área de soporte";
+  if (["APROBADA_SUPERVISOR", "APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA"].includes(status)) return "Clasificar, priorizar y asignar responsable";
+  if (status === "EN_IMPLEMENTACION") return "Registrar avance y evidencia de implementación";
+  if (["IMPLEMENTADA", "EN_VALIDACION_FINAL"].includes(status)) return "Validar el resultado y asignar ProbocaCoins";
+  if (["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(status)) return "Revisar la justificación y decidir si se reenvía";
+  if (status === "VENCIDA") return "Escalar el compromiso o acordar una nueva fecha";
+  if (status === "CERRADA") return "Consultar evidencia y resultado final";
+  return "Revisar el expediente y definir la siguiente acción";
+}
+
 function trendBuckets(ideas: DashboardIdea[], period: Period) {
   const monthly = period === "365" || period === "all";
   const bucketMap = new Map<string, { label: string; created: number; closed: number; sort: number }>();
@@ -167,7 +186,7 @@ function MetricCard({ label, value, detail, change, icon: Icon, visual, tone = "
   const positive = (change ?? 0) >= 0;
 
   return (
-    <article className="surface min-h-[150px] rounded-lg p-4 sm:p-5">
+    <article className="surface metric-depth min-h-[150px] rounded-lg p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <p className="text-[11px] font-extrabold uppercase tracking-[0.05em] text-slate-500">{label}</p>
         {visual ?? <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors[tone]}`}><Icon className="h-[18px] w-[18px]" aria-hidden /></span>}
@@ -192,6 +211,18 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
   const [category, setCategory] = useState<"all" | IdeaCategory>("all");
   const [department, setDepartment] = useState<Department>("all");
   const [impact, setImpact] = useState<string | null>(null);
+  const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const storedPeriod = window.localStorage.getItem(WORKSPACE_PERIOD_STORAGE);
+    if (["30", "90", "365", "all"].includes(storedPeriod ?? "")) setPeriod(storedPeriod as Period);
+    const onPeriodChange = (event: Event) => {
+      const value = (event as CustomEvent<WorkspacePeriod>).detail;
+      if (["30", "90", "365", "all"].includes(value)) setPeriod(value);
+    };
+    window.addEventListener(WORKSPACE_PERIOD_EVENT, onPeriodChange);
+    return () => window.removeEventListener(WORKSPACE_PERIOD_EVENT, onPeriodChange);
+  }, []);
 
   const now = useMemo(() => new Date(generatedAt), [generatedAt]);
   const dimensionIdeas = useMemo(() => ideas.filter((idea) =>
@@ -342,8 +373,28 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
   };
 
   const recentIdeas = currentIdeas.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 8);
+  const selectedIdea = selectedIdeaId ? currentIdeas.find((idea) => idea.id === selectedIdeaId) ?? null : null;
   const activeFilters = [period !== "90", area !== "all", category !== "all", department !== "all", Boolean(impact)].filter(Boolean).length;
-  const resetFilters = () => { setPeriod("90"); setArea("all"); setCategory("all"); setDepartment("all"); setImpact(null); };
+  const updatePeriod = (value: Period) => {
+    setPeriod(value);
+    window.localStorage.setItem(WORKSPACE_PERIOD_STORAGE, value);
+    window.dispatchEvent(new CustomEvent<WorkspacePeriod>(WORKSPACE_PERIOD_EVENT, { detail: value }));
+  };
+  const resetFilters = () => { updatePeriod("90"); setArea("all"); setCategory("all"); setDepartment("all"); setImpact(null); };
+
+  useEffect(() => {
+    if (!selectedIdea) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedIdeaId(null);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [selectedIdea]);
 
   return (
     <div className="dashboard-command-center">
@@ -355,7 +406,7 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
             <p className="mt-1 text-xs text-slate-500">Actualizado {new Date(generatedAt).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label><span className="label">Periodo</span><select className="field min-w-36" value={period} onChange={(event) => setPeriod(event.target.value as Period)}><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="365">Último año</option><option value="all">Todo el historial</option></select></label>
+            <label><span className="label">Periodo</span><select className="field min-w-36" value={period} onChange={(event) => updatePeriod(event.target.value as Period)}><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="365">Último año</option><option value="all">Todo el historial</option></select></label>
             <label><span className="label">Área</span><select className="field min-w-32" value={area} onChange={(event) => setArea(event.target.value)}><option value="all">Todas</option>{areas.map((code) => <option value={code} key={code}>{code}</option>)}</select></label>
             <label><span className="label">Categoría</span><select className="field min-w-32" value={category} onChange={(event) => setCategory(event.target.value as "all" | IdeaCategory)}><option value="all">Todas</option><option value="A">Categoría A</option><option value="B">Categoría B</option><option value="C">Categoría C</option></select></label>
             <label><span className="label">Soporte</span><select className="field min-w-40" value={department} onChange={(event) => setDepartment(event.target.value as Department)}><option value="all">Todos</option><option value="quality">Calidad</option><option value="safety">Seguridad</option><option value="maintenance">Mantenimiento</option></select></label>
@@ -364,7 +415,7 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
         {(impact || activeFilters) ? <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3"><span className="text-xs font-bold text-slate-500">{activeFilters} filtros activos</span>{impact ? <button className="inline-flex min-h-8 items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-3 text-xs font-extrabold text-brand-700" onClick={() => setImpact(null)} type="button">Impacto: {impact}<XCircle className="h-3.5 w-3.5" aria-hidden /></button> : null}<button className="btn btn-secondary ml-auto min-h-9 px-3 text-xs" onClick={resetFilters} type="button"><RotateCcw className="h-3.5 w-3.5" aria-hidden />Restablecer</button></div> : null}
       </section>
 
-      <section className="overflow-hidden rounded-lg bg-slate-950 text-white">
+      <section className="command-attention-band overflow-hidden rounded-lg bg-slate-950 text-white">
         <div className="grid lg:grid-cols-[285px_1fr]">
           <div className="border-b border-white/10 p-5 lg:border-b-0 lg:border-r lg:p-6">
             <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-red-300">Atención de hoy</p>
@@ -417,9 +468,50 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
 
         <article className="surface overflow-hidden rounded-lg">
           <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4"><div><p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-brand-700">Trazabilidad inmediata</p><h2 className="mt-1 text-lg font-extrabold text-ink">Ideas recientes en la selección</h2></div><Link className="text-xs font-extrabold text-brand-700 hover:underline" href="/ideas">Ver todas</Link></div>
-          {!recentIdeas.length ? <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><CheckCircle2 className="h-8 w-8 text-slate-300" aria-hidden /><p className="mt-3 text-sm font-extrabold text-slate-700">No hay ideas con estos filtros</p><button className="mt-3 text-xs font-extrabold text-brand-700" onClick={resetFilters} type="button">Restablecer filtros</button></div> : <div className="divide-y divide-line">{recentIdeas.map((idea) => <Link className="group grid gap-3 px-5 py-4 transition hover:bg-slate-50 sm:grid-cols-[110px_1fr_auto] sm:items-center" href={`/ideas/${idea.id}`} key={idea.id}><div><p className="text-xs font-extrabold text-brand-700">{idea.folio}</p><p className="mt-1 text-[11px] font-bold text-slate-500">{idea.areaCode} · Cat. {idea.category}</p></div><div className="min-w-0"><p className="line-clamp-1 text-sm font-bold text-slate-800">{idea.problem}</p><p className="mt-1 text-xs text-slate-500">{idea.supervisorName ?? "Sin supervisor"} · {new Date(idea.createdAt).toLocaleDateString("es-MX")}</p></div><div className="flex items-center gap-3"><StatusPill status={idea.status} /><ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden /></div></Link>)}</div>}
+          {!recentIdeas.length ? <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><CheckCircle2 className="h-8 w-8 text-slate-300" aria-hidden /><p className="mt-3 text-sm font-extrabold text-slate-700">No hay ideas con estos filtros</p><button className="mt-3 text-xs font-extrabold text-brand-700" onClick={resetFilters} type="button">Restablecer filtros</button></div> : <div className="divide-y divide-line">{recentIdeas.map((idea) => <button aria-label={`Ver resumen de ${idea.folio}`} className="quick-view-row group grid w-full gap-3 px-5 py-4 text-left transition hover:bg-slate-50 sm:grid-cols-[110px_1fr_auto] sm:items-center" key={idea.id} onClick={() => setSelectedIdeaId(idea.id)} type="button"><span><span className="block text-xs font-extrabold text-brand-700">{idea.folio}</span><span className="mt-1 block text-[11px] font-bold text-slate-500">{idea.areaCode} · Cat. {idea.category}</span></span><span className="min-w-0"><span className="line-clamp-1 block text-sm font-bold text-slate-800">{idea.problem}</span><span className="mt-1 block text-xs text-slate-500">{idea.supervisorName ?? "Sin supervisor"} · {new Date(idea.createdAt).toLocaleDateString("es-MX")}</span></span><span className="flex items-center gap-3"><StatusPill status={idea.status} /><ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden /></span></button>)}</div>}
         </article>
       </section>
+
+      {selectedIdea ? (
+        <div className="quick-view-layer" role="presentation">
+          <button aria-label="Cerrar detalle rápido" className="quick-view-backdrop" onClick={() => setSelectedIdeaId(null)} type="button" />
+          <aside aria-label={`Detalle rápido de ${selectedIdea.folio}`} aria-modal="true" className="quick-view-panel" role="dialog">
+            <header className="quick-view-header">
+              <div className="min-w-0">
+                <p className="text-[10px] font-extrabold uppercase text-brand-700">Detalle rápido · {selectedIdea.areaCode}</p>
+                <h2 className="mt-1 text-xl font-extrabold text-ink">{selectedIdea.folio}</h2>
+              </div>
+              <button aria-label="Cerrar detalle rápido" className="icon-button" onClick={() => setSelectedIdeaId(null)} title="Cerrar" type="button"><X className="h-4 w-4" aria-hidden /></button>
+            </header>
+            <div className="quick-view-body">
+              <div className="flex flex-wrap items-center gap-2"><StatusPill status={selectedIdea.status} /><span className="text-xs font-bold text-slate-500">Categoría {selectedIdea.category}</span></div>
+              <section className="quick-view-section">
+                <p className="quick-view-label">Qué pasó</p>
+                <p className="mt-2 text-sm font-bold leading-6 text-ink">{selectedIdea.problem}</p>
+                <p className="mt-2 text-xs text-slate-500">Registrada por {selectedIdea.collaboratorName} el {new Date(selectedIdea.createdAt).toLocaleDateString("es-MX", { dateStyle: "medium" })}.</p>
+              </section>
+              <section className="quick-view-next-step">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10"><ArrowRight className="h-4 w-4" aria-hidden /></span>
+                <span><span className="block text-[10px] font-extrabold uppercase text-red-200">Siguiente paso</span><span className="mt-1 block text-sm font-extrabold">{nextStepFor(selectedIdea.status)}</span></span>
+              </section>
+              <dl className="quick-view-facts">
+                <div><dt><UserRound className="h-4 w-4" aria-hidden />Responsable visible</dt><dd>{selectedIdea.supervisorName ?? "Pendiente de asignar"}</dd></div>
+                <div><dt><CalendarClock className="h-4 w-4" aria-hidden />Fecha compromiso</dt><dd>{selectedIdea.dueDate ? new Date(selectedIdea.dueDate).toLocaleDateString("es-MX", { dateStyle: "medium" }) : "Sin fecha definida"}</dd></div>
+                <div><dt><Tag className="h-4 w-4" aria-hidden />Estado actual</dt><dd>{statusLabels[selectedIdea.status]}</dd></div>
+              </dl>
+              <section className="quick-view-section">
+                <p className="quick-view-label">Impacto operativo</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedIdea.impactTypes.length ? selectedIdea.impactTypes.map((item) => <span className="quick-view-impact" key={item}>{item}</span>) : <span className="text-xs text-slate-500">Sin impacto clasificado</span>}
+                </div>
+              </section>
+            </div>
+            <footer className="quick-view-footer">
+              <Link className="btn btn-brand w-full" href={`/ideas/${selectedIdea.id}`}>Abrir expediente completo<ArrowUpRight className="h-4 w-4" aria-hidden /></Link>
+            </footer>
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

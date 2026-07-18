@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { submitIdeaAction } from "@/app/actions";
 import { CaptureClassification } from "@/components/capture-classification";
+import { ThemeSelector } from "@/components/theme-selector";
 import { impactOptions, shifts } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
@@ -124,7 +125,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
           <div className="h-1.5 bg-brand-500" />
           <div className="grid gap-5 p-4 sm:grid-cols-[1fr_auto] sm:items-center sm:p-5">
             <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-              <span className="flex h-12 w-24 shrink-0 items-center justify-center border border-line bg-white p-2 sm:h-14 sm:w-28">
+              <span className="brand-logo-surface flex h-12 w-24 shrink-0 items-center justify-center border border-line bg-white p-2 sm:h-14 sm:w-28">
                 <Image alt="Proboca" className="h-auto w-full object-contain" height={72} priority width={216} src="/brand/proboca-logo.png" />
               </span>
               <div className="min-w-0">
@@ -132,12 +133,15 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                 <h1 className="mt-0.5 text-xl font-extrabold leading-tight text-ink sm:text-2xl">Registrar idea de mejora</h1>
               </div>
             </div>
-            <div className="flex items-center gap-3 border-l-4 border-emerald-600 bg-emerald-50 px-3 py-2.5">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-700 text-sm font-extrabold text-white">{area.code}</span>
-              <span>
-                <span className="block text-xs font-extrabold text-emerald-900">{area.name}</span>
-                <span className="mt-0.5 block text-[11px] text-emerald-800">{area.supervisor?.name ?? "Supervisor pendiente"}</span>
-              </span>
+            <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-3 border-l-4 border-emerald-600 bg-emerald-50 px-3 py-2.5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-sm font-extrabold text-white">{area.code}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-extrabold text-emerald-900">{area.name}</span>
+                  <span className="mt-0.5 block truncate text-[11px] text-emerald-800">{area.supervisor?.name ?? "Supervisor pendiente"}</span>
+                </span>
+              </div>
+              <ThemeSelector />
             </div>
           </div>
         </header>
