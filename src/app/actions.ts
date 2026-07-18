@@ -57,6 +57,49 @@ async function notifyModuleAssignment(input: { to?: string | null; subject: stri
   });
 }
 
+async function createIdeaWithUniqueFolio(data: Omit<Prisma.IdeaUncheckedCreateInput, "folio">) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      return await prisma.idea.create({ data: { ...data, folio: await nextFolio() } });
+    } catch (error) {
+      const duplicateFolio = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+      if (!duplicateFolio || attempt === 3) throw error;
+    }
+  }
+  throw new Error("No fue posible generar el folio de la idea.");
+}
+
+async function ensureKaizenTransfer(input: {
+  ideaId: string;
+  actorId: string;
+  leaderId?: string | null;
+  startDate?: Date | null;
+  endDate?: Date | null;
+  updateExisting?: boolean;
+}) {
+  const idea = await prisma.idea.findUniqueOrThrow({
+    where: { id: input.ideaId },
+    select: {
+      classification: true,
+      implementationOwnerId: true,
+      createdAt: true,
+      dueDate: true
+    }
+  });
+  if (idea.classification !== "KAIZEN") return null;
+
+  const startDate = input.startDate ?? idea.createdAt;
+  const endDate = input.endDate ?? idea.dueDate ?? new Date(startDate.getTime() + 90 * 86_400_000);
+  return createKaizenFromIdea({
+    ideaId: input.ideaId,
+    leaderId: input.leaderId ?? idea.implementationOwnerId ?? input.actorId,
+    startDate,
+    endDate,
+    createdById: input.actorId,
+    updateExisting: input.updateExisting
+  });
+}
+
 async function refreshKaizenProject(projectId: string) {
   const project = await prisma.kaizenProject.findUniqueOrThrow({
     where: { id: projectId },
@@ -151,9 +194,7 @@ export async function submitIdeaAction(formData: FormData) {
     redirect(`/captura/${areaCode}?error=datos&campos=externalSupportDetails&categoria=C`);
   }
 
-  const idea = await prisma.idea.create({
-    data: {
-      folio: await nextFolio(),
+  const idea = await createIdeaWithUniqueFolio({
       collaboratorName: parsed.data.collaboratorName,
       collaboratorEmail: text(formData, "collaboratorEmail") || null,
       employeeNumber: text(formData, "employeeNumber") || null,
@@ -169,7 +210,6 @@ export async function submitIdeaAction(formData: FormData) {
       externalSupportDetails: parsed.data.category === "C" ? externalSupportDetails : null,
       status: "EN_REVISION_SUPERVISOR",
       supervisorId: area.supervisorId
-    }
   });
 
   await prisma.approval.create({
@@ -454,14 +494,15 @@ export async function classifyIdeaAction(formData: FormData) {
   await auditLog({ entity: "Idea", entityId: ideaId, action: "MC_CLASSIFIED", userId: user.id, details: { classification, priority } });
   if (classification === "KAIZEN") {
     const startDate = new Date();
-    const kaizenProject = await createKaizenFromIdea({
+    const kaizenProject = await ensureKaizenTransfer({
       ideaId,
+      actorId: user.id,
       leaderId: user.id,
       startDate,
       endDate: new Date(startDate.getTime() + 90 * 86_400_000),
-      createdById: user.id,
       updateExisting: false
     });
+    if (!kaizenProject) throw new Error("La idea no conservó la clasificación Kaizen.");
     await auditLog({
       entity: "KaizenProject",
       entityId: kaizenProject.id,
@@ -514,14 +555,16 @@ export async function assignImplementationAction(formData: FormData) {
 
   let kaizenProject: Awaited<ReturnType<typeof createKaizenFromIdea>> | null = null;
   if (currentIdea.classification === "KAIZEN") {
-    kaizenProject = await createKaizenFromIdea({
+    kaizenProject = await ensureKaizenTransfer({
       ideaId,
+      actorId: user.id,
       leaderId: ownerId,
       startDate: new Date(),
       endDate: new Date(`${dueDateText}T12:00:00`),
-      createdById: user.id
+      updateExisting: true
     });
-    await auditLog({ entity: "KaizenProject", entityId: kaizenProject.id, action: "CREATED_FROM_IDEA", userId: user.id, details: { ideaId, folio: kaizenProject.folio } });
+    if (!kaizenProject) throw new Error("La idea no conservó la clasificación Kaizen.");
+    await auditLog({ entity: "KaizenProject", entityId: kaizenProject.id, action: "SYNCED_FROM_IDEA_ASSIGNMENT", userId: user.id, details: { ideaId, folio: kaizenProject.folio, leaderId: ownerId, dueDateText } });
     await notifyModuleAssignment({
       to: idea.implementationOwner?.email,
       subject: `Nuevo proyecto Kaizen ${kaizenProject.folio}`,
@@ -575,6 +618,24 @@ export async function implementationUpdateAction(formData: FormData) {
   });
   await auditLog({ entity: "Idea", entityId: ideaId, action: "IMPLEMENTATION_UPDATED", userId: user.id, details: { markImplemented, hasEvidence: Boolean(afterEvidence) } });
 
+  const kaizenProject = await ensureKaizenTransfer({
+    ideaId,
+    actorId: user.id,
+    leaderId: updatedIdea.implementationOwnerId,
+    startDate: updatedIdea.createdAt,
+    endDate: updatedIdea.dueDate,
+    updateExisting: false
+  });
+  if (kaizenProject) {
+    await auditLog({
+      entity: "KaizenProject",
+      entityId: kaizenProject.id,
+      action: markImplemented ? "TRANSFER_VERIFIED_AT_IMPLEMENTATION" : "TRANSFER_VERIFIED_AT_PROGRESS",
+      userId: user.id,
+      details: { ideaId, folio: kaizenProject.folio }
+    });
+  }
+
   const recipients = new Set<string>();
   if (updatedIdea.supervisor?.email) recipients.add(updatedIdea.supervisor.email);
   if (updatedIdea.implementationOwner?.email) recipients.add(updatedIdea.implementationOwner.email);
@@ -597,6 +658,8 @@ export async function implementationUpdateAction(formData: FormData) {
   }
 
   revalidatePath(`/ideas/${ideaId}`);
+  revalidatePath("/kaizen");
+  revalidatePath("/kaizen/kanban");
   redirect(`/ideas/${ideaId}`);
 }
 
@@ -692,9 +755,28 @@ export async function closeIdeaAction(formData: FormData) {
       }))
     }
   });
+  const kaizenProject = await ensureKaizenTransfer({
+    ideaId,
+    actorId: user.id,
+    leaderId: idea.implementationOwnerId,
+    startDate: idea.createdAt,
+    endDate: idea.dueDate,
+    updateExisting: false
+  });
+  if (kaizenProject) {
+    await auditLog({
+      entity: "KaizenProject",
+      entityId: kaizenProject.id,
+      action: "TRANSFER_VERIFIED_AT_IDEA_CLOSE",
+      userId: user.id,
+      details: { ideaId, folio: kaizenProject.folio }
+    });
+  }
   await notifyIdeaClosed(ideaId, { coinsUpdated: wasClosed });
   revalidatePath("/dashboard");
   revalidatePath(`/ideas/${ideaId}`);
+  revalidatePath("/kaizen");
+  revalidatePath("/kaizen/kanban");
   redirect(`/ideas/${ideaId}?coins=${totalPoints}`);
 }
 

@@ -5,6 +5,7 @@ import {
   Accessibility,
   Camera,
   Check,
+  CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
   Factory,
@@ -19,6 +20,7 @@ import {
   Sparkles,
   Truck,
   UserRound,
+  XCircle,
 } from "lucide-react";
 import { submitIdeaAction } from "@/app/actions";
 import { CaptureClassification } from "@/components/capture-classification";
@@ -74,6 +76,32 @@ function FormSectionTitle({ number, title, description, icon: Icon }: { number: 
         <p className="mt-0.5 text-sm leading-5 text-slate-600">{description}</p>
       </div>
     </div>
+  );
+}
+
+function IdeaEligibilityGuide() {
+  return (
+    <details className="details-panel mb-5">
+      <summary><span className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4 text-emerald-700" aria-hidden />¿Esto sí es una idea de mejora?</span></summary>
+      <div className="grid gap-5 p-4 sm:grid-cols-2 sm:p-5">
+        <div className="border-l-4 border-emerald-600 pl-4">
+          <p className="flex items-center gap-2 text-sm font-extrabold text-emerald-900"><CheckCircle2 className="h-4 w-4" aria-hidden />Sí es una idea</p>
+          <ul className="mt-2 space-y-2 text-xs leading-5 text-slate-700">
+            <li>Propone una solución a un problema u objetivo no alcanzado.</li>
+            <li>Mejora o crea una forma estándar de trabajar.</li>
+            <li>Reduce defectos, esperas, movimientos, transporte, inventario o reproceso.</li>
+          </ul>
+        </div>
+        <div className="border-l-4 border-slate-400 pl-4">
+          <p className="flex items-center gap-2 text-sm font-extrabold text-slate-800"><XCircle className="h-4 w-4" aria-hidden />Necesita otro canal</p>
+          <ul className="mt-2 space-y-2 text-xs leading-5 text-slate-700">
+            <li>Es solo una queja, sin propuesta de solución.</li>
+            <li>Es una falla rutinaria que requiere reparación inmediata.</li>
+            <li>Es un asunto de personal o contradice una norma establecida.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -183,6 +211,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
 
           <section className="border-t border-line p-5 sm:p-6">
             <FormSectionTitle description="Cuentanos que viste y como crees que podria mejorar." icon={Lightbulb} number="2" title="La oportunidad" />
+            <IdeaEligibilityGuide />
             <div className="grid gap-4">
               <label>
                 <span className="label">¿Qué problema viste? *</span>

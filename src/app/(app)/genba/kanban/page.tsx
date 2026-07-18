@@ -63,13 +63,14 @@ export default async function GenbaKanbanPage() {
                         {overdue ? <p className="mt-3 flex items-center gap-2 text-xs font-extrabold text-rose-700"><AlertTriangle className="h-4 w-4" aria-hidden />{overdue} {overdue === 1 ? "actividad vencida" : "actividades vencidas"}</p> : null}
                       </div>
                       <div className="border-t border-line bg-slate-50/70">
-                        {activities.map((activity) => (
+                        {activities.slice(0, 3).map((activity) => (
                           <Link className="grid grid-cols-[26px_minmax(0,1fr)_auto] items-start gap-2 border-b border-line px-3 py-3 transition last:border-0 hover:bg-white" href={`/genba/${walk.id}#actividad-${activity.id}`} key={activity.id}>
                             <span className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-extrabold ${["COMPLETADA", "CANCELADA"].includes(activity.status) ? "bg-emerald-100 text-emerald-800" : activity.status === "BLOQUEADA" ? "bg-rose-100 text-rose-800" : "bg-white text-slate-700"}`}>{activity.status === "COMPLETADA" ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : activity.number}</span>
                             <span className="min-w-0"><span className="line-clamp-2 block text-xs font-extrabold leading-4 text-slate-800">{activity.action ?? activity.problem}</span><span className={`mt-1 block truncate text-[10px] font-bold ${isWorkItemOverdue(activity) ? "text-rose-700" : "text-slate-500"}`}>{activity.owner?.name ?? "Sin responsable"} · {activity.dueDate ? activity.dueDate.toLocaleDateString("es-MX") : "Sin fecha"}</span></span>
                             <WorkStatusPill status={activity.status} />
                           </Link>
                         ))}
+                        {activities.length ? <Link className="flex min-h-11 items-center justify-between gap-3 bg-white px-3 py-2 text-xs font-extrabold text-brand-700 hover:bg-brand-50" href={`/genba/${walk.id}`}><span>Ver plan completo · {activities.length} actividades</span><ArrowRight className="h-4 w-4" aria-hidden /></Link> : <p className="px-4 py-5 text-center text-xs font-bold text-slate-500">Sin actividades registradas</p>}
                       </div>
                     </article>
                   );

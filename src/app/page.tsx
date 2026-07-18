@@ -1,12 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Building2, CheckCircle2, LogIn, QrCode } from "lucide-react";
-import { prisma } from "@/lib/prisma";
+import { CaptureAreaExplorer } from "@/components/capture-area-explorer";
+import { getOrganizationStructure } from "@/lib/organization";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const areas = await prisma.area.findMany({ where: { active: true }, orderBy: { code: "asc" } });
+  const structure = await getOrganizationStructure();
 
   return (
     <main className="min-h-screen bg-white text-ink">
@@ -76,18 +77,7 @@ export default async function HomePage() {
             <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">¿En qué área viste la oportunidad?</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">Selecciona el área. El sistema enviará la idea al supervisor correcto automáticamente.</p>
           </div>
-          <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {areas.map((area) => (
-              <Link className="surface surface-interactive group flex min-h-24 items-center gap-4 rounded-lg p-4" href={`/captura/${area.code}`} key={area.id}>
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-lg font-extrabold text-white">{area.code}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-extrabold text-ink">{area.name}</span>
-                  <span className="mt-1 block text-xs text-slate-500">Abrir formulario</span>
-                </span>
-                <ArrowRight className="h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden />
-              </Link>
-            ))}
-          </div>
+          <div className="mt-7"><CaptureAreaExplorer structure={structure} /></div>
         </div>
       </section>
 

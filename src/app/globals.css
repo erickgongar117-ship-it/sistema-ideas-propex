@@ -931,6 +931,24 @@ input[type="file"]::file-selector-button {
   content: "−";
 }
 
+.work-item-disclosure {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.work-item-disclosure:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.work-item-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.work-item-disclosure[open] .work-item-chevron {
+  transform: rotate(180deg);
+}
+
 .org-dialog::backdrop {
   background: rgba(17, 20, 18, 0.56);
   backdrop-filter: blur(3px);

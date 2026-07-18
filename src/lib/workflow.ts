@@ -11,8 +11,13 @@ const supportRoleForApproval: Partial<Record<ApprovalType, Role>> = {
 };
 
 export async function nextFolio() {
-  const count = await prisma.idea.count();
-  return `IM-${String(count + 1).padStart(6, "0")}`;
+  const latest = await prisma.idea.findFirst({
+    where: { folio: { startsWith: "IM-" } },
+    orderBy: { folio: "desc" },
+    select: { folio: true }
+  });
+  const current = Number(latest?.folio.replace(/^IM-/, "")) || 0;
+  return `IM-${String(current + 1).padStart(6, "0")}`;
 }
 
 export async function supportUserFor(type: ApprovalType) {

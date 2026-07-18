@@ -109,15 +109,23 @@ export const priorityLabels: Record<Priority, string> = {
 };
 
 export const classificationLabels: Record<Classification, string> = {
-  IDEA_RAPIDA: "Idea de mejora",
-  ACCION_MANTENIMIENTO: "Acción de mantenimiento",
-  KAIZEN: "Kaizen",
-  PROYECTO_DMAIC: "Proyecto DMAIC",
+  IDEA_RAPIDA: "Idea de mejora / Quick Win (hasta 1 mes)",
+  ACCION_MANTENIMIENTO: "Actividad de mantenimiento",
+  KAIZEN: "Proyecto Kaizen (1 a 3 meses)",
+  PROYECTO_DMAIC: "Proyecto DMAIC (4 a 6 meses)",
+  PLAN_ACCION: "Plan de acción (solución ya definida)",
   CINCO_S_GESTION_VISUAL: "5S / Gestión visual",
   SEGURIDAD: "Seguridad",
   CALIDAD_INOCUIDAD: "Calidad/Inocuidad",
   NO_VIABLE: "No viable"
 };
+
+export const coreClassificationGuide = [
+  { key: "IDEA_RAPIDA", label: "Idea de mejora", signal: "Causa y solución conocidas", timing: "Hasta 1 mes" },
+  { key: "KAIZEN", label: "Kaizen", signal: "Desperdicio visible; requiere equipo", timing: "1 a 3 meses" },
+  { key: "PROYECTO_DMAIC", label: "DMAIC", signal: "Variación crónica; causa desconocida", timing: "4 a 6 meses" },
+  { key: "PLAN_ACCION", label: "Plan de acción", signal: "La solución ya está decidida; falta ejecutar", timing: "Según cronograma" }
+] as const;
 
 export const approvalTypeLabels: Record<ApprovalType, string> = {
   SUPERVISOR: "Supervisor",

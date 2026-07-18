@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CalendarDays, CheckCircle2, FileText, FolderOpen, GitMerge, MessageSquare, Paperclip, Plus, Save, Target, Upload, UserRound, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarDays, CheckCircle2, FileText, FolderOpen, GitMerge, MessageSquare, Paperclip, Plus, Save, Target, Upload, XCircle } from "lucide-react";
 import {
   addKaizenActivityAction,
   addKaizenUpdateAction,
@@ -10,10 +10,11 @@ import {
   updateKaizenProjectAction,
   uploadKaizenCharterAction
 } from "@/app/actions";
-import { KaizenStatusPill, WorkStatusPill } from "@/components/module-status";
+import { KaizenStatusPill } from "@/components/module-status";
 import { PageHeader } from "@/components/page-header";
 import { ProgressMeter } from "@/components/progress-meter";
 import { SectionHeading } from "@/components/section-heading";
+import { WorkItemDisclosure } from "@/components/work-item-disclosure";
 import { isWorkItemOverdue, kaizenStatusLabels, workItemStatusLabels, workProgress } from "@/lib/domain";
 import { requireKaizenAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
@@ -72,16 +73,16 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
           <section>
             <SectionHeading count={project.activities.filter((activity) => activity.status !== "COMBINADA").length} description="El avance del proyecto se calcula automáticamente con estas actividades." title="Plan de actividades" tone="dark" />
             {!project.activities.length ? <div className="surface rounded-lg border-dashed p-8 text-center text-sm text-slate-500">Todavía no hay actividades en este Kaizen.</div> : null}
-            <div className="grid gap-4">
+            <div className="overflow-hidden rounded-lg">
               {project.activities.map((activity) => {
                 const canClose = canManage || project.leaderId === user.id || activity.ownerId === user.id;
                 const terminal = ["COMPLETADA", "CANCELADA", "COMBINADA"].includes(activity.status);
                 return (
-                  <article className={`surface overflow-hidden rounded-lg ${activity.status === "COMBINADA" ? "opacity-75" : ""}`} id={`actividad-${activity.id}`} key={activity.id}>
-                    <div className={`h-1 ${activity.status === "COMPLETADA" ? "bg-emerald-600" : activity.status === "BLOQUEADA" ? "bg-rose-600" : activity.status === "COMBINADA" ? "bg-violet-500" : "bg-amber-500"}`} />
-                    <div className="p-4 sm:p-5">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="text-[10px] font-extrabold uppercase text-amber-700">Actividad #{activity.number}</p><h3 className="mt-1 text-base font-extrabold leading-6 text-ink">{activity.action}</h3>{activity.problem ? <p className="mt-2 text-sm leading-5 text-slate-600"><span className="font-bold">Problemática:</span> {activity.problem}</p> : null}</div><WorkStatusPill status={activity.status} /></div>
-                      <div className="mt-4 grid gap-3 border-y border-line py-3 text-xs sm:grid-cols-3"><p className="flex items-center gap-2"><UserRound className="h-4 w-4 text-slate-400" aria-hidden /><span><span className="block text-[10px] font-bold uppercase text-slate-400">Responsable</span><span className="font-extrabold text-slate-700">{activity.owner?.name ?? "Sin asignar"}</span></span></p><p className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-slate-400" aria-hidden /><span><span className="block text-[10px] font-bold uppercase text-slate-400">Compromiso</span><span className={`font-extrabold ${isWorkItemOverdue(activity) ? "text-rose-700" : "text-slate-700"}`}>{activity.dueDate ? activity.dueDate.toLocaleDateString("es-MX") : "Sin fecha"}</span></span></p><p className="flex items-center gap-2"><Paperclip className="h-4 w-4 text-slate-400" aria-hidden /><span><span className="block text-[10px] font-bold uppercase text-slate-400">Evidencias</span><span className="font-extrabold text-slate-700">{activity.attachments.length}</span></span></p></div>
+                  <WorkItemDisclosure description={activity.problem ? `Problema: ${activity.problem}` : null} dueDate={activity.dueDate} id={`actividad-${activity.id}`} key={activity.id} number={activity.number} overdue={isWorkItemOverdue(activity)} owner={activity.owner?.name} status={activity.status} title={activity.action} tone="amber">
+                      <div className="grid gap-3 text-xs sm:grid-cols-2">
+                        <p className="border-l-4 border-slate-300 pl-3"><span className="block text-[10px] font-extrabold uppercase text-slate-400">Contexto</span><span className="mt-1 block leading-5 text-slate-700">{activity.problem ?? "Sin problemática adicional."}</span></p>
+                        <p className="flex items-center gap-2 border-l-4 border-slate-300 pl-3"><Paperclip className="h-4 w-4 text-slate-400" aria-hidden /><span><span className="block text-[10px] font-extrabold uppercase text-slate-400">Evidencias</span><span className="mt-1 block font-extrabold text-slate-700">{activity.attachments.length}</span></span></p>
+                      </div>
                       {activity.mergedInto ? <div className="alert alert-info mt-3"><GitMerge className="h-4 w-4 shrink-0" aria-hidden />Combinada con actividad #{activity.mergedInto.number}. {activity.mergeReason}</div> : null}
                       {activity.completionNote || activity.cancellationReason ? <p className="mt-3 rounded-lg bg-panel p-3 text-sm leading-5 text-slate-700">{activity.completionNote ?? activity.cancellationReason}</p> : null}
                       {activity.attachments.length ? <div className="mt-3 flex flex-wrap gap-2">{activity.attachments.map((file) => <a className="btn btn-secondary" href={file.path} key={file.id} rel="noreferrer" target="_blank"><Paperclip className="h-4 w-4" aria-hidden />{file.filename}</a>)}</div> : null}
@@ -90,8 +91,7 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
                         {canManage ? <details className="details-panel"><summary>Editar actividad</summary><form action={updateKaizenActivityAction} className="grid gap-3 p-4"><input name="activityId" type="hidden" value={activity.id} /><label><span className="label">Problemática</span><textarea className="field min-h-20" defaultValue={activity.problem ?? ""} name="problem" /></label><label><span className="label">Acción</span><textarea className="field min-h-20" defaultValue={activity.action} name="action" required /></label><label><span className="label">Responsable</span><select className="field" defaultValue={activity.ownerId ?? ""} name="ownerId"><option value="">Sin asignar</option>{users.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label><span className="label">Inicio</span><input className="field" defaultValue={activity.startDate?.toISOString().slice(0, 10) ?? ""} name="startDate" type="date" /></label><label><span className="label">Compromiso</span><input className="field" defaultValue={activity.dueDate?.toISOString().slice(0, 10) ?? ""} name="dueDate" type="date" /></label></div><label><span className="label">Estado</span><select className="field" defaultValue={activity.status} name="status"><option value="PENDIENTE">Pendiente</option><option value="EN_PROCESO">En proceso</option><option value="BLOQUEADA">Bloqueada</option></select></label><button className="btn btn-secondary" type="submit"><Save className="h-4 w-4" aria-hidden />Guardar actividad</button></form></details> : null}
                         {canClose ? <details className="details-panel"><summary>Cerrar actividad</summary><form action={closeKaizenActivityAction} className="grid gap-3 p-4"><input name="activityId" type="hidden" value={activity.id} /><p className="text-xs leading-5 text-slate-600">Para completar, adjunta evidencia. Si no se hará, escribe la justificación.</p><label><span className="label">Evidencia</span><input className="field" name="evidence" type="file" accept="image/*,.pdf,.doc,.docx" /></label><label><span className="label">Resultado o justificación</span><textarea className="field min-h-20" name="note" placeholder="Qué se realizó o por qué no se realizará" /></label><div className="grid gap-2 sm:grid-cols-2"><button className="btn btn-success" name="outcome" type="submit" value="COMPLETADA"><CheckCircle2 className="h-4 w-4" aria-hidden />Completar</button><button className="btn btn-danger" name="outcome" type="submit" value="CANCELADA"><XCircle className="h-4 w-4" aria-hidden />Cerrar sin ejecutar</button></div></form></details> : null}
                       </div> : null}
-                    </div>
-                  </article>
+                  </WorkItemDisclosure>
                 );
               })}
             </div>
