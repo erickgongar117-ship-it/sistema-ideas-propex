@@ -40,16 +40,6 @@ const DynamicChart = dynamic(() => import("@/components/premium-chart"), {
   loading: () => <div className="flex h-72 items-center justify-center text-sm font-bold text-slate-400">Preparando visualización...</div>
 });
 
-const OperationalTwin3D = dynamic(() => import("@/components/operational-twin-3d"), {
-  ssr: false,
-  loading: () => (
-    <section className="operational-twin-loading" aria-label="Preparando gemelo digital">
-      <span className="operational-twin-loading-mark" />
-      <span>Sincronizando plantas y areas...</span>
-    </section>
-  )
-});
-
 const DAY = 86_400_000;
 const PROPEX_TIME_ZONE = "America/Monterrey";
 
@@ -62,19 +52,10 @@ const rejectedStatuses: IdeaStatus[] = ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALID
 type Period = WorkspacePeriod;
 type Department = "all" | "quality" | "safety" | "maintenance";
 
-export type DashboardArea = {
-  code: string;
-  name: string;
-  plantCode: string;
-  plantName: string;
-};
-
 export type DashboardIdea = {
   id: string;
   folio: string;
   areaCode: string;
-  areaName: string;
-  plantCode: string;
   collaboratorName: string;
   supervisorName: string | null;
   problem: string;
@@ -109,7 +90,7 @@ export type DashboardPortfolio = {
 
 type DashboardCommandCenterProps = {
   ideas: DashboardIdea[];
-  areas: DashboardArea[];
+  areas: string[];
   generatedAt: string;
   portfolio: DashboardPortfolio;
   timing: {
@@ -124,10 +105,6 @@ function departmentMatches(idea: DashboardIdea, department: Department) {
   if (department === "safety") return idea.impactsSafety;
   if (department === "maintenance") return idea.requiresMaintenance;
   return true;
-}
-
-function ideaIsOverdue(idea: DashboardIdea, now: Date) {
-  return idea.status === "VENCIDA" || Boolean(idea.dueDate && new Date(idea.dueDate) < now && !["CERRADA", "CANCELADA"].includes(idea.status));
 }
 
 function percent(value: number, total: number) {
@@ -231,7 +208,6 @@ function MetricCard({ label, value, detail, change, icon: Icon, visual, tone = "
 
 export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, timing }: DashboardCommandCenterProps) {
   const [period, setPeriod] = useState<Period>("90");
-  const [plant, setPlant] = useState("all");
   const [area, setArea] = useState("all");
   const [category, setCategory] = useState<"all" | IdeaCategory>("all");
   const [department, setDepartment] = useState<Department>("all");
@@ -250,52 +226,35 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
   }, []);
 
   const now = useMemo(() => new Date(generatedAt), [generatedAt]);
-  const plants = useMemo(() => [...new Map(areas.map((item) => [item.plantCode, item.plantName])).entries()].map(([code, name]) => ({ code, name })), [areas]);
-  const visibleAreas = useMemo(() => areas.filter((item) => plant === "all" || item.plantCode === plant), [areas, plant]);
-  const scopeIdeas = useMemo(() => ideas.filter((idea) =>
-    (plant === "all" || idea.plantCode === plant) &&
+  const dimensionIdeas = useMemo(() => ideas.filter((idea) =>
+    (area === "all" || idea.areaCode === area) &&
     (category === "all" || idea.category === category) &&
     departmentMatches(idea, department) &&
     (!impact || idea.impactTypes.includes(impact))
-  ), [ideas, plant, category, department, impact]);
+  ), [ideas, area, category, department, impact]);
 
   const periodDays = period === "all" ? null : Number(period);
-  const currentScopeIdeas = useMemo(() => {
-    if (!periodDays) return scopeIdeas;
+  const currentIdeas = useMemo(() => {
+    if (!periodDays) return dimensionIdeas;
     const start = now.getTime() - periodDays * DAY;
-    return scopeIdeas.filter((idea) => new Date(idea.createdAt).getTime() >= start);
-  }, [scopeIdeas, now, periodDays]);
-  const previousScopeIdeas = useMemo(() => {
+    return dimensionIdeas.filter((idea) => new Date(idea.createdAt).getTime() >= start);
+  }, [dimensionIdeas, now, periodDays]);
+  const previousIdeas = useMemo(() => {
     if (!periodDays) return [];
     const end = now.getTime() - periodDays * DAY;
     const start = end - periodDays * DAY;
-    return scopeIdeas.filter((idea) => {
+    return dimensionIdeas.filter((idea) => {
       const created = new Date(idea.createdAt).getTime();
       return created >= start && created < end;
     });
-  }, [scopeIdeas, now, periodDays]);
-  const currentIdeas = useMemo(() => currentScopeIdeas.filter((idea) => area === "all" || idea.areaCode === area), [currentScopeIdeas, area]);
-  const previousIdeas = useMemo(() => previousScopeIdeas.filter((idea) => area === "all" || idea.areaCode === area), [previousScopeIdeas, area]);
-
-  const operationalAreas = useMemo(() => areas.map((item) => {
-    const areaIdeas = currentScopeIdeas.filter((idea) => idea.areaCode === item.code);
-    const open = areaIdeas.filter((idea) => !["CERRADA", "CANCELADA"].includes(idea.status));
-    return {
-      ...item,
-      total: areaIdeas.length,
-      open: open.length,
-      pending: areaIdeas.filter((idea) => initialStatuses.includes(idea.status) || validationStatuses.includes(idea.status)).length,
-      overdue: open.filter((idea) => ideaIsOverdue(idea, now)).length,
-      closed: areaIdeas.filter((idea) => idea.status === "CERRADA").length
-    };
-  }), [areas, currentScopeIdeas, now]);
+  }, [dimensionIdeas, now, periodDays]);
 
   const metrics = useMemo(() => {
     const closed = currentIdeas.filter((idea) => idea.status === "CERRADA").length;
     const previousClosed = previousIdeas.filter((idea) => idea.status === "CERRADA").length;
     const approved = currentIdeas.filter((idea) => approvedStatuses.includes(idea.status)).length;
     const rejected = currentIdeas.filter((idea) => rejectedStatuses.includes(idea.status)).length;
-    const overdue = currentIdeas.filter((idea) => ideaIsOverdue(idea, now)).length;
+    const overdue = currentIdeas.filter((idea) => idea.status === "VENCIDA" || (idea.dueDate && new Date(idea.dueDate) < now && !["CERRADA", "CANCELADA"].includes(idea.status))).length;
     const points = currentIdeas.reduce((sum, idea) => sum + idea.pointsAssigned, 0);
     return {
       closed,
@@ -416,26 +375,13 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
 
   const recentIdeas = currentIdeas.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 8);
   const selectedIdea = selectedIdeaId ? currentIdeas.find((idea) => idea.id === selectedIdeaId) ?? null : null;
-  const activeFilters = [period !== "90", plant !== "all", area !== "all", category !== "all", department !== "all", Boolean(impact)].filter(Boolean).length;
+  const activeFilters = [period !== "90", area !== "all", category !== "all", department !== "all", Boolean(impact)].filter(Boolean).length;
   const updatePeriod = (value: Period) => {
     setPeriod(value);
     window.localStorage.setItem(WORKSPACE_PERIOD_STORAGE, value);
     window.dispatchEvent(new CustomEvent<WorkspacePeriod>(WORKSPACE_PERIOD_EVENT, { detail: value }));
   };
-  const updatePlant = (value: string) => {
-    setPlant(value);
-    if (area !== "all" && !areas.some((item) => item.code === area && (value === "all" || item.plantCode === value))) setArea("all");
-  };
-  const selectTwinArea = (areaCode: string | null) => {
-    if (!areaCode) {
-      setArea("all");
-      return;
-    }
-    const match = areas.find((item) => item.code === areaCode);
-    if (match) setPlant(match.plantCode);
-    setArea(areaCode);
-  };
-  const resetFilters = () => { updatePeriod("90"); setPlant("all"); setArea("all"); setCategory("all"); setDepartment("all"); setImpact(null); };
+  const resetFilters = () => { updatePeriod("90"); setArea("all"); setCategory("all"); setDepartment("all"); setImpact(null); };
 
   useEffect(() => {
     if (!selectedIdea) return;
@@ -460,10 +406,9 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
             <h2 className="mt-1 text-lg font-extrabold text-ink">Explora el desempeño sin salir del panel</h2>
             <p className="mt-1 text-xs text-slate-500">Actualizado {new Date(generatedAt).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: PROPEX_TIME_ZONE })}</p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label><span className="label">Periodo</span><select className="field min-w-36" value={period} onChange={(event) => updatePeriod(event.target.value as Period)}><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="365">Último año</option><option value="all">Todo el historial</option></select></label>
-            <label><span className="label">Planta</span><select className="field min-w-36" value={plant} onChange={(event) => updatePlant(event.target.value)}><option value="all">Ambas plantas</option>{plants.map((item) => <option value={item.code} key={item.code}>{item.name}</option>)}</select></label>
-            <label><span className="label">Área</span><select className="field min-w-36" value={area} onChange={(event) => setArea(event.target.value)}><option value="all">Todas</option>{visibleAreas.map((item) => <option value={item.code} key={item.code}>{item.code} · {item.name}</option>)}</select></label>
+            <label><span className="label">Área</span><select className="field min-w-32" value={area} onChange={(event) => setArea(event.target.value)}><option value="all">Todas</option>{areas.map((code) => <option value={code} key={code}>{code}</option>)}</select></label>
             <label><span className="label">Categoría</span><select className="field min-w-32" value={category} onChange={(event) => setCategory(event.target.value as "all" | IdeaCategory)}><option value="all">Todas</option><option value="A">Categoría A</option><option value="B">Categoría B</option><option value="C">Categoría C</option></select></label>
             <label><span className="label">Soporte</span><select className="field min-w-40" value={department} onChange={(event) => setDepartment(event.target.value as Department)}><option value="all">Todos</option><option value="quality">Calidad</option><option value="safety">Seguridad</option><option value="maintenance">Mantenimiento</option></select></label>
           </div>
@@ -483,14 +428,6 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
           </div>
         </div>
       </section>
-
-      <OperationalTwin3D
-        areas={operationalAreas}
-        onSelectArea={selectTwinArea}
-        onSelectPlant={updatePlant}
-        selectedArea={area === "all" ? null : area}
-        selectedPlant={plant}
-      />
 
       <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="Ideas registradas" value={currentIdeas.length} detail="Comparación contra el periodo anterior" change={periodDays && previousIdeas.length ? delta(currentIdeas.length, previousIdeas.length) : null} icon={Lightbulb} />
