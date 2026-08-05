@@ -49,6 +49,7 @@ export default async function GenbaKanbanPage() {
               <div className="grid gap-3">
                 {items.map((walk) => {
                   const activities = walk.activities.filter((activity) => activity.status !== "COMBINADA");
+                  const combinedActivities = walk.activities.length - activities.length;
                   const progress = workProgress(activities);
                   const overdue = activities.filter(isWorkItemOverdue).length;
                   return (
@@ -59,7 +60,7 @@ export default async function GenbaKanbanPage() {
                           <span className="min-w-0"><span className="block text-[10px] font-extrabold uppercase text-brand-700">{walk.folio}</span><span className="mt-1 block truncate text-base font-extrabold text-ink">{walk.areaName}</span><span className="mt-1 block text-[11px] font-bold text-slate-500">{walk.visitDate.toLocaleDateString("es-MX")}</span></span>
                           <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden />
                         </Link>
-                        <div className="mt-4"><ProgressMeter label={`${progress.closed} de ${progress.total} realizadas`} percent={progress.percent} /></div>
+                        <div className="mt-4"><ProgressMeter label={`${progress.closed} de ${progress.total} activas realizadas`} percent={progress.percent} /></div>
                         {overdue ? <p className="mt-3 flex items-center gap-2 text-xs font-extrabold text-rose-700"><AlertTriangle className="h-4 w-4" aria-hidden />{overdue} {overdue === 1 ? "actividad vencida" : "actividades vencidas"}</p> : null}
                       </div>
                       <div className="border-t border-line bg-slate-50">
@@ -70,7 +71,7 @@ export default async function GenbaKanbanPage() {
                             <WorkStatusPill status={activity.status} />
                           </Link>
                         ))}
-                        {activities.length ? <Link className="flex min-h-11 items-center justify-between gap-3 bg-white px-3 py-2 text-xs font-extrabold text-brand-700 hover:bg-brand-50" href={`/genba/${walk.id}`}><span>Ver plan completo · {activities.length} actividades</span><ArrowRight className="h-4 w-4" aria-hidden /></Link> : <p className="px-4 py-5 text-center text-xs font-bold text-slate-500">Sin actividades registradas</p>}
+                        {walk.activities.length ? <Link className="flex min-h-11 items-center justify-between gap-3 bg-white px-3 py-2 text-xs font-extrabold text-brand-700 hover:bg-brand-50" href={`/genba/${walk.id}`}><span>Ver plan completo · {walk.activities.length} actividades{combinedActivities ? ` (${combinedActivities} ${combinedActivities === 1 ? "combinada" : "combinadas"})` : ""}</span><ArrowRight className="h-4 w-4" aria-hidden /></Link> : <p className="px-4 py-5 text-center text-xs font-bold text-slate-500">Sin actividades registradas</p>}
                       </div>
                     </article>
                   );

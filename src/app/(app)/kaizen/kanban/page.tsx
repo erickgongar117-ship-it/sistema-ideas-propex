@@ -55,6 +55,7 @@ export default async function KaizenKanbanPage() {
               <div className="grid gap-3">
                 {items.map((project) => {
                   const activities = project.activities.filter((activity) => activity.status !== "COMBINADA");
+                  const combinedActivities = project.activities.length - activities.length;
                   const progress = workProgress(activities);
                   const overdue = activities.filter(isWorkItemOverdue).length;
                   const accent = column.key === "CERRADAS" ? "bg-emerald-600" : column.key === "BLOQUEADAS" ? "bg-rose-600" : column.key === "EN_PROCESO" ? "bg-blue-600" : "bg-amber-500";
@@ -71,7 +72,7 @@ export default async function KaizenKanbanPage() {
                           <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-amber-700" aria-hidden />
                         </Link>
                         <div className="mt-3"><KaizenStatusPill status={project.status} /></div>
-                        <div className="mt-4"><ProgressMeter label={`${progress.closed} de ${progress.total} realizadas`} percent={progress.percent} /></div>
+                        <div className="mt-4"><ProgressMeter label={`${progress.closed} de ${progress.total} activas realizadas`} percent={progress.percent} /></div>
                         {overdue ? <p className="mt-3 flex items-center gap-2 text-xs font-extrabold text-rose-700"><AlertTriangle className="h-4 w-4" aria-hidden />{overdue} {overdue === 1 ? "actividad vencida" : "actividades vencidas"}</p> : null}
                       </div>
                       <div className="border-t border-line bg-slate-50">
@@ -86,7 +87,7 @@ export default async function KaizenKanbanPage() {
                           </Link>
                         ))}
                         {!activities.length ? <p className="px-4 py-5 text-center text-xs font-bold text-slate-500">Sin actividades registradas</p> : null}
-                        {activities.length ? <Link className="flex min-h-11 items-center justify-between gap-3 bg-white px-3 py-2 text-xs font-extrabold text-amber-800 hover:bg-amber-50" href={`/kaizen/${project.id}`}><span>Ver plan completo · {activities.length} actividades</span><ArrowRight className="h-4 w-4" aria-hidden /></Link> : null}
+                        {project.activities.length ? <Link className="flex min-h-11 items-center justify-between gap-3 bg-white px-3 py-2 text-xs font-extrabold text-amber-800 hover:bg-amber-50" href={`/kaizen/${project.id}`}><span>Ver plan completo · {project.activities.length} actividades{combinedActivities ? ` (${combinedActivities} ${combinedActivities === 1 ? "combinada" : "combinadas"})` : ""}</span><ArrowRight className="h-4 w-4" aria-hidden /></Link> : null}
                       </div>
                     </article>
                   );
