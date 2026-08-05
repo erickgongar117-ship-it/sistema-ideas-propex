@@ -42,6 +42,10 @@ function refreshTraining() {
   revalidatePath("/probocacoins");
 }
 
+function uniqueValues(formData: FormData, key: string, limit = 2_000) {
+  return [...new Set(formData.getAll(key).map(String).map((value) => value.trim()).filter(Boolean))].slice(0, limit);
+}
+
 export async function createTrainingProgramAction(formData: FormData) {
   const user = await requireUser([...trainingRoles]);
   const name = textValue(formData, "name");
@@ -176,6 +180,169 @@ export async function enrollParticipantAction(formData: FormData) {
 
   refreshTraining();
   redirect(trainingPath({ success: "inscripcion", session: sessionId }));
+}
+
+export async function bulkEnrollParticipantsAction(formData: FormData) {
+  await requireUser([...trainingRoles]);
+  const sessionId = textValue(formData, "sessionId");
+  const requestedIds = uniqueValues(formData, "participantIds");
+  if (!sessionId || !requestedIds.length) redirect(trainingPath({ error: "inscripcion" }));
+
+  const [session, activeParticipants, currentEnrollments] = await Promise.all([
+    prisma.trainingSession.findUnique({ where: { id: sessionId }, select: { id: true } }),
+    prisma.participant.findMany({ where: { id: { in: requestedIds }, active: true }, select: { id: true } }),
+    prisma.trainingEnrollment.findMany({
+      where: { sessionId, participantId: { in: requestedIds } },
+      select: { id: true, participantId: true, status: true }
+    })
+  ]);
+  if (!session) redirect(trainingPath({ error: "inscripcion" }));
+
+  const activeIds = new Set(activeParticipants.map((participant) => participant.id));
+  const currentByParticipant = new Map(currentEnrollments.map((enrollment) => [enrollment.participantId, enrollment]));
+  const eligibleIds = requestedIds.filter((id) => activeIds.has(id) && currentByParticipant.get(id)?.status !== TrainingEnrollmentStatus.COMPLETED);
+  const newIds = eligibleIds.filter((id) => !currentByParticipant.has(id));
+  const cancelledIds = eligibleIds.filter((id) => currentByParticipant.get(id)?.status === TrainingEnrollmentStatus.CANCELLED);
+
+  await prisma.$transaction(async (transaction) => {
+    if (cancelledIds.length) {
+      await transaction.trainingEnrollment.updateMany({
+        where: { sessionId, participantId: { in: cancelledIds }, status: TrainingEnrollmentStatus.CANCELLED },
+        data: { status: TrainingEnrollmentStatus.REGISTERED, completedAt: null, coinsAwarded: 0 }
+      });
+    }
+    if (newIds.length) {
+      await transaction.trainingEnrollment.createMany({
+        data: newIds.map((participantId) => ({ sessionId, participantId }))
+      });
+    }
+  });
+
+  const enrolledCount = newIds.length + cancelledIds.length;
+  refreshTraining();
+  redirect(trainingPath({ success: "inscripciones", count: String(enrolledCount), session: sessionId }));
+}
+
+export async function bulkUpdateTrainingEnrollmentsAction(formData: FormData) {
+  const user = await requireUser([...trainingRoles]);
+  const sessionId = textValue(formData, "sessionId");
+  const requestedStatus = textValue(formData, "status");
+  const scope = textValue(formData, "scope");
+  const enrollmentIds = uniqueValues(formData, "enrollmentIds");
+  if (
+    !sessionId ||
+    (requestedStatus !== TrainingEnrollmentStatus.COMPLETED && requestedStatus !== TrainingEnrollmentStatus.CANCELLED) ||
+    (scope !== "all" && !enrollmentIds.length)
+  ) {
+    redirect(trainingPath({ error: "estado", session: sessionId }));
+  }
+
+  const session = await prisma.trainingSession.findUnique({
+    where: { id: sessionId },
+    include: { program: { select: { name: true, coinValue: true } } }
+  });
+  if (!session) redirect(trainingPath({ error: "estado" }));
+
+  const pending = await prisma.trainingEnrollment.findMany({
+    where: {
+      sessionId,
+      status: TrainingEnrollmentStatus.REGISTERED,
+      ...(scope === "all" ? {} : { id: { in: enrollmentIds } })
+    },
+    include: { participant: { select: { id: true, name: true } } }
+  });
+  if (!pending.length) redirect(trainingPath({ error: "sin_pendientes", session: sessionId }));
+  let processedCount = pending.length;
+
+  if (requestedStatus === TrainingEnrollmentStatus.CANCELLED) {
+    const result = await prisma.trainingEnrollment.updateMany({
+      where: { id: { in: pending.map((enrollment) => enrollment.id) }, status: TrainingEnrollmentStatus.REGISTERED },
+      data: { status: TrainingEnrollmentStatus.CANCELLED, coinsAwarded: 0, completedAt: null }
+    });
+    processedCount = result.count;
+  } else {
+    const completedAt = new Date();
+    const enrollmentIdsToComplete = pending.map((enrollment) => enrollment.id);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        processedCount = await prisma.$transaction(async (transaction) => {
+          const stillPending = await transaction.trainingEnrollment.findMany({
+            where: { id: { in: enrollmentIdsToComplete }, status: TrainingEnrollmentStatus.REGISTERED },
+            include: { participant: { select: { name: true } } }
+          });
+          if (!stillPending.length) return 0;
+
+          const references = stillPending.map((enrollment) => `training:${enrollment.id}`);
+          const existing = await transaction.coinTransaction.findMany({
+            where: { reference: { in: references } },
+            select: { reference: true }
+          });
+          const existingReferences = new Set(existing.map((item) => item.reference));
+          const newTransactions = stillPending
+            .filter((enrollment) => !existingReferences.has(`training:${enrollment.id}`))
+            .map((enrollment) => ({
+              reference: `training:${enrollment.id}`,
+              participantId: enrollment.participantId,
+              type: "AWARD" as const,
+              sourceType: "TRAINING" as const,
+              sourceId: session.id,
+              amount: session.program.coinValue,
+              description: `${session.program.name} completado por ${enrollment.participant.name}`,
+              createdById: user.id,
+              occurredAt: completedAt
+            }));
+          if (newTransactions.length) await transaction.coinTransaction.createMany({ data: newTransactions });
+          const result = await transaction.trainingEnrollment.updateMany({
+            where: { id: { in: stillPending.map((enrollment) => enrollment.id) }, status: TrainingEnrollmentStatus.REGISTERED },
+            data: {
+              status: TrainingEnrollmentStatus.COMPLETED,
+              coinsAwarded: session.program.coinValue,
+              completedAt
+            }
+          });
+          return result.count;
+        });
+        break;
+      } catch (error) {
+        const isConcurrentDuplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+        if (!isConcurrentDuplicate || attempt === 2) throw error;
+      }
+    }
+  }
+
+  refreshTraining();
+  redirect(trainingPath({
+    success: requestedStatus === TrainingEnrollmentStatus.COMPLETED ? "completados" : "cancelados",
+    count: String(processedCount),
+    session: sessionId
+  }));
+}
+
+export async function updateParticipantActiveAction(formData: FormData) {
+  await requireUser(["ADMIN"]);
+  const participantId = textValue(formData, "participantId");
+  const active = textValue(formData, "active") === "true";
+  const participant = await prisma.participant.findUnique({ where: { id: participantId }, select: { id: true, userId: true } });
+  if (!participant) redirect(trainingPath({ error: "participante" }));
+  if (participant.userId) redirect(trainingPath({ error: "cuenta_vinculada", participant: participant.id }));
+  await prisma.participant.update({ where: { id: participant.id }, data: { active } });
+  refreshTraining();
+  redirect(trainingPath({ success: active ? "participante_activado" : "participante_retirado", peopleStatus: active ? "active" : "inactive" }));
+}
+
+export async function deleteInactiveParticipantAction(formData: FormData) {
+  await requireUser(["ADMIN"]);
+  const participantId = textValue(formData, "participantId");
+  const participant = await prisma.participant.findFirst({
+    where: { id: participantId, active: false, userId: null },
+    include: { _count: { select: { ideas: true, enrollments: true, coinTransactions: true } } }
+  });
+  if (!participant) redirect(trainingPath({ error: "participante" }));
+  const hasHistory = participant._count.ideas + participant._count.enrollments + participant._count.coinTransactions > 0;
+  if (hasHistory) redirect(trainingPath({ error: "participante_historial", participant: participant.id, peopleStatus: "inactive" }));
+  await prisma.participant.delete({ where: { id: participant.id } });
+  refreshTraining();
+  redirect(trainingPath({ success: "participante_eliminado", peopleStatus: "inactive" }));
 }
 
 export async function updateTrainingEnrollmentStatusAction(formData: FormData) {

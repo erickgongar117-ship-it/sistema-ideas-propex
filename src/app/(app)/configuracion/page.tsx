@@ -1,6 +1,9 @@
-import { Building2, CircleCheck, KeyRound, Mail, Network, Plus, SlidersHorizontal, UserCog, UsersRound } from "lucide-react";
-import { createPointRuleAction, createUserAction, updateAreaAction, updatePointRuleAction, updateUserAction } from "@/app/actions";
+import { Prisma } from "@prisma/client";
+import Link from "next/link";
+import { Building2, CircleCheck, Filter, KeyRound, Mail, Network, Plus, Search, SlidersHorizontal, Trash2, UserCog, UsersRound } from "lucide-react";
+import { createPointRuleAction, createUserAction, deleteInactiveUserAction, updateAreaAction, updatePointRuleAction, updateUserAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
 import { SectionHeading } from "@/components/section-heading";
 import { requireUser } from "@/lib/auth";
 import { roleLabels } from "@/lib/domain";
@@ -10,8 +13,15 @@ import { prisma } from "@/lib/prisma";
 const configurableRoles = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"] as const;
 
 type ConfigPageProps = {
-  searchParams: Promise<{ error?: string; success?: string; user?: string }>;
+  searchParams: Promise<{ error?: string; page?: string; q?: string; status?: string; success?: string; user?: string }>;
 };
+
+const userPageSize = 30;
+
+function positivePage(value?: string) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
 
 const roleTone = {
   ADMIN: "bg-slate-950 text-white",
@@ -26,10 +36,24 @@ const roleTone = {
 export default async function ConfigPage({ searchParams }: ConfigPageProps) {
   await requireUser(["ADMIN"]);
   const query = await searchParams;
-  const [areas, assignableUsers, users, pointRules] = await Promise.all([
+  const currentPage = positivePage(query.page);
+  const search = query.q?.trim() ?? "";
+  const status = query.status === "inactive" ? "inactive" : query.status === "all" ? "all" : "active";
+  const userWhere: Prisma.UserWhereInput = {
+    role: { in: [...configurableRoles] },
+    ...(status === "all" ? {} : { active: status === "active" }),
+    ...(search ? { OR: [
+      { name: { contains: search } },
+      { email: { contains: search } },
+      { employeeNumber: { contains: search } },
+      { jobTitle: { contains: search } }
+    ] } : {})
+  };
+  const [areas, assignableUsers, userCount, users, pointRules] = await Promise.all([
     prisma.area.findMany({ include: { supervisor: true }, orderBy: { code: "asc" } }),
     prisma.user.findMany({ where: { role: { in: [...configurableRoles] }, active: true }, orderBy: [{ role: "asc" }, { name: "asc" }] }),
-    prisma.user.findMany({ where: { role: { in: [...configurableRoles] } }, orderBy: [{ role: "asc" }, { name: "asc" }] }),
+    prisma.user.count({ where: userWhere }),
+    prisma.user.findMany({ where: userWhere, orderBy: [{ role: "asc" }, { name: "asc" }], skip: (currentPage - 1) * userPageSize, take: userPageSize }),
     prisma.pointRule.findMany({ orderBy: { createdAt: "asc" } })
   ]);
 
@@ -43,6 +67,12 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
       ? "La contraseña debe tener al menos 8 caracteres."
       : query.error === "usuario"
         ? "El usuario que intentas modificar ya no existe."
+      : query.error === "usuario_activo"
+        ? "Primero desactiva el acceso y guarda los cambios antes de eliminar la cuenta."
+      : query.error === "usuario_historial"
+        ? "Esta cuenta tiene ideas, aprobaciones, entrenamientos, ProbocaCoins u otras responsabilidades. Debe permanecer archivada para conservar la trazabilidad."
+      : query.error === "usuario_propio"
+        ? "No puedes eliminar la cuenta con la que tienes abierta la sesion."
       : query.error
         ? "Revisa la información capturada."
         : null;
@@ -50,6 +80,8 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
     ? "Los datos y el correo se actualizaron correctamente. Los avisos pendientes ahora usan el correo nuevo."
     : query.success === "usuario_creado"
       ? "El usuario fue creado y ya puede usar su correo para iniciar sesion."
+    : query.success === "usuario_eliminado"
+      ? "La cuenta inactiva y sin historial fue eliminada, incluido su correo de acceso."
       : query.success === "area_actualizada"
         ? "El area y su responsable se actualizaron en la estructura, los QR y las rutas de seguimiento."
       : null;
@@ -74,7 +106,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
       </div>
 
       <section className="scroll-mt-6" id="usuarios">
-        <SectionHeading count={users.length} description="Solo el administrador puede crear accesos, cambiar correos o desactivar cuentas." title="Usuarios y correos" />
+        <SectionHeading count={userCount} description="Busca cuentas por nombre, correo o numero de empleado. Las cuentas con historial se archivan; las vacias pueden eliminarse." title="Usuarios y correos" />
 
         <details className="details-panel mb-4 border-dashed border-slate-400" open={Boolean(query.error && !query.user)}>
           <summary><span className="flex items-center gap-2 text-brand-700"><Plus className="h-4 w-4" aria-hidden />Agregar una persona</span></summary>
@@ -90,6 +122,13 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
             <div className="flex items-end"><button className="btn btn-primary w-full" type="submit"><Plus className="h-4 w-4" aria-hidden />Crear usuario</button></div>
           </form>
         </details>
+
+        <form className="mb-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto_auto]" method="get">
+          <label><span className="sr-only">Buscar usuario</span><span className="relative block"><Search className="pointer-events-none absolute left-3 top-[14px] h-4 w-4 text-slate-400" aria-hidden /><input className="field pl-9" defaultValue={search} name="q" placeholder="Nombre, correo, numero o puesto" /></span></label>
+          <label><span className="sr-only">Estado de la cuenta</span><select className="field" defaultValue={status} name="status"><option value="active">Activos</option><option value="inactive">Inactivos</option><option value="all">Todos</option></select></label>
+          <button className="btn btn-secondary" type="submit"><Filter className="h-4 w-4" aria-hidden />Filtrar</button>
+          {(search || status !== "active") ? <Link className="btn btn-secondary" href="/configuracion#usuarios">Limpiar</Link> : <span />}
+        </form>
 
         <div className="grid gap-3">
           {users.map((user) => (
@@ -113,9 +152,18 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
                 <fieldset className="rounded-lg border border-line bg-panel p-3"><legend className="px-1 text-xs font-extrabold text-ink">Módulos adicionales</legend><div className="mt-2 flex flex-wrap gap-4 text-sm font-bold text-slate-700"><label className="flex items-center gap-2"><input defaultChecked={user.kaizenAccess} name="kaizenAccess" type="checkbox" />Kaizen</label><label className="flex items-center gap-2"><input defaultChecked={user.genbaAccess} name="genbaAccess" type="checkbox" />GENBA</label></div></fieldset>
                 <div className="flex items-end"><button className="btn btn-secondary w-full" type="submit"><UserCog className="h-4 w-4" aria-hidden />Guardar cambios</button></div>
               </form>
+              {!user.active ? (
+                <form action={deleteInactiveUserAction} className="flex flex-wrap items-center justify-between gap-3 border-t border-rose-200 bg-rose-50 px-4 py-3">
+                  <input name="userId" type="hidden" value={user.id} />
+                  <p className="max-w-2xl text-xs font-bold leading-5 text-rose-800">Eliminar solo funcionara si la cuenta nunca tuvo actividad. Si existe historial, seguira archivada y el sistema explicara por que.</p>
+                  <button className="btn btn-secondary border-rose-300 text-rose-800" type="submit"><Trash2 className="h-4 w-4" aria-hidden />Eliminar cuenta y correo</button>
+                </form>
+              ) : null}
             </details>
           ))}
+          {!users.length ? <p className="border-y border-line py-8 text-center text-sm text-slate-500">No hay cuentas con estos filtros.</p> : null}
         </div>
+        <Pagination currentPage={currentPage} pageSize={userPageSize} path="/configuracion" query={{ q: search || undefined, status }} totalItems={userCount} totalPages={Math.max(1, Math.ceil(userCount / userPageSize))} />
       </section>
 
       <section className="mt-10 scroll-mt-6" id="areas">

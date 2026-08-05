@@ -17,6 +17,7 @@
     "db:seed:dashboards": "tsx scripts/seed-dashboard-examples.ts",
     "db:seed:managerial-points": "tsx scripts/seed-managerial-point-rules.ts",
     "db:backfill:kaizen-ideas": "tsx scripts/backfill-kaizen-ideas.ts",
+    "qa:scale": "tsx scripts/qa-scale-1000.ts",
     "reminders": "tsx scripts/reminders.ts",
     "export-demo": "tsx scripts/export-demo.ts"
   },

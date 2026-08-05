@@ -1722,7 +1722,11 @@ export async function createUserAction(formData: FormData) {
     if (duplicate) redirect(`/configuracion?error=${duplicate}#usuarios`);
     throw error;
   }
-  await resolveParticipantFromUser(user.id);
+  if (user.active) {
+    await resolveParticipantFromUser(user.id);
+  } else {
+    await prisma.participant.updateMany({ where: { userId: user.id }, data: { active: false } });
+  }
   await auditLog({ entity: "User", entityId: user.id, action: "USER_CREATED", userId: admin.id, details: { email, role } });
   revalidatePath("/configuracion");
   redirect(`/configuracion?success=usuario_creado&user=${encodeURIComponent(user.id)}#usuarios`);
@@ -1772,7 +1776,11 @@ export async function updateUserAction(formData: FormData) {
     if (duplicate) redirect(`/configuracion?error=${duplicate}&user=${encodeURIComponent(userId)}#usuarios`);
     throw error;
   }
-  await resolveParticipantFromUser(user.id);
+  if (user.active) {
+    await resolveParticipantFromUser(user.id);
+  } else {
+    await prisma.participant.updateMany({ where: { userId: user.id }, data: { active: false } });
+  }
   if (admin.id === user.id) await setSession(user);
   await auditLog({
     entity: "User",
@@ -1785,6 +1793,80 @@ export async function updateUserAction(formData: FormData) {
   revalidatePath("/configuracion/estructura");
   revalidatePath("/notificaciones");
   redirect(`/configuracion?success=usuario_actualizado&user=${encodeURIComponent(user.id)}#usuarios`);
+}
+
+export async function deleteInactiveUserAction(formData: FormData) {
+  const admin = await requireUser(["ADMIN"]);
+  const userId = text(formData, "userId");
+  if (!userId) redirect("/configuracion?error=usuario#usuarios");
+  if (userId === admin.id) redirect("/configuracion?error=usuario_propio&status=inactive#usuarios");
+
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      participant: { include: { _count: { select: { ideas: true, enrollments: true, coinTransactions: true } } } },
+      _count: {
+        select: {
+          supervisedAreas: true,
+          supervisedIdeas: true,
+          ownedImplementations: true,
+          approvals: true,
+          comments: true,
+          auditLogs: true,
+          ledKaizenProjects: true,
+          createdKaizenProjects: true,
+          ownedKaizenActivities: true,
+          kaizenUpdates: true,
+          coordinatedGenbaWalks: true,
+          createdGenbaWalks: true,
+          ownedGenbaActivities: true,
+          genbaUpdates: true,
+          routedOrgUnits: true,
+          orgMemberships: true,
+          assignedSupportIdeas: true,
+          followedIdeas: true,
+          createdIdeaFollowers: true,
+          createdTrainingPrograms: true,
+          createdTrainingSessions: true,
+          createdCoinTransactions: true
+        }
+      }
+    }
+  });
+  if (!target) redirect("/configuracion?error=usuario#usuarios");
+  if (target.active) redirect(`/configuracion?error=usuario_activo&status=active&user=${encodeURIComponent(target.id)}#usuarios`);
+
+  const userHistory = Object.values(target._count).reduce((sum, count) => sum + count, 0);
+  const participantHistory = target.participant
+    ? target.participant._count.ideas + target.participant._count.enrollments + target.participant._count.coinTransactions
+    : 0;
+  if (userHistory || participantHistory) {
+    redirect(`/configuracion?error=usuario_historial&status=inactive&user=${encodeURIComponent(target.id)}#usuarios`);
+  }
+
+  const removedAddress = `deleted-${target.id}@inactive.proboca`;
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.notificationOutbox.updateMany({
+        where: { to: target.email },
+        data: { to: removedAddress, status: "DISMISSED", errorMessage: "Cuenta eliminada por el administrador." }
+      });
+      if (target.participant) await tx.participant.delete({ where: { id: target.participant.id } });
+      await tx.user.delete({ where: { id: target.id } });
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      redirect(`/configuracion?error=usuario_historial&status=inactive&user=${encodeURIComponent(target.id)}#usuarios`);
+    }
+    throw error;
+  }
+
+  await auditLog({ entity: "User", entityId: target.id, action: "USER_DELETED", userId: admin.id, details: { name: target.name, previousEmail: target.email } });
+  revalidatePath("/configuracion");
+  revalidatePath("/configuracion/estructura");
+  revalidatePath("/entrenamientos");
+  revalidatePath("/probocacoins");
+  redirect("/configuracion?success=usuario_eliminado&status=inactive#usuarios");
 }
 
 export async function markNotificationAction(formData: FormData) {

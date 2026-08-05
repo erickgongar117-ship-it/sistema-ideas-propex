@@ -200,6 +200,9 @@ model User {
   createdTrainingPrograms TrainingProgram[]    @relation("TrainingProgramCreator")
   createdTrainingSessions TrainingSession[]    @relation("TrainingSessionCreator")
   createdCoinTransactions CoinTransaction[]    @relation("CoinTransactionCreator")
+
+  @@index([active, name])
+  @@index([role, active])
 }
 
 model Area {
@@ -308,6 +311,10 @@ model Idea {
   participant             Participant?         @relation(fields: [participantId], references: [id], onDelete: SetNull)
   supportRequests         IdeaSupportRequest[]
   followers               IdeaFollower[]
+
+  @@index([status, createdAt])
+  @@index([areaId, createdAt])
+  @@index([supervisorId, status])
 }
 
 model OrgMembership {
@@ -408,6 +415,8 @@ model Participant {
   coinTransactions CoinTransaction[]
 
   @@index([name])
+  @@index([active, name])
+  @@index([email])
   @@index([orgUnitId, active])
 }
 
@@ -454,9 +463,10 @@ model TrainingEnrollment {
   createdAt     DateTime                 @default(now())
   updatedAt     DateTime                 @updatedAt
   session       TrainingSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  participant   Participant              @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  participant   Participant              @relation(fields: [participantId], references: [id], onDelete: Restrict)
 
   @@unique([sessionId, participantId])
+  @@index([sessionId, status])
   @@index([participantId, status])
 }
 
@@ -473,11 +483,14 @@ model CoinTransaction {
   occurredAt    DateTime            @default(now())
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
-  participant   Participant         @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  participant   Participant         @relation(fields: [participantId], references: [id], onDelete: Restrict)
   createdBy     User?               @relation("CoinTransactionCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([participantId, occurredAt])
   @@index([sourceType, sourceId])
+  @@index([sourceType, occurredAt])
+  @@index([type, occurredAt])
+  @@index([occurredAt, createdAt])
 }
 
 model Approval {
