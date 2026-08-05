@@ -120,7 +120,10 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
         include: {
           plant: true,
           escalationRules: {
-            where: { active: true },
+            where: {
+              active: true,
+              reviewerMembership: { is: { active: true, user: { is: { active: true } } } }
+            },
             include: { reviewerMembership: { include: { user: true } } },
             orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }, { submitterLevel: "asc" }]
           }
@@ -141,7 +144,9 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
   });
   const escalationRoutes = area.organizationUnit?.escalationRules ?? [];
   const primaryRoute = escalationRoutes.find((route) => route.isDefault) ?? escalationRoutes[0];
-  const receiverName = primaryRoute?.reviewerMembership.user.name ?? area.supervisor?.name ?? "Responsable pendiente";
+  const fallbackSupervisor = area.supervisor?.active ? area.supervisor : null;
+  const receiverName = primaryRoute?.reviewerMembership.user.name ?? fallbackSupervisor?.name ?? "Responsable pendiente";
+  const hasReceiver = Boolean(primaryRoute || fallbackSupervisor);
 
   return (
     <main className="capture-theme min-h-screen bg-panel px-4 py-5 sm:px-6 sm:py-8">
@@ -163,7 +168,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-sm font-extrabold text-white">{area.code}</span>
                 <span className="min-w-0">
                   <span className="block truncate text-xs font-extrabold text-emerald-900">{area.name}</span>
-                  <span className="mt-0.5 block truncate text-[11px] text-emerald-800">{area.supervisor?.name ?? "Supervisor pendiente"}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-emerald-800">{receiverName}</span>
                 </span>
               </div>
               <ThemeSelector />
@@ -200,10 +205,22 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
               <p className="mt-1 leading-5">
                 {query.error === "area"
                   ? "Este QR pertenece a un área inactiva. Avisa a Mejora Continua o utiliza otro código."
+                  : query.error === "sin_responsable"
+                    ? "Esta área todavía no tiene una ruta activa. Avisa a Mejora Continua para asignar al responsable directo."
                   : missingLabels.length
                     ? `Revisa ${missingLabels.join(", ")}. Puedes usar frases cortas; no tiene que quedar perfecto.`
                     : "Revisa los campos marcados e intenta nuevamente."}
               </p>
+            </div>
+          </div>
+        ) : null}
+
+        {!hasReceiver ? (
+          <div className="alert alert-danger mb-4" role="alert">
+            <UserRound className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+            <div>
+              <p className="font-extrabold">Captura temporalmente pausada.</p>
+              <p className="mt-1 leading-5">Mejora Continua debe asignar una ruta activa antes de recibir ideas de esta área.</p>
             </div>
           </div>
         ) : null}
@@ -324,7 +341,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                 <p className="mt-1 text-xs leading-5 text-slate-300">Al enviarla recibirás un folio para identificarla.</p>
               </div>
             </div>
-            <button className="btn btn-success min-w-48" type="submit">
+            <button className="btn btn-success min-w-48" disabled={!hasReceiver} type="submit">
               Enviar mi idea
               <Send className="h-4 w-4" aria-hidden />
             </button>

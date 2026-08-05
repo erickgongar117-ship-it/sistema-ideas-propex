@@ -65,7 +65,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
         updates: { include: { user: true, activity: true }, orderBy: { createdAt: "desc" }, take: 60 }
       }
     }),
-    prisma.user.findMany({ where: { active: true, role: { not: "COLABORADOR" } }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.kaizenProject.findMany({ where: { status: { notIn: ["COMPLETADO", "CANCELADO"] } }, orderBy: { number: "desc" } })
   ]);
 

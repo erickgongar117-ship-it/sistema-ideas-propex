@@ -71,6 +71,24 @@ function refreshOrganizationPaths(captureCodes: string[] = []) {
   for (const code of captureCodes) revalidatePath(`/captura/${code}`);
 }
 
+function createsReportingCycle(
+  membershipId: string,
+  managerMembershipId: string,
+  memberships: Array<{ id: string; managerMembershipId: string | null }>
+) {
+  const managerByMembership = new Map(memberships.map((membership) => [membership.id, membership.managerMembershipId]));
+  managerByMembership.set(membershipId, managerMembershipId);
+
+  const visited = new Set<string>();
+  let currentId: string | null = membershipId;
+  while (currentId) {
+    if (visited.has(currentId)) return true;
+    visited.add(currentId);
+    currentId = managerByMembership.get(currentId) ?? null;
+  }
+  return false;
+}
+
 export async function saveOrganizationUnitAction(formData: FormData): Promise<OrganizationActionResult> {
   const admin = await requireUser(["ADMIN"]);
   const parsed = unitSchema.safeParse({
@@ -240,14 +258,73 @@ export async function saveMembershipAction(formData: FormData): Promise<Organiza
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa los datos de la persona." };
   const input = parsed.data;
-  const [unit, person, manager] = await Promise.all([
-    prisma.orgUnit.findUnique({ where: { id: input.orgUnitId }, include: { captureArea: true } }),
+  const [unit, person, manager, existingMembership, hierarchyMemberships] = await Promise.all([
+    prisma.orgUnit.findUnique({ where: { id: input.orgUnitId }, include: { captureArea: true, plant: true } }),
     prisma.user.findFirst({ where: { id: input.userId, active: true } }),
-    input.managerMembershipId ? prisma.orgMembership.findUnique({ where: { id: input.managerMembershipId } }) : null
+    input.managerMembershipId
+      ? prisma.orgMembership.findUnique({
+          where: { id: input.managerMembershipId },
+          include: { user: true, orgUnit: { include: { plant: true } } }
+        })
+      : null,
+    input.membershipId
+      ? prisma.orgMembership.findUnique({
+          where: { id: input.membershipId },
+          include: {
+            orgUnit: true,
+            escalationAssignments: {
+              where: { active: true },
+              select: { id: true, name: true, orgUnit: { select: { plantId: true, name: true } } }
+            }
+          }
+        })
+      : null,
+    prisma.orgMembership.findMany({ select: { id: true, managerMembershipId: true } })
   ]);
   if (!unit || !person) return { ok: false, message: "El area o la persona seleccionada ya no esta disponible." };
+  if (input.membershipId && !existingMembership) return { ok: false, message: "La asignacion que intentas modificar ya no existe." };
   if (input.managerMembershipId && !manager) return { ok: false, message: "El jefe directo seleccionado ya no existe." };
-  if (input.membershipId && input.managerMembershipId === input.membershipId) return { ok: false, message: "Una persona no puede ser su propio jefe directo." };
+  if (manager && (!manager.active || !manager.user.active || !manager.orgUnit.active || !manager.orgUnit.plant.active)) {
+    return { ok: false, message: "El jefe directo seleccionado esta inactivo. Activa su usuario, planta, area y membresia antes de asignarlo." };
+  }
+  if (manager && manager.orgUnit.plantId !== unit.plantId) {
+    return { ok: false, message: `El jefe directo pertenece a ${manager.orgUnit.plant.name}; selecciona una jefatura de ${unit.plant.name}.` };
+  }
+  if (manager && manager.userId === input.userId) {
+    return { ok: false, message: "Una persona no puede ser su propio jefe directo, aunque tenga otra asignacion en la estructura." };
+  }
+  if (
+    input.membershipId &&
+    input.managerMembershipId &&
+    createsReportingCycle(input.membershipId, input.managerMembershipId, hierarchyMemberships)
+  ) {
+    return { ok: false, message: "Esta jefatura formaria un ciclo: alguno de los superiores termina reportando nuevamente a esta persona." };
+  }
+  if (input.setAsRoute && (!input.active || !input.canReceiveIdeas)) {
+    return { ok: false, message: "Para usar esta persona como ruta, activa su membresia y el permiso para recibir ideas." };
+  }
+  if (input.setAsRoute && (!unit.active || !unit.plant.active)) {
+    return { ok: false, message: "Activa la planta y el area antes de configurar una ruta de ideas." };
+  }
+
+  const activeRoutes = existingMembership?.escalationAssignments ?? [];
+  if (activeRoutes.length && (!input.active || !input.canReceiveIdeas)) {
+    return {
+      ok: false,
+      message: `Esta persona participa en ${activeRoutes.length} ruta${activeRoutes.length === 1 ? " activa" : "s activas"}. Reasigna esas rutas antes de desactivarla o quitarle el permiso para recibir ideas.`
+    };
+  }
+  const crossPlantRoute = activeRoutes.find((route) => route.orgUnit.plantId !== unit.plantId);
+  if (crossPlantRoute) {
+    return { ok: false, message: `La ruta ${crossPlantRoute.name} pertenece al area ${crossPlantRoute.orgUnit.name} de otra planta. Reasignala antes de mover esta membresia.` };
+  }
+  if (
+    existingMembership &&
+    existingMembership.orgUnit.routingUserId === existingMembership.userId &&
+    (!input.active || !input.canReceiveIdeas || input.userId !== existingMembership.userId || input.orgUnitId !== existingMembership.orgUnitId)
+  ) {
+    return { ok: false, message: "Esta persona es la ruta directa de su area. Asigna primero otro responsable que este activo y pueda recibir ideas." };
+  }
 
   try {
     const membership = await prisma.$transaction(async (tx) => {
@@ -298,10 +375,26 @@ export async function saveEscalationRuleAction(formData: FormData): Promise<Orga
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa la ruta de escalamiento." };
   const input = parsed.data;
   const [unit, reviewer] = await Promise.all([
-    prisma.orgUnit.findUnique({ where: { id: input.orgUnitId }, include: { captureArea: true } }),
-    prisma.orgMembership.findUnique({ where: { id: input.reviewerMembershipId }, include: { user: true } })
+    prisma.orgUnit.findUnique({ where: { id: input.orgUnitId }, include: { captureArea: true, plant: true } }),
+    prisma.orgMembership.findUnique({
+      where: { id: input.reviewerMembershipId },
+      include: { user: true, orgUnit: { include: { plant: true } } }
+    })
   ]);
-  if (!unit || !reviewer || !reviewer.active || !reviewer.user.active) return { ok: false, message: "El area o la persona revisora ya no esta disponible." };
+  if (!unit || !reviewer) return { ok: false, message: "El area o la persona revisora ya no esta disponible." };
+  if (!unit.active || !unit.plant.active) return { ok: false, message: "Activa la planta y el area antes de configurar una ruta." };
+  if (!reviewer.active || !reviewer.user.active || !reviewer.orgUnit.active || !reviewer.orgUnit.plant.active) {
+    return { ok: false, message: "La persona revisora esta inactiva. Activa su usuario, planta, area y membresia antes de asignarla." };
+  }
+  if (reviewer.orgUnit.plantId !== unit.plantId) {
+    return { ok: false, message: `La persona revisora pertenece a ${reviewer.orgUnit.plant.name}; esta ruta solo puede usar responsables de ${unit.plant.name}.` };
+  }
+  if (!reviewer.canReceiveIdeas) {
+    return { ok: false, message: "La persona revisora no tiene permiso para recibir ideas. Activa ese permiso en su asignacion antes de crear la ruta." };
+  }
+  if (input.isDefault && !input.active) {
+    return { ok: false, message: "Una ruta predeterminada debe estar activa. Activa la ruta o desmarca la opcion predeterminada." };
+  }
 
   const rule = await prisma.$transaction(async (tx) => {
     if (input.isDefault) await tx.orgEscalationRule.updateMany({ where: { orgUnitId: input.orgUnitId }, data: { isDefault: false } });

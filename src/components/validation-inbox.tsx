@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { SectionHeading } from "@/components/section-heading";
 import { StatusPill } from "@/components/status-pill";
 import { approvalStatusLabels, approvalTypeLabels } from "@/lib/domain";
+import { buildDepartmentApprovalWhere } from "@/lib/idea-access";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 
@@ -20,15 +21,16 @@ const validationTone: Record<ApprovalType, { accent: string; link: string; soft:
 };
 
 export async function ValidationInbox({ type, roles, title }: { type: ApprovalType; roles: Role[]; title: string }) {
-  await requireUser(["ADMIN", ...roles]);
+  const user = await requireUser(["ADMIN", ...roles]);
+  const approvalScope = buildDepartmentApprovalWhere(user, type);
   const [approvals, reviewedApprovals] = await Promise.all([
     prisma.approval.findMany({
-      where: { type, status: { in: ["PENDING", "MORE_INFO"] } },
+      where: { ...approvalScope, status: { in: ["PENDING", "MORE_INFO"] } },
       include: { idea: { include: { area: true, supervisor: true } }, assignedTo: true },
       orderBy: { createdAt: "asc" }
     }),
     prisma.approval.findMany({
-      where: { type, status: { in: ["APPROVED", "REJECTED"] } },
+      where: { ...approvalScope, status: { in: ["APPROVED", "REJECTED"] } },
       include: {
         idea: { include: { area: true, supervisor: true, implementationOwner: true, approvals: { orderBy: { createdAt: "asc" } } } },
         assignedTo: true

@@ -3,6 +3,7 @@ import { auditLog } from "@/lib/audit";
 import { nextValidationStatus, requiredApprovalTypes, statusForApprovalType, validationOrder } from "@/lib/domain";
 import { ideaMailBody, notify } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { supportFlags } from "@/lib/support-routing";
 
 const supportRoleForApproval: Partial<Record<ApprovalType, Role>> = {
   CALIDAD: "CALIDAD",
@@ -20,22 +21,46 @@ export async function nextFolio() {
   return `IM-${String(current + 1).padStart(6, "0")}`;
 }
 
-export async function supportUserFor(type: ApprovalType) {
-  const role = supportRoleForApproval[type];
-  if (!role) return null;
-  return prisma.user.findFirst({ where: { role, active: true }, orderBy: { createdAt: "asc" } });
-}
-
-export async function supportUsersFor(type: ApprovalType) {
+export async function supportUsersFor(type: ApprovalType, plantId?: string | null) {
   const role = supportRoleForApproval[type];
   if (!role) return [];
+
+  if (plantId) {
+    const units = await prisma.orgUnit.findMany({
+      where: { plantId, active: true, isSupportArea: true },
+      include: {
+        routingUser: true,
+        memberships: {
+          where: { active: true, canReceiveIdeas: true, user: { active: true } },
+          include: { user: true },
+          orderBy: [{ level: "asc" }, { sortOrder: "asc" }]
+        }
+      },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    });
+    const matchingUnits = units.filter((unit) => {
+      const flags = supportFlags([unit]);
+      return type === "CALIDAD" ? flags.impactsQuality : type === "SEGURIDAD" ? flags.impactsSafety : flags.requiresMaintenance;
+    });
+    const users = matchingUnits.flatMap((unit) => [
+      ...(unit.routingUser?.active ? [unit.routingUser] : []),
+      ...unit.memberships.map((membership) => membership.user)
+    ]);
+    const uniqueUsers = [...new Map(users.map((user) => [user.id, user])).values()];
+    if (uniqueUsers.length) return uniqueUsers;
+  }
+
   return prisma.user.findMany({ where: { role, active: true }, orderBy: { createdAt: "asc" } });
+}
+
+export async function supportUserFor(type: ApprovalType, plantId?: string | null) {
+  return (await supportUsersFor(type, plantId))[0] ?? null;
 }
 
 export async function createValidationApprovals(ideaId: string) {
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
-    include: { area: true }
+    include: { area: { include: { organizationUnit: true } } }
   });
   const required = requiredApprovalTypes(idea);
 
@@ -44,7 +69,7 @@ export async function createValidationApprovals(ideaId: string) {
   });
 
   for (const type of required) {
-    const supportUsers = await supportUsersFor(type);
+    const supportUsers = await supportUsersFor(type, idea.area.organizationUnit?.plantId);
     const assignedTo = supportUsers[0] ?? null;
     await prisma.approval.upsert({
       where: { ideaId_type: { ideaId, type } },
@@ -142,7 +167,7 @@ export async function updateStatusAfterValidations(ideaId: string) {
 export async function approveSupervisor(ideaId: string, userId: string) {
   await prisma.approval.upsert({
     where: { ideaId_type: { ideaId, type: "SUPERVISOR" } },
-    update: { status: "APPROVED", decision: "APROBAR", decidedAt: new Date() },
+    update: { assignedToId: userId, status: "APPROVED", decision: "APROBAR", decidedAt: new Date() },
     create: { ideaId, type: "SUPERVISOR", assignedToId: userId, status: "APPROVED", decision: "APROBAR", decidedAt: new Date() }
   });
 
@@ -153,6 +178,7 @@ export async function approveSupervisor(ideaId: string, userId: string) {
     where: { id: ideaId },
     data: {
       status,
+      supervisorId: userId,
       rejectionReason: null,
       moreInfoRequest: null
     }

@@ -37,7 +37,7 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
         updates: { include: { user: true, activity: true }, orderBy: { createdAt: "desc" }, take: 60 }
       }
     }),
-    prisma.user.findMany({ where: { active: true, role: { not: "COLABORADOR" } }, orderBy: { name: "asc" } })
+    prisma.user.findMany({ where: { active: true }, orderBy: { name: "asc" } })
   ]);
   if (!project) notFound();
   const progress = workProgress(project.activities);

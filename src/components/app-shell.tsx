@@ -55,14 +55,19 @@ type NavItem = {
   shortLabel?: string;
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   roles: Role[];
+  requiresReviewAccess?: boolean;
   group: "work" | "control" | "system";
 };
+
+type NavGroup = NavItem["group"];
+
+const allRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"];
 
 const ideaNav: NavItem[] = [
   { href: "/panorama", label: "Panorama PROpEx", shortLabel: "Panorama", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
   { href: "/dashboard", label: "Hoy", shortLabel: "Hoy", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
   { href: "/seguimientos", label: "Mis seguimientos", shortLabel: "Pendientes", icon: ListChecks, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "work" },
-  { href: "/supervisor", label: "Bandeja de supervisor", shortLabel: "Bandeja", icon: UserCheck, roles: ["ADMIN", "SUPERVISOR"], group: "work" },
+  { href: "/supervisor", label: "Bandeja de aprobaciones", shortLabel: "Aprobar", icon: UserCheck, roles: allRoles, requiresReviewAccess: true, group: "work" },
   { href: "/validaciones/calidad", label: "Calidad e inocuidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "work" },
   { href: "/validaciones/seguridad", label: "Seguridad industrial", shortLabel: "Seguridad", icon: ClipboardCheck, roles: ["ADMIN", "SEGURIDAD"], group: "work" },
   { href: "/validaciones/mantenimiento", label: "Mantenimiento", icon: Wrench, roles: ["ADMIN", "MANTENIMIENTO"], group: "work" },
@@ -179,10 +184,15 @@ function ModuleSwitcher({ home, access, compact = false, onNavigate }: { home: s
   );
 }
 
-export function AppShell({ user, children, pendingNotifications, moduleAccess }: { user: ShellUser; children: ReactNode; pendingNotifications: number; moduleAccess: { kaizen: boolean; genba: boolean } }) {
+export function AppShell({ user, children, pendingNotifications, moduleAccess, canReviewIdeas }: { user: ShellUser; children: ReactNode; pendingNotifications: number; moduleAccess: { kaizen: boolean; genba: boolean }; canReviewIdeas: boolean }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<NavGroup, boolean>>({
+    work: true,
+    control: false,
+    system: false
+  });
   const roleBaseTheme = roleTheme[user.role];
   const currentModule = pathname.startsWith("/kaizen") ? "kaizen" : pathname.startsWith("/genba") ? "genba" : "ideas";
   const theme = currentModule === "kaizen"
@@ -192,8 +202,8 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
       : roleBaseTheme;
   const visibleNav = useMemo(() => {
     const source = currentModule === "kaizen" ? kaizenNav : currentModule === "genba" ? genbaNav : ideaNav;
-    return source.filter((item) => item.roles.includes(user.role));
-  }, [currentModule, user.role]);
+    return source.filter((item) => item.roles.includes(user.role) && (!item.requiresReviewAccess || canReviewIdeas));
+  }, [canReviewIdeas, currentModule, user.role]);
   const mobileItems = useMemo(() => {
     const preferred = currentModule === "ideas"
       ? [theme.home, user.role === "ADMIN" || user.role === "MEJORA_CONTINUA" ? "/panorama" : "/seguimientos", "/notificaciones"]
@@ -203,6 +213,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
     return preferred.map((href) => visibleNav.find((item) => item.href === href)).filter((item): item is NavItem => Boolean(item)).filter((item, index, items) => items.findIndex((candidate) => candidate.href === item.href) === index).slice(0, 3);
   }, [currentModule, theme.home, user.role, visibleNav]);
   const activeItem = visibleNav.find((item) => isCurrentPath(pathname, item.href));
+  const showPeriodControl = pathname === "/dashboard" || pathname === "/kaizen" || pathname === "/genba";
   const searchItems = useMemo(() => {
     const moduleSources = [
       { label: "Ideas", visible: true, items: ideaNav },
@@ -212,13 +223,13 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
     const seen = new Set<string>();
     return moduleSources.flatMap((module) => module.visible
       ? module.items
-        .filter((item) => item.roles.includes(user.role) && !seen.has(item.href))
+        .filter((item) => item.roles.includes(user.role) && (!item.requiresReviewAccess || canReviewIdeas) && !seen.has(item.href))
         .map((item) => {
           seen.add(item.href);
           return { href: item.href, label: item.label, group: `${module.label} · ${groupLabels[item.group]}` };
         })
       : []);
-  }, [moduleAccess.genba, moduleAccess.kaizen, user.role]);
+  }, [canReviewIdeas, moduleAccess.genba, moduleAccess.kaizen, user.role]);
 
   useEffect(() => {
     setSidebarCollapsed(window.localStorage.getItem("propex-sidebar-collapsed") === "true");
@@ -227,6 +238,15 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const activeGroup = visibleNav.find((item) => isCurrentPath(pathname, item.href))?.group ?? "work";
+    setExpandedGroups({
+      work: activeGroup === "work",
+      control: activeGroup === "control",
+      system: activeGroup === "system"
+    });
+  }, [pathname, visibleNav]);
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
@@ -243,24 +263,46 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
     });
   };
 
+  const toggleGroup = (group: NavGroup) => {
+    setExpandedGroups((current) => ({
+      work: group === "work" ? !current.work : false,
+      control: group === "control" ? !current.control : false,
+      system: group === "system" ? !current.system : false
+    }));
+  };
+
   const shellStyle = {
     "--role-accent": theme.accent,
     "--role-soft": theme.soft
   } as CSSProperties;
 
   const navigation = (onNavigate?: () => void, collapsed = false) => (
-    <nav aria-label="Navegacion principal" className="space-y-5">
+    <nav aria-label="Navegacion principal" className="space-y-2">
       {(["work", "control", "system"] as const).map((group) => {
         const items = visibleNav.filter((item) => item.group === group);
         if (!items.length) return null;
+        const expanded = collapsed || expandedGroups[group];
         return (
-          <div key={group}>
-            <p className="nav-group-label">{groupLabels[group]}</p>
-            <div className="mt-1.5 space-y-1">
+          <div className="nav-group" key={group}>
+            {!collapsed ? (
+              <button
+                aria-expanded={expanded}
+                className="nav-group-toggle"
+                onClick={() => toggleGroup(group)}
+                type="button"
+              >
+                <span>{groupLabels[group]}</span>
+                <span className="nav-group-meta">
+                  <span>{items.length}</span>
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden />
+                </span>
+              </button>
+            ) : null}
+            {expanded ? <div className={`${collapsed ? "" : "mt-1"} space-y-1`}>
               {items.map((item) => (
                 <NavigationLink collapsed={collapsed} item={item} key={item.href} onNavigate={onNavigate} pathname={pathname} pendingNotifications={pendingNotifications} />
               ))}
-            </div>
+            </div> : null}
           </div>
         );
       })}
@@ -317,7 +359,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
           </div>
           <div className="workspace-topbar-actions">
             <WorkspaceSearch items={searchItems} />
-            <WorkspacePeriodControl />
+            {showPeriodControl ? <WorkspacePeriodControl /> : null}
             <ThemeSelector />
             <Link aria-label={`${pendingNotifications} notificaciones pendientes`} className="icon-button relative" href="/notificaciones" title="Notificaciones">
               <Bell className="h-[18px] w-[18px]" aria-hidden />
@@ -397,7 +439,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
               <div className="mt-3"><ModuleSwitcher access={moduleAccess} compact home={roleBaseTheme.home} onNavigate={() => setMenuOpen(false)} /></div>
               <div className="mobile-workspace-preferences">
                 <WorkspaceSearch fullWidth items={searchItems} />
-                <WorkspacePeriodControl fullWidth />
+                {showPeriodControl ? <WorkspacePeriodControl fullWidth /> : null}
                 <ThemeSelector showLabel />
               </div>
             </div>

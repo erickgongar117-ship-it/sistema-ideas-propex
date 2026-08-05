@@ -90,7 +90,7 @@ function EnrollmentStatus({ status }: { status: "REGISTERED" | "COMPLETED" | "CA
 export default async function TrainingPage({ searchParams }: TrainingPageProps) {
   await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const query = await searchParams;
-  const [programs, sessions, participants, users, plants, orgUnits] = await Promise.all([
+  const [programs, sessions, participants, users, plants, orgUnits, completedEnrollments, registeredEnrollments, trainingCoinTotals] = await Promise.all([
     prisma.trainingProgram.findMany({
       include: { _count: { select: { sessions: true } } },
       orderBy: [{ active: "desc" }, { name: "asc" }]
@@ -127,22 +127,14 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
       where: { active: true },
       include: { plant: { select: { code: true } } },
       orderBy: [{ plant: { code: "asc" } }, { name: "asc" }]
-    })
+    }),
+    prisma.trainingEnrollment.count({ where: { status: "COMPLETED" } }),
+    prisma.trainingEnrollment.count({ where: { status: "REGISTERED" } }),
+    prisma.trainingEnrollment.aggregate({ _sum: { coinsAwarded: true } })
   ]);
 
   const balances = await getParticipantBalances(participants.map((participant) => participant.id));
-  const completedEnrollments = sessions.reduce(
-    (total, session) => total + session.enrollments.filter((enrollment) => enrollment.status === "COMPLETED").length,
-    0
-  );
-  const registeredEnrollments = sessions.reduce(
-    (total, session) => total + session.enrollments.filter((enrollment) => enrollment.status === "REGISTERED").length,
-    0
-  );
-  const trainingCoins = sessions.reduce(
-    (total, session) => total + session.enrollments.reduce((sum, enrollment) => sum + enrollment.coinsAwarded, 0),
-    0
-  );
+  const trainingCoins = trainingCoinTotals._sum.coinsAwarded ?? 0;
   const unlinkedUsers = users.filter((user) => !user.participant);
   const errorMessage = query.error ? errorMessages[query.error] ?? "Revisa la informacion capturada." : null;
   const successMessage = query.success ? successMessages[query.success] ?? "Cambio guardado correctamente." : null;

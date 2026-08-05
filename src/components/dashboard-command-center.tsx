@@ -124,7 +124,7 @@ function averageCycleDays(ideas: DashboardIdea[]) {
 }
 
 function nextStepFor(status: IdeaStatus) {
-  if (["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"].includes(status)) return "Revisión y decisión del supervisor";
+  if (["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"].includes(status)) return "Revisión y decisión del responsable directo";
   if (["EN_VALIDACION_CALIDAD", "EN_VALIDACION_SEGURIDAD", "EN_VALIDACION_MANTENIMIENTO"].includes(status)) return "Completar la validación del área de soporte";
   if (["APROBADA_SUPERVISOR", "APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA"].includes(status)) return "Clasificar, priorizar y asignar responsable";
   if (status === "EN_IMPLEMENTACION") return "Registrar avance y evidencia de implementación";
@@ -271,7 +271,7 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
   }, [currentIdeas, previousIdeas, now]);
 
   const attention = useMemo(() => [
-    { label: "Revisión de supervisor", value: currentIdeas.filter((idea) => initialStatuses.includes(idea.status)).length, href: viewerRole === "ADMIN" ? "/supervisor" : "/seguimientos?vista=equipo", icon: Clock3, tone: "text-amber-300" },
+              { label: "Revisión de responsable", value: currentIdeas.filter((idea) => initialStatuses.includes(idea.status)).length, href: viewerRole === "ADMIN" ? "/supervisor" : "/seguimientos?vista=equipo", icon: Clock3, tone: "text-amber-300" },
     { label: "Validaciones pendientes", value: currentIdeas.filter((idea) => validationStatuses.includes(idea.status)).length, href: "/kanban", icon: ShieldCheck, tone: "text-blue-300" },
     { label: "Acciones de Mejora Continua", value: currentIdeas.filter((idea) => ["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA", "IMPLEMENTADA", "EN_VALIDACION_FINAL"].includes(idea.status)).length, href: "/mejora", icon: Lightbulb, tone: "text-emerald-300" },
     { label: "Compromisos vencidos", value: metrics.overdue, href: "/vencidas", icon: AlertTriangle, tone: "text-rose-300" }
@@ -300,7 +300,7 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
 
   const flowRows = useMemo(() => [
     { name: "Registradas", value: currentIdeas.length },
-    { name: "Aval supervisor", value: currentIdeas.filter((idea) => ![...initialStatuses, "RECHAZADA_SUPERVISOR", "CANCELADA"].includes(idea.status)).length },
+              { name: "Aval responsable", value: currentIdeas.filter((idea) => ![...initialStatuses, "RECHAZADA_SUPERVISOR", "CANCELADA"].includes(idea.status)).length },
     { name: "Listas para ejecutar", value: currentIdeas.filter((idea) => [...implementationStatuses, "CERRADA"].includes(idea.status)).length },
     { name: "En implementación", value: currentIdeas.filter((idea) => ["EN_IMPLEMENTACION", "IMPLEMENTADA", "EN_VALIDACION_FINAL", "CERRADA"].includes(idea.status)).length },
     { name: "Cerradas", value: metrics.closed }
@@ -463,14 +463,14 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
         <article className="surface rounded-lg p-5">
           <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white"><CalendarDays className="h-5 w-5" aria-hidden /></span><div><p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-500">Velocidad</p><h2 className="text-lg font-extrabold text-ink">Tiempos de respuesta</h2></div></div>
           <dl className="mt-4 divide-y divide-line">
-            {[["Respuesta del supervisor", timing.supervisor], ["Validación de soporte", timing.validation], ["Implementación", timing.implementation]].map(([label, value]) => <div className="flex items-center justify-between gap-4 py-4" key={label}><dt className="text-sm font-bold text-slate-600">{label}</dt><dd className="text-xl font-extrabold text-ink">{value}</dd></div>)}
+            {[["Respuesta del responsable", timing.supervisor], ["Validación de soporte", timing.validation], ["Implementación", timing.implementation]].map(([label, value]) => <div className="flex items-center justify-between gap-4 py-4" key={label}><dt className="text-sm font-bold text-slate-600">{label}</dt><dd className="text-xl font-extrabold text-ink">{value}</dd></div>)}
           </dl>
           <p className="mt-4 border-t border-line pt-4 text-xs leading-5 text-slate-500">Estos tiempos usan las decisiones registradas y se recalculan automáticamente.</p>
         </article>
 
         <article className="surface overflow-hidden rounded-lg">
           <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4"><div><p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-brand-700">Trazabilidad inmediata</p><h2 className="mt-1 text-lg font-extrabold text-ink">Ideas recientes en la selección</h2></div><Link className="text-xs font-extrabold text-brand-700 hover:underline" href="/ideas">Ver todas</Link></div>
-          {!recentIdeas.length ? <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><CheckCircle2 className="h-8 w-8 text-slate-300" aria-hidden /><p className="mt-3 text-sm font-extrabold text-slate-700">No hay ideas con estos filtros</p><button className="mt-3 text-xs font-extrabold text-brand-700" onClick={resetFilters} type="button">Restablecer filtros</button></div> : <div className="divide-y divide-line">{recentIdeas.map((idea) => <button aria-label={`Ver resumen de ${idea.folio}`} className="quick-view-row group grid w-full gap-3 px-5 py-4 text-left transition hover:bg-slate-50 sm:grid-cols-[110px_1fr_auto] sm:items-center" key={idea.id} onClick={() => setSelectedIdeaId(idea.id)} type="button"><span><span className="block text-xs font-extrabold text-brand-700">{idea.folio}</span><span className="mt-1 block text-[11px] font-bold text-slate-500">{idea.areaCode} · Cat. {idea.category}</span></span><span className="min-w-0"><span className="line-clamp-1 block text-sm font-bold text-slate-800">{idea.problem}</span><span className="mt-1 block text-xs text-slate-500">{idea.supervisorName ?? "Sin supervisor"} · {new Date(idea.createdAt).toLocaleDateString("es-MX", { timeZone: PROPEX_TIME_ZONE })}</span></span><span className="flex items-center gap-3"><StatusPill status={idea.status} /><ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden /></span></button>)}</div>}
+          {!recentIdeas.length ? <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><CheckCircle2 className="h-8 w-8 text-slate-300" aria-hidden /><p className="mt-3 text-sm font-extrabold text-slate-700">No hay ideas con estos filtros</p><button className="mt-3 text-xs font-extrabold text-brand-700" onClick={resetFilters} type="button">Restablecer filtros</button></div> : <div className="divide-y divide-line">{recentIdeas.map((idea) => <button aria-label={`Ver resumen de ${idea.folio}`} className="quick-view-row group grid w-full gap-3 px-5 py-4 text-left transition hover:bg-slate-50 sm:grid-cols-[110px_1fr_auto] sm:items-center" key={idea.id} onClick={() => setSelectedIdeaId(idea.id)} type="button"><span><span className="block text-xs font-extrabold text-brand-700">{idea.folio}</span><span className="mt-1 block text-[11px] font-bold text-slate-500">{idea.areaCode} · Cat. {idea.category}</span></span><span className="min-w-0"><span className="line-clamp-1 block text-sm font-bold text-slate-800">{idea.problem}</span><span className="mt-1 block text-xs text-slate-500">{idea.supervisorName ?? "Sin responsable"} · {new Date(idea.createdAt).toLocaleDateString("es-MX", { timeZone: PROPEX_TIME_ZONE })}</span></span><span className="flex items-center gap-3"><StatusPill status={idea.status} /><ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden /></span></button>)}</div>}
         </article>
       </section>
 

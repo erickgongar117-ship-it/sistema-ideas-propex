@@ -74,7 +74,7 @@ export default async function KaizenKanbanPage() {
                         <div className="mt-4"><ProgressMeter label={`${progress.closed} de ${progress.total} realizadas`} percent={progress.percent} /></div>
                         {overdue ? <p className="mt-3 flex items-center gap-2 text-xs font-extrabold text-rose-700"><AlertTriangle className="h-4 w-4" aria-hidden />{overdue} {overdue === 1 ? "actividad vencida" : "actividades vencidas"}</p> : null}
                       </div>
-                      <div className="border-t border-line bg-slate-50/70">
+                      <div className="border-t border-line bg-slate-50">
                         {activities.slice(0, 3).map((activity) => (
                           <Link className="grid grid-cols-[26px_minmax(0,1fr)_auto] items-start gap-2 border-b border-line px-3 py-3 transition last:border-0 hover:bg-white" href={`/kaizen/${project.id}#actividad-${activity.id}`} key={activity.id}>
                             <span className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-extrabold ${["COMPLETADA", "CANCELADA"].includes(activity.status) ? "bg-emerald-100 text-emerald-800" : activity.status === "BLOQUEADA" ? "bg-rose-100 text-rose-800" : "bg-white text-slate-700"}`}>{activity.status === "COMPLETADA" ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : activity.number}</span>

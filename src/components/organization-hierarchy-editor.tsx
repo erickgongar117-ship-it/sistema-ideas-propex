@@ -106,8 +106,8 @@ export function OrganizationHierarchyEditor({
                   <label><span className="label">Jefe directo</span><select className="field" defaultValue={membership.managerMembershipId ?? ""} name="managerMembershipId"><option value="">Sin jefe configurado</option><MembershipOptions excludeId={membership.id} options={allMemberships} plantId={node.plantId} /></select><span className="helper-text">Los responsables de la misma planta aparecen primero.</span></label>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <Checkbox defaultChecked={membership.canReviewTeam} label="Puede ver propuestas de su equipo" name="canReviewTeam" />
-                  <Checkbox defaultChecked={membership.canReceiveIdeas} label="Puede recibir ideas" name="canReceiveIdeas" />
+                  <Checkbox defaultChecked={membership.canReviewTeam} label="Puede revisar y aprobar propuestas de su equipo" name="canReviewTeam" />
+                  <Checkbox defaultChecked={membership.canReceiveIdeas} label="Puede recibir ideas como responsable directo" name="canReceiveIdeas" />
                   <Checkbox defaultChecked={membership.canManageActivities} label="Puede gestionar actividades" name="canManageActivities" />
                   <Checkbox defaultChecked={node.routingUserId === membership.userId} label="Usar como ruta principal actual" name="setAsRoute" />
                   <Checkbox defaultChecked={membership.active} label="Asignacion activa" name="active" />
@@ -135,8 +135,8 @@ export function OrganizationHierarchyEditor({
               <label><span className="label">Jefe directo</span><select className="field" name="managerMembershipId"><option value="">Sin jefe configurado</option><MembershipOptions activeOnly options={allMemberships} plantId={node.plantId} /></select><span className="helper-text">Los responsables de la misma planta aparecen primero.</span></label>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <Checkbox label="Puede ver propuestas de su equipo" name="canReviewTeam" />
-              <Checkbox label="Puede recibir ideas" name="canReceiveIdeas" />
+              <Checkbox label="Puede revisar y aprobar propuestas de su equipo" name="canReviewTeam" />
+              <Checkbox label="Puede recibir ideas como responsable directo" name="canReceiveIdeas" />
               <Checkbox label="Puede gestionar actividades" name="canManageActivities" />
               <Checkbox label="Usar como ruta principal actual" name="setAsRoute" />
               <Checkbox defaultChecked label="Asignacion activa" name="active" />

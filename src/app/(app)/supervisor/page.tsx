@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { CalendarDays, Check, CheckCircle2, Clock3, Eye, MessageSquareMore, UserRound, X } from "lucide-react";
+import type { Prisma } from "@prisma/client";
+import { CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, Eye, MessageSquareMore, UserRound, X } from "lucide-react";
 import { supervisorDecisionAction } from "@/app/actions";
 import { EmptyState } from "@/components/empty-state";
 import { KpiCard } from "@/components/mini-charts";
@@ -8,6 +9,7 @@ import { SectionHeading } from "@/components/section-heading";
 import { StatusPill } from "@/components/status-pill";
 import { requireUser } from "@/lib/auth";
 import { approvalStatusLabels, approvalTypeLabels, ideaCategoryLabels } from "@/lib/domain";
+import { buildInitialReviewWhere, getSupervisableOrgUnitIds } from "@/lib/idea-access";
 import { prisma } from "@/lib/prisma";
 
 function SupportRequestFields({
@@ -49,17 +51,31 @@ function SupportRequestFields({
 }
 
 export default async function SupervisorPage() {
-  const user = await requireUser(["ADMIN", "SUPERVISOR"]);
-  const supervisorWhere = user.role === "SUPERVISOR" ? { supervisorId: user.id } : {};
+  const user = await requireUser();
+  const supervisableOrgUnitIds = user.role === "ADMIN" ? [] : await getSupervisableOrgUnitIds(user.id);
+  const initialReviewWhere = buildInitialReviewWhere(user, supervisableOrgUnitIds);
+  const approvedWhere = (user.role === "ADMIN"
+    ? { approvals: { some: { type: "SUPERVISOR", status: "APPROVED" } } }
+    : {
+        OR: [
+          { approvals: { some: { type: "SUPERVISOR", status: "APPROVED", assignedToId: user.id } } },
+          { AND: [initialReviewWhere, { approvals: { some: { type: "SUPERVISOR", status: "APPROVED" } } }] }
+        ]
+      }) satisfies Prisma.IdeaWhereInput;
   const [ideas, approvedIdeas, supportAreas] = await Promise.all([
     prisma.idea.findMany({
-      where: { status: { in: ["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"] }, ...supervisorWhere },
+      where: {
+        AND: [
+          { status: { in: ["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"] } },
+          initialReviewWhere
+        ]
+      },
       include: { area: { include: { organizationUnit: true } }, supervisor: true, supportRequests: true },
       orderBy: { createdAt: "asc" }
     }),
     prisma.idea.findMany({
-      where: { ...supervisorWhere, approvals: { some: { type: "SUPERVISOR", status: "APPROVED" } } },
-      include: { area: true, implementationOwner: true, approvals: { orderBy: { createdAt: "asc" } }, supportRequests: { include: { orgUnit: true }, orderBy: { createdAt: "asc" } } },
+      where: approvedWhere,
+      include: { area: true, implementationOwner: true, approvals: { include: { assignedTo: true }, orderBy: { createdAt: "asc" } }, supportRequests: { include: { orgUnit: true }, orderBy: { createdAt: "asc" } } },
       orderBy: { updatedAt: "desc" },
       take: 40
     }),
@@ -75,12 +91,12 @@ export default async function SupervisorPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Supervisor · Revisión de área"
-        title="Bandeja del supervisor"
-        description="Primero atiende las ideas pendientes; abajo puedes consultar lo que ocurrio con las ideas aprobadas."
+        eyebrow="Jefatura / Revisión directa"
+        title="Bandeja de aprobaciones"
+        description="Atiende las ideas que recibes por asignación, ruta jerárquica o alcance de equipo y conserva su seguimiento después de decidir."
       />
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="hidden gap-3 sm:grid sm:grid-cols-3">
         <KpiCard detail="Esperan tu decision" icon={Clock3} label="Pendientes" tone="amber" value={ideas.length} />
         <KpiCard detail="Continuan en el proceso" icon={CheckCircle2} label="En seguimiento" tone="green" value={ideasInMotion} />
         <KpiCard detail="Con resultado final" icon={Check} label="Cerradas" tone="dark" value={closedIdeas} />
@@ -106,40 +122,47 @@ export default async function SupervisorPage() {
                   <StatusPill status={idea.status} />
                 </div>
 
-                <div className="mt-5 grid gap-4 border-y border-line py-4 lg:grid-cols-3">
-                  <div>
-                    <p className="text-[11px] font-extrabold uppercase tracking-[0.05em] text-slate-500">Problema observado</p>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">{idea.problem}</p>
+                <p className="mt-4 line-clamp-2 text-sm font-semibold leading-6 text-slate-800">{idea.problem}</p>
+                <details className="group mt-4 border-t border-line pt-1" open={ideas.length === 1}>
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 py-2 text-sm font-extrabold text-emerald-800">
+                    Revisar detalle y decidir
+                    <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+                  </summary>
+                  <div className="grid gap-4 border-y border-line py-4 lg:grid-cols-3">
+                    <div>
+                      <p className="text-[11px] font-extrabold uppercase tracking-[0.05em] text-slate-500">Problema observado</p>
+                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">{idea.problem}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-extrabold uppercase tracking-[0.05em] text-slate-500">Propuesta</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">{idea.proposal}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-extrabold uppercase tracking-[0.05em] text-slate-500">Beneficio esperado</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">{idea.expectedBenefit}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[11px] font-extrabold uppercase tracking-[0.05em] text-slate-500">Propuesta</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">{idea.proposal}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-extrabold uppercase tracking-[0.05em] text-slate-500">Beneficio esperado</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">{idea.expectedBenefit}</p>
-                  </div>
-                </div>
 
-                <form action={supervisorDecisionAction} className="mt-4 grid gap-3">
-                  <input name="ideaId" type="hidden" value={idea.id} />
-                  <SupportRequestFields idea={idea} supportAreas={supportAreas} />
-                  <label>
-                    <span className="label">Comentario de la decision</span>
-                    <textarea className="field min-h-20" name="comments" placeholder="Obligatorio al rechazar o solicitar información" />
-                  </label>
-                  <div className="grid gap-2 sm:flex sm:flex-wrap">
-                    <button className="btn btn-success" name="decision" type="submit" value="APROBAR">
-                      <Check className="h-4 w-4" aria-hidden /> Aprobar idea
-                    </button>
-                    <button className="btn btn-secondary" name="decision" type="submit" value="SOLICITAR_INFORMACION">
-                      <MessageSquareMore className="h-4 w-4" aria-hidden /> Solicitar información
-                    </button>
-                    <button className="btn btn-danger sm:ml-auto" name="decision" type="submit" value="RECHAZAR">
-                      <X className="h-4 w-4" aria-hidden /> Rechazar
-                    </button>
-                  </div>
-                </form>
+                  <form action={supervisorDecisionAction} className="mt-4 grid gap-3">
+                    <input name="ideaId" type="hidden" value={idea.id} />
+                    <SupportRequestFields idea={idea} supportAreas={supportAreas} />
+                    <label>
+                      <span className="label">Comentario del responsable</span>
+                      <textarea className="field min-h-20" name="comments" placeholder="Obligatorio al rechazar o solicitar información" />
+                    </label>
+                    <div className="grid gap-2 sm:flex sm:flex-wrap">
+                      <button className="btn btn-success" name="decision" type="submit" value="APROBAR">
+                        <Check className="h-4 w-4" aria-hidden /> Aprobar idea
+                      </button>
+                      <button className="btn btn-secondary" name="decision" type="submit" value="SOLICITAR_INFORMACION">
+                        <MessageSquareMore className="h-4 w-4" aria-hidden /> Solicitar información
+                      </button>
+                      <button className="btn btn-danger sm:ml-auto" name="decision" type="submit" value="RECHAZAR">
+                        <X className="h-4 w-4" aria-hidden /> Rechazar
+                      </button>
+                    </div>
+                  </form>
+                </details>
               </div>
             </article>
           ))}
@@ -147,17 +170,19 @@ export default async function SupervisorPage() {
       </section>
 
       <section className="mt-10">
-        <SectionHeading count={approvedIdeas.length} description="Consulta responsable, fecha, validaciones y resultado final." title="Ideas que aprobaste" />
+        <SectionHeading count={approvedIdeas.length} description="Consulta quién decidió, responsable, validaciones y resultado final." title="Aprobadas en tu alcance" />
         {!approvedIdeas.length ? <EmptyState title="Aun no hay ideas aprobadas" description="Cuando apruebes una idea, su seguimiento permanecera visible aqui." /> : null}
         <div className="grid gap-4 xl:grid-cols-2">
           {approvedIdeas.map((idea) => {
             const supportApprovals = idea.approvals.filter((approval) => ["CALIDAD", "SEGURIDAD", "MANTENIMIENTO"].includes(approval.type));
+            const directApproval = idea.approvals.find((approval) => approval.type === "SUPERVISOR");
             return (
               <article className="surface rounded-lg p-4 sm:p-5" key={idea.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Link className="text-base font-extrabold text-ink hover:text-brand-700" href={`/ideas/${idea.id}`}>{idea.folio}</Link>
                     <p className="mt-0.5 text-xs font-bold text-slate-500">{idea.area.code} · {idea.collaboratorName}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">Aprobó {directApproval?.assignedTo?.name ?? "Responsable no identificado"}{directApproval?.decidedAt ? ` · ${directApproval.decidedAt.toLocaleDateString("es-MX")}` : ""}</p>
                   </div>
                   <StatusPill status={idea.status} />
                 </div>

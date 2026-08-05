@@ -28,6 +28,7 @@ import {
   assignImplementationAction,
   cancelIdeaAction,
   classifyIdeaAction,
+  deleteCancelledIdeaAction,
   implementationUpdateAction,
   removeIdeaPointsAction,
   reopenRejectedIdeaAction,
@@ -45,7 +46,6 @@ import { SectionHeading } from "@/components/section-heading";
 import { StatusPill } from "@/components/status-pill";
 import {
   approvalStatusLabels,
-  approvalTypeForRole,
   approvalTypeLabels,
   classificationLabels,
   coreClassificationGuide,
@@ -57,7 +57,7 @@ import {
 } from "@/lib/domain";
 import { requireUser } from "@/lib/auth";
 import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
-import { canViewIdea } from "@/lib/idea-access";
+import { canDecideInitialIdea, canViewIdea } from "@/lib/idea-access";
 import { automaticManagerialEvaluation, automaticPointRules } from "@/lib/points";
 import { prisma } from "@/lib/prisma";
 
@@ -109,13 +109,14 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
 
   if (!(await canViewIdea(user, idea.id))) redirect(roleHomePath(user.role));
 
-  const canSupervisor = user.role === "ADMIN" || idea.supervisorId === user.id || idea.escalationRule?.reviewerMembership.userId === user.id;
-  const roleApprovalType = approvalTypeForRole(user.role);
+  const canInitialReviewScope = await canDecideInitialIdea(user, idea.id);
+  const initialApproval = idea.approvals.find((approval) => approval.type === "SUPERVISOR");
+  const canSupervisor = canInitialReviewScope && Boolean(initialApproval && ["PENDING", "MORE_INFO"].includes(initialApproval.status));
   const validationTypes: ApprovalType[] = user.role === "ADMIN"
     ? ["CALIDAD", "SEGURIDAD", "MANTENIMIENTO"]
-    : roleApprovalType
-      ? [roleApprovalType].filter((type) => type !== "SUPERVISOR" && type !== "MEJORA_CONTINUA_FINAL")
-      : [];
+    : idea.approvals
+      .filter((approval) => approval.assignedToId === user.id && ["CALIDAD", "SEGURIDAD", "MANTENIMIENTO"].includes(approval.type))
+      .map((approval) => approval.type);
   const canMC = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
   const supportAreasForPlant = supportAreas.filter((area) => !idea.area.organizationUnit?.plantId || area.plantId === idea.area.organizationUnit.plantId);
   const selectedSupportIds = new Set(idea.supportRequests.map((request) => request.orgUnitId));
@@ -138,11 +139,12 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
   const isClosed = idea.status === "CERRADA";
   const canManageAreaActivities = userMemberships.some((membership) => membership.orgUnitId === idea.area.organizationUnit?.id && membership.canManageActivities);
   const canUpdateProgress = ["EN_IMPLEMENTACION", "IMPLEMENTADA", "VENCIDA"].includes(idea.status) &&
-    (canMC || idea.implementationOwnerId === user.id || idea.supervisorId === user.id || canManageAreaActivities);
+    (canMC || idea.implementationOwnerId === user.id || canInitialReviewScope || canManageAreaActivities);
   const canReviewClose = canMC && (["IMPLEMENTADA", "EN_VALIDACION_FINAL", "CERRADA"].includes(idea.status));
-  const canAssign = canMC && !["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
-  const canClassify = canMC && !["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
+  const canAssign = canMC && Boolean(idea.classification) && ["CLASIFICACION_MEJORA_CONTINUA", "EN_IMPLEMENTACION"].includes(idea.status);
+  const canClassify = canMC && ["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA"].includes(idea.status);
   const canReopen = canMC && ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
+  const canPermanentlyDelete = user.role === "ADMIN" && idea.status === "CANCELADA";
   const impacts = parseImpactTypes(idea.impactTypes);
   const returnPath = canMC ? roleHomePath(user.role) : "/seguimientos";
   const parsedReward = Number.parseInt(query.coins ?? "", 10);
@@ -153,7 +155,17 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
     : query.error === "justificacion"
       ? "Escribe una justificacion para completar esta decision."
       : query.error === "informacion"
-        ? "Explica qué información necesitas del colaborador."
+      ? "Explica qué información necesitas del colaborador."
+        : query.error === "sin_permiso"
+          ? "Esta idea no está asignada a tu ruta de aprobación ni al equipo que supervisas."
+          : query.error === "estado_revision"
+            ? "La revisión inicial ya fue atendida y no puede repetirse."
+          : query.error === "eliminar_estado"
+            ? "Solo se pueden eliminar definitivamente las ideas canceladas."
+          : query.error === "eliminar_confirmacion"
+            ? `La confirmación no coincide. Escribe exactamente ELIMINAR ${idea.folio}.`
+          : query.error === "flujo"
+            ? "Completa primero la aprobación, las validaciones y la clasificación antes de avanzar a la siguiente etapa."
         : query.error
           ? "Revisa los campos obligatorios e intenta nuevamente."
           : null;
@@ -247,7 +259,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                         </div>
                       </div>
                       <span className="w-fit rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-extrabold text-slate-700">
-                        {request.activatedAt ? approvalStatusLabels[request.status] : "Pendiente de envio por supervisor"}
+                            {request.activatedAt ? approvalStatusLabels[request.status] : "Pendiente de envío por responsable"}
                       </span>
                     </div>
                     {request.comments ? <p className="mt-3 border-t border-black/5 pt-2 text-sm leading-5 text-slate-700">{request.comments}</p> : null}
@@ -331,7 +343,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                 ["Ruta de revisión", idea.escalationRule?.name ?? "Ruta predeterminada"],
                 ["Turno", idea.shift],
                 ["Categoría", ideaCategoryLabels[idea.category]],
-                ["Supervisor", idea.supervisor?.name ?? "Sin supervisor"],
+                ["Responsable directo", idea.supervisor?.name ?? "Sin responsable"],
                 ["Responsable", idea.implementationOwner?.name ?? "Sin responsable"],
                 ["Fecha compromiso", idea.dueDate ? idea.dueDate.toLocaleDateString("es-MX") : "Sin fecha"],
                 ["Prioridad", idea.priority ? priorityLabels[idea.priority] : "Sin prioridad"],
@@ -378,11 +390,31 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
             </article>
           ) : null}
 
-          {canSupervisor && ["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"].includes(idea.status) ? (
+          {canPermanentlyDelete ? (
+            <article className="surface overflow-hidden rounded-lg border border-rose-300">
+              <div className="h-1 bg-rose-600" />
+              <div className="p-5">
+                <div className="flex items-start gap-3">
+                  <Trash2 className="mt-0.5 h-5 w-5 shrink-0 text-rose-700" aria-hidden />
+                  <div>
+                    <h2 className="text-base font-extrabold text-rose-950">Eliminar idea cancelada</h2>
+                    <p className="mt-1 text-xs leading-5 text-rose-800">La idea y sus dependencias desaparecerán de tableros, registros y exportaciones.</p>
+                  </div>
+                </div>
+                <form action={deleteCancelledIdeaAction} className="mt-4 grid gap-3">
+                  <input name="ideaId" type="hidden" value={idea.id} />
+                  <label><span className="label">Confirmación</span><input autoComplete="off" className="field border-rose-300" name="confirmation" placeholder={`ELIMINAR ${idea.folio}`} required /></label>
+                  <button className="btn btn-danger" type="submit"><Trash2 className="h-4 w-4" aria-hidden />Eliminar definitivamente</button>
+                </form>
+              </div>
+            </article>
+          ) : null}
+
+          {canSupervisor ? (
             <article className="surface overflow-hidden rounded-lg">
               <div className="h-1 bg-emerald-600" />
               <div className="p-5">
-                <h2 className="text-base font-extrabold text-ink">Decision del supervisor</h2>
+                <h2 className="text-base font-extrabold text-ink">Decisión del responsable directo</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-500">El comentario es obligatorio al rechazar o solicitar información.</p>
                 <form action={supervisorDecisionAction} className="mt-4 grid gap-2">
                   <input name="ideaId" type="hidden" value={idea.id} />

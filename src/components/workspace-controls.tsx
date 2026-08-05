@@ -134,8 +134,8 @@ export function WorkspacePeriodControl({ fullWidth = false }: { fullWidth?: bool
   return (
     <label className={`workspace-period-control ${fullWidth ? "is-full" : ""}`}>
       <CalendarRange className="h-[18px] w-[18px]" aria-hidden />
-      <span className="sr-only">Periodo global</span>
-      <select aria-label="Periodo global" onChange={(event) => updatePeriod(event.target.value as WorkspacePeriod)} value={period}>
+      <span className="sr-only">Periodo del panel</span>
+      <select aria-label="Periodo del panel" onChange={(event) => updatePeriod(event.target.value as WorkspacePeriod)} value={period}>
         {periodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </label>

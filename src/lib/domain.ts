@@ -12,7 +12,7 @@ import {
 } from "@prisma/client";
 
 export const ideaCategoryLabels: Record<IdeaCategory, string> = {
-  A: "Categoría A · Operador y supervisor",
+  A: "Categoría A · Colaborador y jefe directo",
   B: "Categoría B · Apoyo interno",
   C: "Categoría C · Externo o cotización"
 };
@@ -63,10 +63,10 @@ export const roleLabels: Record<Role, string> = {
 
 export const statusLabels: Record<IdeaStatus, string> = {
   REGISTRADA: "Registrada",
-  EN_REVISION_SUPERVISOR: "En revisión de supervisor",
-  RECHAZADA_SUPERVISOR: "Rechazada por supervisor",
+  EN_REVISION_SUPERVISOR: "En revisión de responsable directo",
+  RECHAZADA_SUPERVISOR: "Rechazada por responsable directo",
   SOLICITUD_INFORMACION: "Solicitud de información",
-  APROBADA_SUPERVISOR: "Aprobada por supervisor",
+  APROBADA_SUPERVISOR: "Aprobada por responsable directo",
   EN_VALIDACION_CALIDAD: "En validación Calidad/Inocuidad",
   EN_VALIDACION_SEGURIDAD: "En validación Seguridad",
   EN_VALIDACION_MANTENIMIENTO: "En validación Mantenimiento",
@@ -128,7 +128,7 @@ export const coreClassificationGuide = [
 ] as const;
 
 export const approvalTypeLabels: Record<ApprovalType, string> = {
-  SUPERVISOR: "Supervisor",
+  SUPERVISOR: "Responsable directo",
   CALIDAD: "Calidad/Inocuidad",
   SEGURIDAD: "Seguridad Industrial",
   MANTENIMIENTO: "Mantenimiento",
@@ -251,7 +251,7 @@ export function isOverdue(input: { dueDate: Date | null; status: IdeaStatus }): 
 }
 
 export const kanbanColumns: Array<{ title: string; statuses: IdeaStatus[] }> = [
-  { title: "En revisión de supervisor", statuses: ["REGISTRADA", "EN_REVISION_SUPERVISOR"] },
+  { title: "En revisión de responsable", statuses: ["REGISTRADA", "EN_REVISION_SUPERVISOR"] },
   {
     title: "En validación",
     statuses: ["APROBADA_SUPERVISOR", "EN_VALIDACION_CALIDAD", "EN_VALIDACION_SEGURIDAD", "EN_VALIDACION_MANTENIMIENTO"]

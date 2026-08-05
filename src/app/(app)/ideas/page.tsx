@@ -1,6 +1,6 @@
 import { IdeaStatus, Prisma } from "@prisma/client";
 import Link from "next/link";
-import { ArrowRight, CalendarDays, Download, Filter, RotateCcw, Search } from "lucide-react";
+import { ArrowRight, CalendarDays, CheckCircle2, Download, Filter, RotateCcw, Search } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
@@ -9,7 +9,7 @@ import { classificationLabels, ideaCategoryLabels, priorityLabels, statusLabels 
 import { prisma } from "@/lib/prisma";
 
 type IdeasPageProps = {
-  searchParams: Promise<{ q?: string; status?: string; area?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; area?: string; success?: string }>;
 };
 
 export default async function IdeasPage({ searchParams }: IdeasPageProps) {
@@ -45,6 +45,10 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
           </Link>
         }
       />
+
+      {query.success === "eliminada" ? (
+        <div className="alert alert-success mb-5" role="status"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">La idea cancelada se eliminó definitivamente.</span></div>
+      ) : null}
 
       <form className="surface mb-5 rounded-lg p-4" method="get">
         <div className="mb-3 flex items-center gap-2 text-sm font-extrabold text-ink">
@@ -115,7 +119,7 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Folio</th><th>Fecha</th><th>Área</th><th>Categoría</th><th>Colaborador</th><th>Problema</th><th>Supervisor</th><th>Estatus</th><th>Prioridad</th><th>Clasificación</th><th>Compromiso</th><th>Días</th><th>ProbocaCoins</th><th><span className="sr-only">Acción</span></th>
+                <th>Folio</th><th>Fecha</th><th>Área</th><th>Categoría</th><th>Colaborador</th><th>Problema</th><th>Responsable directo</th><th>Estatus</th><th>Prioridad</th><th>Clasificación</th><th>Compromiso</th><th>Días</th><th>ProbocaCoins</th><th><span className="sr-only">Acción</span></th>
               </tr>
             </thead>
             <tbody>

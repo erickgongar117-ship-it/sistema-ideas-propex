@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "crypto";
 import {
   CoinSourceType,
   CoinTransactionType,
@@ -27,6 +28,16 @@ export type CoinTransactionInput = {
   sourceType: CoinSourceType;
   sourceId?: string | null;
   amount: number;
+  description: string;
+  createdById?: string | null;
+  occurredAt?: Date;
+};
+
+export type CoinSourceReconciliationInput = {
+  participantId: string;
+  sourceType: Exclude<CoinSourceType, "MANUAL">;
+  sourceId: string;
+  targetAmount: number;
   description: string;
   createdById?: string | null;
   occurredAt?: Date;
@@ -140,7 +151,10 @@ export async function resolveParticipantFromCollaborator(
     ? await database.participant.findUnique({ where: { employeeNumber } })
     : email
       ? await database.participant.findFirst({ where: { email }, orderBy: { createdAt: "asc" } })
-      : null;
+      : await database.participant.findFirst({
+          where: { name, orgUnitId },
+          orderBy: { createdAt: "asc" }
+        });
 
   if (existing) {
     return database.participant.update({
@@ -221,6 +235,39 @@ export async function getParticipantBalance(
     _sum: { amount: true }
   });
   return result._sum.amount ?? 0;
+}
+
+export async function reconcileCoinSourceAmount(
+  input: CoinSourceReconciliationInput,
+  database: CoinDatabase = prisma
+) {
+  const targetAmount = Math.max(0, Math.trunc(input.targetAmount));
+  const current = await database.coinTransaction.aggregate({
+    where: {
+      participantId: input.participantId,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId
+    },
+    _sum: { amount: true }
+  });
+  const currentAmount = current._sum.amount ?? 0;
+  const difference = targetAmount - currentAmount;
+  if (!difference) return null;
+
+  const type = currentAmount === 0 && difference > 0
+    ? CoinTransactionType.AWARD
+    : CoinTransactionType.ADJUSTMENT;
+  return upsertCoinTransaction({
+    reference: `${input.sourceType}:${input.sourceId}:reconcile:${randomUUID()}`,
+    participantId: input.participantId,
+    type,
+    sourceType: input.sourceType,
+    sourceId: input.sourceId,
+    amount: difference,
+    description: input.description,
+    createdById: input.createdById,
+    occurredAt: input.occurredAt
+  }, database);
 }
 
 export async function getParticipantBalances(participantIds?: string[]) {

@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 type FollowUpView = "pendientes" | "seguimiento" | "equipo";
-type PageProps = { searchParams: Promise<{ vista?: string }> };
+type PageProps = { searchParams: Promise<{ vista?: string; error?: string }> };
 
 const terminalIdeaStatuses = new Set<IdeaStatus>([
   "RECHAZADA_SUPERVISOR",
@@ -27,6 +27,7 @@ const terminalIdeaStatuses = new Set<IdeaStatus>([
   "CANCELADA"
 ]);
 const activeWorkStatuses = new Set<WorkItemStatus>(["PENDIENTE", "EN_PROCESO", "BLOQUEADA"]);
+const initialReviewStatuses = new Set<IdeaStatus>(["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"]);
 const mcActionStatuses = new Set<IdeaStatus>([
   "APROBADA_PARA_IMPLEMENTAR",
   "CLASIFICACION_MEJORA_CONTINUA",
@@ -76,6 +77,9 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
   const [user, query] = await Promise.all([requireUser(), searchParams]);
   const requestedView = query.vista;
   const activeView: FollowUpView = requestedView === "seguimiento" || requestedView === "equipo" ? requestedView : "pendientes";
+  const errorMessage = query.error === "sin_permiso"
+    ? "No puedes decidir esa idea porque no está asignada a tu ruta ni al equipo que supervisas."
+    : null;
   const globalAccess = hasGlobalIdeaAccess(user);
   const [supervisableOrgUnitIds, manageableOrgUnitIds, moduleAccess] = await Promise.all([
     globalAccess ? Promise.resolve([]) : getSupervisableOrgUnitIds(user.id),
@@ -167,16 +171,32 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
   const manageableScope = new Set(manageableOrgUnitIds);
 
   for (const idea of ideas) {
-    const pendingApproval = idea.approvals.find((approval) => approval.assignedToId === user.id && approval.status === "PENDING");
+    const pendingInitialApproval = idea.approvals.find((approval) =>
+      approval.type === "SUPERVISOR" && approval.assignedToId === user.id && ["PENDING", "MORE_INFO"].includes(approval.status)
+    );
+    const pendingApproval = idea.approvals.find((approval) =>
+      approval.type !== "SUPERVISOR" && approval.assignedToId === user.id && approval.status === "PENDING"
+    );
     const pendingSupport = idea.supportRequests.find((request) => request.assignedToId === user.id && request.status === "PENDING");
-    const supervisorAction = idea.supervisorId === user.id && ["REGISTRADA", "EN_REVISION_SUPERVISOR"].includes(idea.status);
+    const orgUnit = idea.area.organizationUnit;
+    const directInitialReview = Boolean(
+      pendingInitialApproval ||
+      idea.supervisorId === user.id ||
+      idea.area.supervisorId === user.id ||
+      idea.escalationRule?.reviewerMembership.userId === user.id
+    );
+    const teamInitialReview = Boolean(
+      (orgUnit?.id && supervisedScope.has(orgUnit.id)) ||
+      (idea.escalationRule?.orgUnitId && supervisedScope.has(idea.escalationRule.orgUnitId))
+    );
+    const supervisorAction = initialReviewStatuses.has(idea.status) && (directInitialReview || teamInitialReview);
     const ownerAction = idea.implementationOwnerId === user.id && ["APROBADA_PARA_IMPLEMENTAR", "EN_IMPLEMENTACION", "VENCIDA"].includes(idea.status);
     const unassignedValidation = globalAccess && (
       idea.approvals.some((approval) => approval.status === "PENDING" && !approval.assignedToId) ||
       idea.supportRequests.some((request) => request.status === "PENDING" && !request.assignedToId)
     );
     const globalAction = globalAccess && mcActionStatuses.has(idea.status);
-    const needsAction = Boolean(pendingApproval || pendingSupport || supervisorAction || ownerAction || unassignedValidation || globalAction);
+    const needsAction = Boolean(pendingInitialApproval || pendingApproval || pendingSupport || supervisorAction || ownerAction || unassignedValidation || globalAction);
     const directAssignment = Boolean(
       idea.supervisorId === user.id ||
       idea.implementationOwnerId === user.id ||
@@ -187,16 +207,15 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       idea.escalationRule?.reviewerMembership.userId === user.id
     );
     const view: FollowUpView = needsAction ? "pendientes" : directAssignment ? "seguimiento" : "equipo";
-    const orgUnit = idea.area.organizationUnit;
     const dueDate = idea.dueDate;
     const supportLabel = pendingSupport ? `Apoyo solicitado · ${pendingSupport.orgUnit.name}` : null;
     const followerLabel = idea.followers[0]?.label;
-    const assignment = pendingApproval
-      ? "Validación pendiente"
-      : supportLabel
+    const assignment = supervisorAction
+      ? "Aprobación como responsable directo"
+      : pendingApproval
+        ? "Validación pendiente"
+        : supportLabel
         ? supportLabel
-        : supervisorAction
-          ? "Revisión directa"
           : ownerAction
             ? "Implementación a tu cargo"
             : unassignedValidation
@@ -344,6 +363,13 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         title="Mis seguimientos"
         description="Ideas, Kaizen y recorridos GENBA reunidos por responsabilidad y nivel de atención."
       />
+
+      {errorMessage ? (
+        <div className="alert alert-danger mb-5" role="alert">
+          <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+          <span className="font-bold">{errorMessage}</span>
+        </div>
+      ) : null}
 
       <section className="hidden gap-3 sm:grid sm:grid-cols-3">
         <KpiCard detail="Requieren decisión o avance" icon={CircleAlert} label="Pendientes" tone="amber" value={buckets.pendientes.length} />

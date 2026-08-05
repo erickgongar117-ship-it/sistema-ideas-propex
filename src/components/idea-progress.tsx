@@ -1,7 +1,7 @@
 import type { IdeaStatus } from "@prisma/client";
 import { Check, X } from "lucide-react";
 
-const stages = ["Captura", "Supervisor", "Validaciones", "Implementación", "Cierre"];
+const stages = ["Captura", "Jefe directo", "Validaciones", "Implementación", "Cierre"];
 
 const stageByStatus: Record<IdeaStatus, number> = {
   REGISTRADA: 0,

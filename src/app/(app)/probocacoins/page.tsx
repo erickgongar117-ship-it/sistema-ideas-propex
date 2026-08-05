@@ -49,6 +49,7 @@ const errorMessages: Record<string, string> = {
   cantidad: "Para premios y gastos captura una cantidad positiva.",
   origen_tipo: "Solo los premios pueden vincularse directamente con una idea, Kaizen o GENBA.",
   origen: "El elemento vinculado ya no existe o no es valido.",
+  origen_duplicado: "Esa persona ya recibió un premio vinculado al mismo registro.",
   participante: "La persona seleccionada no esta disponible.",
   saldo: "El movimiento fue rechazado porque dejaria un saldo negativo."
 };
@@ -168,7 +169,7 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
       {errorMessage ? <div className="alert alert-danger mb-5"><X className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
       {successMessage ? <div className="alert alert-success mb-5"><CircleDollarSign className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{successMessage}</span></div> : null}
 
-      <section className="mb-7 grid gap-3 border-y border-line py-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumen financiero">
+      <section className="mb-7 grid grid-cols-2 gap-2 border-y border-line py-4 sm:gap-3 xl:grid-cols-4" aria-label="Resumen financiero">
         <Metric icon={<WalletCards className="h-4 w-4" aria-hidden />} label="Saldo vigente" value={totalBalance.toLocaleString("es-MX")} note={`${holders} personas con saldo`} />
         <Metric icon={<ArrowUpRight className="h-4 w-4" aria-hidden />} label="Premios" value={awarded.toLocaleString("es-MX")} note="ProbocaCoins entregadas" />
         <Metric icon={<ArrowDownRight className="h-4 w-4" aria-hidden />} label="Gastos" value={redeemed.toLocaleString("es-MX")} note="Canjeadas en recompensas" />

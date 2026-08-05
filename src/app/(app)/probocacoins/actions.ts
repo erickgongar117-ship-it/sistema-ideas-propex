@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import { CoinSourceType, CoinTransactionType } from "@prisma/client";
+import { CoinSourceType, CoinTransactionType, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
@@ -15,6 +15,21 @@ import { prisma } from "@/lib/prisma";
 const financeRoles = ["ADMIN", "MEJORA_CONTINUA"] as const;
 
 class InsufficientBalanceError extends Error {}
+class DuplicateSourceAwardError extends Error {}
+
+async function serializableTransaction<T>(operation: (transaction: Prisma.TransactionClient) => Promise<T>) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      });
+    } catch (error) {
+      const retryable = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+      if (!retryable || attempt === 2) throw error;
+    }
+  }
+  throw new Error("No fue posible conciliar el movimiento.");
+}
 
 function textValue(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -99,12 +114,26 @@ export async function createCoinTransactionAction(formData: FormData) {
   const signedAmount = normalizeCoinAmount(requestedType, amount);
 
   try {
-    await prisma.$transaction(async (transaction) => {
+    await serializableTransaction(async (transaction) => {
       const currentBalance = await getParticipantBalance(participantId, transaction);
       if (currentBalance + signedAmount < 0) throw new InsufficientBalanceError();
+      if (linkedSource && requestedType === CoinTransactionType.AWARD) {
+        const existingAward = await transaction.coinTransaction.findFirst({
+          where: {
+            participantId,
+            type: CoinTransactionType.AWARD,
+            sourceType: linkedSource.sourceType,
+            sourceId: linkedSource.sourceId
+          },
+          select: { id: true }
+        });
+        if (existingAward) throw new DuplicateSourceAwardError();
+      }
 
       await upsertCoinTransaction({
-        reference: `ledger:${randomUUID()}`,
+        reference: linkedSource
+          ? `linked:${linkedSource.sourceType}:${linkedSource.sourceId}:${participantId}`
+          : `ledger:${randomUUID()}`,
         participantId,
         type: requestedType,
         sourceType,
@@ -118,6 +147,9 @@ export async function createCoinTransactionAction(formData: FormData) {
   } catch (error) {
     if (error instanceof InsufficientBalanceError) {
       redirect(financePath({ error: "saldo", participant: participantId }));
+    }
+    if (error instanceof DuplicateSourceAwardError) {
+      redirect(financePath({ error: "origen_duplicado", participant: participantId }));
     }
     throw error;
   }

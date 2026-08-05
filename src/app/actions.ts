@@ -7,14 +7,15 @@ import { z } from "zod";
 import { Prisma, type ApprovalType, type Classification, type GenbaStatus, type IdeaCategory, type KaizenStatus, type Priority, type Role, type WorkItemStatus } from "@prisma/client";
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
-import { approvalTypeForRole, genbaDepartments, impactOptions, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
+import { genbaDepartments, impactOptions, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
 import { saveUpload } from "@/lib/files";
 import { createKaizenFromIdea } from "@/lib/kaizen-from-idea";
 import { managerialFactorForRule } from "@/lib/managerial-evaluation";
 import { userModuleAccess } from "@/lib/module-access";
 import { ideaMailBody, notify } from "@/lib/notifications";
-import { resolveParticipantFromCollaborator, resolveParticipantFromUser, upsertCoinTransaction } from "@/lib/coins";
-import { canViewIdea } from "@/lib/idea-access";
+import { reconcileCoinSourceAmount, resolveParticipantFromCollaborator, resolveParticipantFromUser } from "@/lib/coins";
+import { canDecideDepartmentApproval, canDecideInitialIdea, canViewIdea } from "@/lib/idea-access";
+import { hardDeleteIdeaByFolio } from "@/lib/hard-delete";
 import { prisma } from "@/lib/prisma";
 import { managerFollowersForMembership, supportFlags, syncIdeaSupportRequests, validSupportUnits } from "@/lib/support-routing";
 import { appBaseUrl } from "@/lib/url";
@@ -33,6 +34,20 @@ const dateOrNull = (formData: FormData, key: string) => {
   return value ? new Date(`${value}T12:00:00`) : null;
 };
 const isImprovementManager = (role: Role) => role === "ADMIN" || role === "MEJORA_CONTINUA";
+
+async function serializableTransaction<T>(operation: (transaction: Prisma.TransactionClient) => Promise<T>) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      });
+    } catch (error) {
+      const retryable = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+      if (!retryable || attempt === 2) throw error;
+    }
+  }
+  throw new Error("No fue posible completar la operacion atomica.");
+}
 
 const ideaSchema = z.object({
   collaboratorName: z.string().min(2),
@@ -195,11 +210,16 @@ export async function submitIdeaAction(formData: FormData) {
         where: {
           orgUnitId: area.organizationUnit.id,
           active: true,
+          reviewerMembership: { is: { active: true, user: { is: { active: true } } } },
           ...(requestedRouteId ? { id: requestedRouteId } : { isDefault: true })
         },
         include: { reviewerMembership: { include: { user: true } } }
       }) ?? await prisma.orgEscalationRule.findFirst({
-        where: { orgUnitId: area.organizationUnit.id, active: true },
+        where: {
+          orgUnitId: area.organizationUnit.id,
+          active: true,
+          reviewerMembership: { is: { active: true, user: { is: { active: true } } } }
+        },
         include: { reviewerMembership: { include: { user: true } } },
         orderBy: [{ sortOrder: "asc" }, { submitterLevel: "asc" }]
       })
@@ -207,6 +227,9 @@ export async function submitIdeaAction(formData: FormData) {
   if (requestedRouteId && !escalationRule) redirect(`/captura/${areaCode}?error=ruta`);
   const supervisorId = escalationRule?.reviewerMembership.userId ?? area.supervisorId;
   const supervisor = escalationRule?.reviewerMembership.user ?? area.supervisor;
+  if (!supervisorId || !supervisor?.active) {
+    redirect(`/captura/${areaCode}?error=sin_responsable`);
+  }
 
   const selectedImpacts = formData
     .getAll("impactTypes")
@@ -334,33 +357,50 @@ export async function submitIdeaAction(formData: FormData) {
 }
 
 export async function supervisorDecisionAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "SUPERVISOR"]);
+  const user = await requireUser();
   const ideaId = text(formData, "ideaId");
   const decision = text(formData, "decision");
   const comments = text(formData, "comments");
 
+  if (!["APROBAR", "RECHAZAR", "SOLICITAR_INFORMACION"].includes(decision)) {
+    redirect(`/ideas/${ideaId}?error=decision`);
+  }
+
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
-    include: { area: { include: { organizationUnit: true } }, supervisor: true, supportRequests: true }
+    include: { area: { include: { organizationUnit: true } }, supervisor: true, supportRequests: true, approvals: true }
   });
-  if (user.role === "SUPERVISOR" && idea.supervisorId !== user.id) redirect("/supervisor");
+  if (!(await canDecideInitialIdea(user, ideaId))) redirect("/seguimientos?error=sin_permiso");
+  const initialApproval = idea.approvals.find((approval) => approval.type === "SUPERVISOR");
+  if (!initialApproval || !["PENDING", "MORE_INFO"].includes(initialApproval.status)) {
+    redirect(`/ideas/${ideaId}?error=estado_revision`);
+  }
+
+  if ((decision === "RECHAZAR" || decision === "SOLICITAR_INFORMACION") && !comments) {
+    redirect(`/ideas/${ideaId}?error=${decision === "RECHAZAR" ? "justificacion" : "informacion"}`);
+  }
+  const claimed = await prisma.approval.updateMany({
+    where: { ideaId, type: "SUPERVISOR", status: { in: ["PENDING", "MORE_INFO"] } },
+    data: {
+      assignedToId: user.id,
+      status: decision === "APROBAR" ? "APPROVED" : decision === "RECHAZAR" ? "REJECTED" : "MORE_INFO",
+      decision: decision === "APROBAR" ? "APROBAR" : decision === "RECHAZAR" ? "RECHAZAR" : "SOLICITAR_INFORMACION",
+      comments: comments || null,
+      decidedAt: new Date()
+    }
+  });
+  if (claimed.count !== 1) redirect(`/ideas/${ideaId}?error=estado_revision`);
 
   if (decision === "RECHAZAR") {
-    if (!comments) redirect(`/ideas/${ideaId}?error=justificacion`);
-    await prisma.approval.upsert({
-      where: { ideaId_type: { ideaId, type: "SUPERVISOR" } },
-      update: { status: "REJECTED", decision: "RECHAZAR", comments, decidedAt: new Date(), assignedToId: user.id },
-      create: { ideaId, type: "SUPERVISOR", status: "REJECTED", decision: "RECHAZAR", comments, decidedAt: new Date(), assignedToId: user.id }
-    });
     await prisma.idea.update({
       where: { id: ideaId },
-      data: { status: "RECHAZADA_SUPERVISOR", rejectionReason: comments }
+      data: { status: "RECHAZADA_SUPERVISOR", supervisorId: user.id, rejectionReason: comments }
     });
     await auditLog({ entity: "Idea", entityId: ideaId, action: "SUPERVISOR_REJECTED", userId: user.id, details: { comments } });
     await notify({
       ideaId,
       to: idea.collaboratorEmail ?? "",
-      subject: `Idea rechazada por supervisor - Folio ${idea.folio} - Area ${idea.area.code}`,
+      subject: `Idea rechazada por responsable directo - Folio ${idea.folio} - Area ${idea.area.code}`,
       body: ideaMailBody({
         folio: idea.folio,
         area: idea.area.code,
@@ -373,23 +413,9 @@ export async function supervisorDecisionAction(formData: FormData) {
   }
 
   if (decision === "SOLICITAR_INFORMACION") {
-    if (!comments) redirect(`/ideas/${ideaId}?error=informacion`);
-    await prisma.approval.upsert({
-      where: { ideaId_type: { ideaId, type: "SUPERVISOR" } },
-      update: { status: "MORE_INFO", decision: "SOLICITAR_INFORMACION", comments, decidedAt: new Date(), assignedToId: user.id },
-      create: {
-        ideaId,
-        type: "SUPERVISOR",
-        status: "MORE_INFO",
-        decision: "SOLICITAR_INFORMACION",
-        comments,
-        decidedAt: new Date(),
-        assignedToId: user.id
-      }
-    });
     await prisma.idea.update({
       where: { id: ideaId },
-      data: { status: "SOLICITUD_INFORMACION", moreInfoRequest: comments }
+      data: { status: "SOLICITUD_INFORMACION", supervisorId: user.id, moreInfoRequest: comments }
     });
     await auditLog({ entity: "Idea", entityId: ideaId, action: "SUPERVISOR_MORE_INFO", userId: user.id, details: { comments } });
     await notify({
@@ -440,29 +466,22 @@ export async function supervisorDecisionAction(formData: FormData) {
 }
 
 export async function validationDecisionAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"]);
+  const user = await requireUser();
   const ideaId = text(formData, "ideaId");
   const decision = text(formData, "decision");
   const comments = text(formData, "comments");
   const explicitType = text(formData, "type") as ApprovalType;
-  const type = user.role === "ADMIN" && explicitType ? explicitType : approvalTypeForRole(user.role);
+  const type = explicitType;
   if (!type || !requiredApprovalTypes({ impactsQuality: true, impactsSafety: true, requiresMaintenance: true }).includes(type)) redirect("/dashboard");
+  if (!["APROBAR", "RECHAZAR", "SOLICITAR_INFORMACION"].includes(decision)) redirect(`/ideas/${ideaId}?error=decision`);
   if ((decision === "RECHAZAR" || decision === "SOLICITAR_INFORMACION") && !comments) redirect(`/ideas/${ideaId}?error=justificacion`);
+  if (!(await canDecideDepartmentApproval(user, ideaId, type))) redirect(`/ideas/${ideaId}?error=sin_permiso`);
 
   const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, include: { area: true, supervisor: true } });
   const status = decision === "APROBAR" ? "APPROVED" : decision === "RECHAZAR" ? "REJECTED" : "MORE_INFO";
-  await prisma.approval.upsert({
-    where: { ideaId_type: { ideaId, type } },
-    update: {
-      assignedToId: user.id,
-      status,
-      decision: decision === "APROBAR" ? "APROBAR" : decision === "RECHAZAR" ? "RECHAZAR" : "SOLICITAR_INFORMACION",
-      comments: comments || null,
-      decidedAt: new Date()
-    },
-    create: {
-      ideaId,
-      type,
+  const updatedApproval = await prisma.approval.updateMany({
+    where: { ideaId, type, status: { in: ["PENDING", "MORE_INFO"] } },
+    data: {
       assignedToId: user.id,
       status,
       decision: decision === "APROBAR" ? "APROBAR" : decision === "RECHAZAR" ? "RECHAZAR" : "SOLICITAR_INFORMACION",
@@ -470,6 +489,7 @@ export async function validationDecisionAction(formData: FormData) {
       decidedAt: new Date()
     }
   });
+  if (updatedApproval.count !== 1) redirect(`/ideas/${ideaId}?error=estado_revision`);
 
   if (decision === "RECHAZAR") {
     await prisma.idea.update({ where: { id: ideaId }, data: { status: "RECHAZADA_VALIDACION", rejectionReason: comments } });
@@ -523,8 +543,8 @@ export async function supportDecisionAction(formData: FormData) {
   if (!authorized || !request.activatedAt) redirect(roleHomePath(user.role));
 
   const status = decision === "APROBAR" ? "APPROVED" : decision === "RECHAZAR" ? "REJECTED" : "MORE_INFO";
-  await prisma.ideaSupportRequest.update({
-    where: { id: request.id },
+  const updatedRequest = await prisma.ideaSupportRequest.updateMany({
+    where: { id: request.id, activatedAt: { not: null }, status: { in: ["PENDING", "MORE_INFO"] } },
     data: {
       assignedToId: user.id,
       status,
@@ -533,6 +553,7 @@ export async function supportDecisionAction(formData: FormData) {
       decidedAt: new Date()
     }
   });
+  if (updatedRequest.count !== 1) redirect(`/ideas/${request.ideaId}?error=estado_revision`);
   if (decision === "RECHAZAR") {
     await prisma.idea.update({ where: { id: request.ideaId }, data: { status: "RECHAZADA_VALIDACION", rejectionReason: comments } });
   } else if (decision === "SOLICITAR_INFORMACION") {
@@ -634,7 +655,9 @@ export async function classifyIdeaAction(formData: FormData) {
   const priority = text(formData, "priority") as Priority;
   const mcComments = text(formData, "mcComments");
   const currentIdea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { status: true } });
-  if (["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(currentIdea.status)) redirect(`/ideas/${ideaId}?error=justificacion`);
+  if (!["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA"].includes(currentIdea.status)) {
+    redirect(`/ideas/${ideaId}?error=flujo`);
+  }
 
   await prisma.idea.update({
     where: { id: ideaId },
@@ -658,7 +681,9 @@ export async function assignImplementationAction(formData: FormData) {
   const priority = text(formData, "priority") as Priority;
   if (!ownerId || !dueDateText) redirect(`/ideas/${ideaId}?error=asignacion`);
   const currentIdea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { status: true, classification: true } });
-  if (["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(currentIdea.status)) redirect(`/ideas/${ideaId}?error=justificacion`);
+  if (!currentIdea.classification || !["CLASIFICACION_MEJORA_CONTINUA", "EN_IMPLEMENTACION"].includes(currentIdea.status)) {
+    redirect(`/ideas/${ideaId}?error=flujo`);
+  }
 
   const idea = await prisma.idea.update({
     where: { id: ideaId },
@@ -737,7 +762,8 @@ export async function implementationUpdateAction(formData: FormData) {
   const canUpdate = isImprovementManager(user.role) ||
     idea.implementationOwnerId === user.id ||
     idea.supervisorId === user.id ||
-    Boolean(activityMembership);
+    Boolean(activityMembership) ||
+    await canDecideInitialIdea(user, ideaId);
   if (!canUpdate) redirect(`/ideas/${ideaId}`);
 
   const afterEvidence = await saveUpload(formData.get("afterEvidence") as File | null, `${idea.folio}-after`);
@@ -847,63 +873,63 @@ export async function closeIdeaAction(formData: FormData) {
     pointAdjustments.set(rule.id, Number.isFinite(value) ? Math.max(0, value) : rule.points);
   }
   const totalPoints = selectedRules.reduce((sum, rule) => sum + (pointAdjustments.get(rule.id) ?? rule.points), 0);
-  await prisma.ideaPointRule.deleteMany({ where: { ideaId } });
-  for (const rule of selectedRules) {
-    await prisma.ideaPointRule.create({
-      data: {
+  await serializableTransaction(async (transaction) => {
+    await transaction.ideaPointRule.deleteMany({ where: { ideaId } });
+    for (const rule of selectedRules) {
+      await transaction.ideaPointRule.create({
+        data: {
+          ideaId,
+          pointRuleId: rule.id,
+          points: pointAdjustments.get(rule.id) ?? rule.points
+        }
+      });
+    }
+
+    await transaction.approval.upsert({
+      where: { ideaId_type: { ideaId, type: "MEJORA_CONTINUA_FINAL" } },
+      update: { assignedToId: user.id, status: "APPROVED", decision: "APROBAR", decidedAt: new Date(), comments: wasClosed ? "ProbocaCoins revisadas y otorgadas nuevamente." : "Cierre final validado." },
+      create: {
         ideaId,
-        pointRuleId: rule.id,
-        points: pointAdjustments.get(rule.id) ?? rule.points
+        type: "MEJORA_CONTINUA_FINAL",
+        assignedToId: user.id,
+        status: "APPROVED",
+        decision: "APROBAR",
+        decidedAt: new Date(),
+        comments: wasClosed ? "ProbocaCoins revisadas y otorgadas nuevamente." : "Cierre final validado."
       }
     });
-  }
 
-  await prisma.approval.upsert({
-    where: { ideaId_type: { ideaId, type: "MEJORA_CONTINUA_FINAL" } },
-    update: { assignedToId: user.id, status: "APPROVED", decision: "APROBAR", decidedAt: new Date(), comments: wasClosed ? "ProbocaCoins revisadas y otorgadas nuevamente." : "Cierre final validado." },
-    create: {
-      ideaId,
-      type: "MEJORA_CONTINUA_FINAL",
-      assignedToId: user.id,
-      status: "APPROVED",
-      decision: "APROBAR",
-      decidedAt: new Date(),
-      comments: wasClosed ? "ProbocaCoins revisadas y otorgadas nuevamente." : "Cierre final validado."
-    }
-  });
-
-  await prisma.idea.update({
-    where: { id: ideaId },
-    data: {
-      status: "CERRADA",
-      closedAt: idea.closedAt ?? new Date(),
-      pointsAssigned: totalPoints
-    }
-  });
-  if (idea.participantId && totalPoints > 0) {
-    await upsertCoinTransaction({
-      reference: `IDEA:${idea.id}`,
-      participantId: idea.participantId,
-      type: "AWARD",
-      sourceType: "IDEA",
-      sourceId: idea.id,
-      amount: totalPoints,
-      description: `ProbocaCoins por cierre de la idea ${idea.folio}`,
-      createdById: user.id,
-      occurredAt: idea.closedAt ?? new Date()
-    });
-  } else {
-    await prisma.coinTransaction.deleteMany({ where: { reference: `IDEA:${idea.id}` } });
-  }
-  if (wasClosed) {
-    await prisma.comment.create({
+    await transaction.idea.update({
+      where: { id: ideaId },
       data: {
-        ideaId,
-        userId: user.id,
-        comment: `Mejora Continua otorgo o ajusto ${totalPoints} ProbocaCoins.`
+        status: "CERRADA",
+        closedAt: idea.closedAt ?? new Date(),
+        pointsAssigned: totalPoints
       }
     });
-  }
+    if (idea.participantId) {
+      await reconcileCoinSourceAmount({
+        participantId: idea.participantId,
+        sourceType: "IDEA",
+        sourceId: idea.id,
+        targetAmount: totalPoints,
+        description: wasClosed
+          ? `Ajuste de ProbocaCoins de la idea ${idea.folio}`
+          : `ProbocaCoins por cierre de la idea ${idea.folio}`,
+        createdById: user.id,
+        occurredAt: idea.closedAt ?? new Date()
+      }, transaction);
+    }
+    if (wasClosed) {
+      await transaction.comment.create({
+        data: {
+          ideaId,
+          userId: user.id,
+          comment: `Mejora Continua otorgo o ajusto ${totalPoints} ProbocaCoins.`
+        }
+      });
+    }
+  });
   await auditLog({
     entity: "Idea",
     entityId: ideaId,
@@ -955,15 +981,26 @@ export async function removeIdeaPointsAction(formData: FormData) {
     include: { pointRuleSelections: { include: { pointRule: true } } }
   });
 
-  await prisma.ideaPointRule.deleteMany({ where: { ideaId } });
-  await prisma.idea.update({ where: { id: ideaId }, data: { pointsAssigned: 0 } });
-  await prisma.coinTransaction.deleteMany({ where: { reference: `IDEA:${ideaId}` } });
-  await prisma.comment.create({
-    data: {
-      ideaId,
-      userId: user.id,
-      comment: `Mejora Continua retiro las ProbocaCoins. Motivo: ${reason}`
+  await serializableTransaction(async (transaction) => {
+    await transaction.ideaPointRule.deleteMany({ where: { ideaId } });
+    await transaction.idea.update({ where: { id: ideaId }, data: { pointsAssigned: 0 } });
+    if (idea.participantId) {
+      await reconcileCoinSourceAmount({
+        participantId: idea.participantId,
+        sourceType: "IDEA",
+        sourceId: idea.id,
+        targetAmount: 0,
+        description: `Retiro de ProbocaCoins de la idea ${idea.folio}: ${reason}`,
+        createdById: user.id
+      }, transaction);
     }
+    await transaction.comment.create({
+      data: {
+        ideaId,
+        userId: user.id,
+        comment: `Mejora Continua retiro las ProbocaCoins. Motivo: ${reason}`
+      }
+    });
   });
   await auditLog({
     entity: "Idea",
@@ -990,6 +1027,26 @@ export async function cancelIdeaAction(formData: FormData) {
   await auditLog({ entity: "Idea", entityId: ideaId, action: "IDEA_CANCELLED", userId: user.id, details: { reason } });
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}`);
+}
+
+export async function deleteCancelledIdeaAction(formData: FormData) {
+  await requireUser(["ADMIN"]);
+  const ideaId = text(formData, "ideaId");
+  const confirmation = text(formData, "confirmation").toUpperCase();
+  const idea = await prisma.idea.findUnique({
+    where: { id: ideaId },
+    select: { folio: true, status: true }
+  });
+  if (!idea) redirect("/ideas");
+  if (idea.status !== "CANCELADA") redirect(`/ideas/${ideaId}?error=eliminar_estado`);
+  if (confirmation !== `ELIMINAR ${idea.folio}`) redirect(`/ideas/${ideaId}?error=eliminar_confirmacion`);
+
+  await hardDeleteIdeaByFolio(idea.folio);
+  revalidatePath("/dashboard");
+  revalidatePath("/ideas");
+  revalidatePath("/kanban");
+  revalidatePath("/reportes");
+  redirect("/ideas?success=eliminada");
 }
 
 export async function addCommentAction(formData: FormData) {

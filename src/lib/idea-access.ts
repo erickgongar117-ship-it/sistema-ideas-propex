@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma, User } from "@prisma/client";
+import type { ApprovalType, Prisma, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export type IdeaAccessUser = Pick<User, "id" | "role">;
@@ -115,6 +115,85 @@ export async function getSupervisableOrgUnits(userId: string): Promise<Supervisa
     },
     orderBy: [{ plant: { name: "asc" } }, { sortOrder: "asc" }, { name: "asc" }]
   });
+}
+
+export function buildInitialReviewWhere(
+  user: IdeaAccessUser,
+  supervisableOrgUnitIds: string[] = []
+): Prisma.IdeaWhereInput {
+  if (user.role === "ADMIN") return {};
+
+  const assignments: Prisma.IdeaWhereInput[] = [
+    { supervisorId: user.id },
+    { area: { is: { supervisorId: user.id } } },
+    { approvals: { some: { type: "SUPERVISOR", assignedToId: user.id } } },
+    {
+      escalationRule: {
+        is: {
+          reviewerMembership: {
+            is: { userId: user.id, active: true }
+          }
+        }
+      }
+    }
+  ];
+
+  if (supervisableOrgUnitIds.length) {
+    assignments.push(
+      {
+        area: {
+          is: {
+            organizationUnit: {
+              is: { id: { in: supervisableOrgUnitIds } }
+            }
+          }
+        }
+      },
+      { escalationRule: { is: { orgUnitId: { in: supervisableOrgUnitIds } } } },
+      { participant: { is: { orgUnitId: { in: supervisableOrgUnitIds } } } }
+    );
+  }
+
+  return { OR: assignments };
+}
+
+export async function canDecideInitialIdea(user: IdeaAccessUser, ideaId: string) {
+  if (user.role === "ADMIN") return true;
+  const supervisableOrgUnitIds = await getSupervisableOrgUnitIds(user.id);
+  const match = await prisma.idea.findFirst({
+    where: {
+      AND: [
+        { id: ideaId },
+        buildInitialReviewWhere(user, supervisableOrgUnitIds)
+      ]
+    },
+    select: { id: true }
+  });
+  return Boolean(match);
+}
+
+export function buildDepartmentApprovalWhere(
+  user: IdeaAccessUser,
+  type: ApprovalType
+): Prisma.ApprovalWhereInput {
+  if (user.role === "ADMIN") return { type };
+  return { type, assignedToId: user.id };
+}
+
+export async function canDecideDepartmentApproval(
+  user: IdeaAccessUser,
+  ideaId: string,
+  type: ApprovalType
+) {
+  const approval = await prisma.approval.findFirst({
+    where: {
+      ideaId,
+      status: { in: ["PENDING", "MORE_INFO"] },
+      ...buildDepartmentApprovalWhere(user, type)
+    },
+    select: { id: true }
+  });
+  return Boolean(approval);
 }
 
 export function buildIdeaVisibilityWhere(
