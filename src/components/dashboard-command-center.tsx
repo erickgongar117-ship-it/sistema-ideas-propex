@@ -93,6 +93,7 @@ type DashboardCommandCenterProps = {
   areas: string[];
   generatedAt: string;
   portfolio: DashboardPortfolio;
+  viewerRole: "ADMIN" | "MEJORA_CONTINUA";
   timing: {
     supervisor: string;
     validation: string;
@@ -206,7 +207,7 @@ function MetricCard({ label, value, detail, change, icon: Icon, visual, tone = "
   );
 }
 
-export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, timing }: DashboardCommandCenterProps) {
+export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, timing, viewerRole }: DashboardCommandCenterProps) {
   const [period, setPeriod] = useState<Period>("90");
   const [area, setArea] = useState("all");
   const [category, setCategory] = useState<"all" | IdeaCategory>("all");
@@ -270,11 +271,11 @@ export function DashboardCommandCenter({ ideas, areas, generatedAt, portfolio, t
   }, [currentIdeas, previousIdeas, now]);
 
   const attention = useMemo(() => [
-    { label: "Revisión de supervisor", value: currentIdeas.filter((idea) => initialStatuses.includes(idea.status)).length, href: "/supervisor", icon: Clock3, tone: "text-amber-300" },
+    { label: "Revisión de supervisor", value: currentIdeas.filter((idea) => initialStatuses.includes(idea.status)).length, href: viewerRole === "ADMIN" ? "/supervisor" : "/seguimientos?vista=equipo", icon: Clock3, tone: "text-amber-300" },
     { label: "Validaciones pendientes", value: currentIdeas.filter((idea) => validationStatuses.includes(idea.status)).length, href: "/kanban", icon: ShieldCheck, tone: "text-blue-300" },
     { label: "Acciones de Mejora Continua", value: currentIdeas.filter((idea) => ["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA", "IMPLEMENTADA", "EN_VALIDACION_FINAL"].includes(idea.status)).length, href: "/mejora", icon: Lightbulb, tone: "text-emerald-300" },
     { label: "Compromisos vencidos", value: metrics.overdue, href: "/vencidas", icon: AlertTriangle, tone: "text-rose-300" }
-  ], [currentIdeas, metrics.overdue]);
+  ], [currentIdeas, metrics.overdue, viewerRole]);
 
   const trend = useMemo(() => trendBuckets(currentIdeas, period), [currentIdeas, period]);
   const impactRows = useMemo(() => {

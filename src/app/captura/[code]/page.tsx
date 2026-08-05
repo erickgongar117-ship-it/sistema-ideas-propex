@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   Factory,
   Gauge,
+  GitBranch,
   HeartHandshake,
   ImagePlus,
   Leaf,
@@ -113,10 +114,34 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
   const missingLabels = errorFields.map((field) => fieldLabels[field] ?? field);
   const area = await prisma.area.findFirst({
     where: { code: code.toUpperCase(), active: true },
-    include: { supervisor: true }
+    include: {
+      supervisor: true,
+      organizationUnit: {
+        include: {
+          plant: true,
+          escalationRules: {
+            where: { active: true },
+            include: { reviewerMembership: { include: { user: true } } },
+            orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }, { submitterLevel: "asc" }]
+          }
+        }
+      }
+    }
   });
 
   if (!area) notFound();
+  const supportAreas = await prisma.orgUnit.findMany({
+    where: {
+      active: true,
+      isSupportArea: true,
+      ...(area.organizationUnit ? { plantId: area.organizationUnit.plantId, id: { not: area.organizationUnit.id } } : {})
+    },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: { id: true, code: true, name: true }
+  });
+  const escalationRoutes = area.organizationUnit?.escalationRules ?? [];
+  const primaryRoute = escalationRoutes.find((route) => route.isDefault) ?? escalationRoutes[0];
+  const receiverName = primaryRoute?.reviewerMembership.user.name ?? area.supervisor?.name ?? "Responsable pendiente";
 
   return (
     <main className="capture-theme min-h-screen bg-panel px-4 py-5 sm:px-6 sm:py-8">
@@ -148,9 +173,9 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
 
         <div className="my-4 grid grid-cols-3 gap-2 sm:my-5 sm:gap-3">
           {[
-            ["1", "Idea", Lightbulb],
-            ["2", "Categoría", ClipboardCheck],
-            ["3", "Enviar", Send]
+            ["1", "Tus datos", UserRound],
+            ["2", "Tu idea", Lightbulb],
+            ["3", "Apoyo y envío", Send]
           ].map(([number, label, Icon]) => {
             const StepIcon = Icon as ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
             return (
@@ -211,6 +236,23 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                 </select>
               </label>
             </div>
+            {escalationRoutes.length ? (
+              <fieldset className="mt-5 rounded-lg border border-line bg-panel p-4">
+                <legend className="px-1 text-sm font-extrabold text-ink">¿Cual es tu puesto o circunstancia? *</legend>
+                <p className="mb-3 mt-1 text-xs leading-5 text-slate-600">Esto permite enviar tu idea al jefe directo correcto.</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {escalationRoutes.map((route, index) => (
+                    <label className="capture-choice cursor-pointer" key={route.id}>
+                      <input className="peer sr-only" defaultChecked={route.isDefault || (!primaryRoute?.isDefault && index === 0)} name="escalationRuleId" required type="radio" value={route.id} />
+                      <span className="flex min-h-20 items-start gap-3 rounded-lg border border-line bg-white p-3 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-50">
+                        <GitBranch className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden />
+                        <span className="min-w-0"><span className="block text-sm font-extrabold text-ink">{route.submitterLabel}</span><span className="mt-1 block text-xs leading-4 text-slate-600">{route.circumstance || `Reporta a ${route.reviewerMembership.user.name}`}</span></span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
           </section>
 
           <section className="border-t border-line p-5 sm:p-6">
@@ -239,7 +281,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
 
           <section className="border-t border-line p-5 sm:p-6">
             <FormSectionTitle description="Indica quién participará y marca todo lo que podría mejorar." icon={ClipboardCheck} number="3" title="Categoría, apoyo e impacto" />
-            <CaptureClassification initialCategory={query.categoria === "B" || query.categoria === "C" ? query.categoria : "A"} />
+            <CaptureClassification initialCategory={query.categoria === "B" || query.categoria === "C" ? query.categoria : "A"} supportAreas={supportAreas} />
 
             <div className="mt-6 border-t border-line pt-6">
               <fieldset>
@@ -270,7 +312,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                 Foto o evidencia antes
               </span>
               <span className="helper-text">Opcional. Una imagen ayuda a entender la oportunidad con mayor rapidez.</span>
-              <input className="field mt-3 bg-white" name="beforeEvidence" type="file" accept="image/*,.pdf" />
+              <input accept="image/*,.pdf" capture="environment" className="field mt-3 bg-white" name="beforeEvidence" type="file" />
             </label>
           </section>
 
@@ -278,7 +320,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
             <div className="flex items-start gap-3">
               <Factory className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
               <div>
-                <p className="text-sm font-extrabold">Tu idea llegará al supervisor de {area.code}</p>
+                <p className="text-sm font-extrabold">Tu idea llegará a {receiverName}</p>
                 <p className="mt-1 text-xs leading-5 text-slate-300">Al enviarla recibirás un folio para identificarla.</p>
               </div>
             </div>

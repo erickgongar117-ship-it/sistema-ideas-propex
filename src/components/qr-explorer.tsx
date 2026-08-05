@@ -102,20 +102,20 @@ function matchesGroup(group: DepartmentGroup, query: string) {
   ].filter(Boolean).join(" ")).includes(query));
 }
 
-export function QrExplorer({ structure, baseUrl }: { structure: OrganizationStructure; baseUrl: string }) {
+export function QrExplorer({ structure, baseUrl, downloadEnabled = true }: { structure: OrganizationStructure; baseUrl: string; downloadEnabled?: boolean }) {
   const [plant, setPlant] = useState<PlantCode | null>(null);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
 
-  const groupsByPlant = useMemo(() => ({
-    APO: departmentGroups(structure.APO.nodes),
-    CAR: departmentGroups(structure.CAR.nodes)
-  }), [structure]);
+  const groupsByPlant = useMemo<Record<string, DepartmentGroup[]>>(
+    () => Object.fromEntries(Object.values(structure).map((organizationPlant) => [organizationPlant.code, departmentGroups(organizationPlant.nodes)])),
+    [structure]
+  );
 
-  const activeGroups = plant ? groupsByPlant[plant] : [];
+  const activeGroups = plant ? groupsByPlant[plant] ?? [] : [];
   const normalizedQuery = normalize(query.trim());
   const visibleGroups = normalizedQuery ? activeGroups.filter((group) => matchesGroup(group, normalizedQuery)) : activeGroups;
-  const qrCount = (code: PlantCode) => groupsByPlant[code].reduce((total, group) => total + group.items.length, 0);
+  const qrCount = (code: PlantCode) => (groupsByPlant[code] ?? []).reduce((total, group) => total + group.items.length, 0);
 
   function choosePlant(code: PlantCode) {
     setPlant(code);
@@ -133,6 +133,7 @@ export function QrExplorer({ structure, baseUrl }: { structure: OrganizationStru
   }
 
   if (!plant) {
+    const plantOptions = Object.values(structure);
     return (
       <section className="surface p-5 sm:p-7" aria-labelledby="qr-plant-title">
         <div className="mx-auto max-w-3xl">
@@ -140,14 +141,15 @@ export function QrExplorer({ structure, baseUrl }: { structure: OrganizationStru
           <h2 className="text-xl font-extrabold text-ink sm:text-2xl" id="qr-plant-title">¿De que planta necesitas los QR?</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">Selecciona la planta para mostrar solamente sus departamentos, areas y responsables.</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <button className="surface surface-interactive flex min-h-32 items-center gap-4 p-5 text-left" type="button" onClick={() => choosePlant("APO")}>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center bg-brand-500 text-white"><Factory className="h-6 w-6" aria-hidden /></span>
-              <span><strong className="block text-lg text-ink">Apodaca</strong><span className="mt-1 block text-sm text-slate-600">{groupsByPlant.APO.length} departamentos · {qrCount("APO")} QR activos</span></span>
-            </button>
-            <button className="surface surface-interactive flex min-h-32 items-center gap-4 p-5 text-left" type="button" onClick={() => choosePlant("CAR")}>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center bg-ink text-white"><Warehouse className="h-6 w-6" aria-hidden /></span>
-              <span><strong className="block text-lg text-ink">El Carmen</strong><span className="mt-1 block text-sm text-slate-600">{groupsByPlant.CAR.length} departamentos · {qrCount("CAR")} QR activos</span></span>
-            </button>
+            {plantOptions.map((option, index) => {
+              const PlantIcon = index % 2 === 0 ? Factory : Warehouse;
+              return (
+                <button className="surface surface-interactive flex min-h-32 items-center gap-4 p-5 text-left" type="button" onClick={() => choosePlant(option.code)} key={option.id}>
+                  <span className={`flex h-12 w-12 shrink-0 items-center justify-center text-white ${index % 2 === 0 ? "bg-brand-500" : "bg-ink"}`}><PlantIcon className="h-6 w-6" aria-hidden /></span>
+                  <span className="min-w-0"><strong className="block break-words text-lg text-ink">{option.name}</strong><span className="mt-1 block text-sm text-slate-600">{(groupsByPlant[option.code] ?? []).length} departamentos · {qrCount(option.code)} QR activos</span></span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -253,7 +255,11 @@ export function QrExplorer({ structure, baseUrl }: { structure: OrganizationStru
                             </div>
                             <p className="mt-3 break-all bg-panel p-3 text-[11px] font-semibold leading-4 text-slate-600">{captureUrl}</p>
                             <div className="no-print mt-3 grid gap-2 sm:grid-cols-2">
-                              <a className="btn btn-secondary" download href={`${qrUrl}&download=1`}><Download className="h-4 w-4" aria-hidden />Descargar</a>
+                              {downloadEnabled ? (
+                                <a className="btn btn-secondary" download href={`${qrUrl}&download=1`}><Download className="h-4 w-4" aria-hidden />Descargar</a>
+                              ) : (
+                                <button className="btn btn-secondary" disabled title="Disponible desde la pagina publicada" type="button"><Download className="h-4 w-4" aria-hidden />Descargar</button>
+                              )}
                               <a className="btn btn-primary" href={captureUrl} rel="noreferrer" target="_blank"><ExternalLink className="h-4 w-4" aria-hidden />Probar</a>
                             </div>
                           </div>

@@ -19,13 +19,15 @@ import {
   Plus,
   QrCode,
   Search,
+  Trash2,
   UserRound,
   Warehouse,
   X
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { saveOrganizationUnitAction } from "@/app/(app)/configuracion/estructura/actions";
+import { deleteOrganizationUnitAction, deletePlantAction, saveOrganizationUnitAction, savePlantAction } from "@/app/(app)/configuracion/estructura/actions";
+import { OrganizationHierarchyEditor } from "@/components/organization-hierarchy-editor";
 import type {
   OrganizationNode,
   OrganizationPlant,
@@ -55,6 +57,7 @@ type EditorValues = {
   manager: string;
   routingUserId: string;
   qrEnabled: boolean;
+  isSupportArea: boolean;
   active: boolean;
 };
 
@@ -73,6 +76,7 @@ const emptyValues: EditorValues = {
   manager: "",
   routingUserId: "",
   qrEnabled: false,
+  isSupportArea: false,
   active: true
 };
 
@@ -163,8 +167,20 @@ export function OrganizationBuilder({
     return options;
   }, [plant, structure]);
 
+  const allMemberships = useMemo(() => {
+    const result: Array<OrganizationNode["memberships"][number] & { unitName: string; plantId: string; plantName: string }> = [];
+    Object.values(structure).forEach((organizationPlant) => {
+      walkNodes(organizationPlant.nodes, ({ node }) => {
+        node.memberships.forEach((membership) => result.push({ ...membership, unitName: node.name, plantId: organizationPlant.id, plantName: organizationPlant.name }));
+      });
+    });
+    return result;
+  }, [structure]);
+
   function choosePlant(code: PlantCode) {
-    const plantNodes = structure[code].nodes;
+    const organizationPlant = structure[code];
+    if (!organizationPlant) return;
+    const plantNodes = organizationPlant.nodes;
     setPlant(code);
     setSelectedId(plantNodes[0]?.id ?? null);
     setExpanded(new Set(plantNodes.map((node) => node.id)));
@@ -198,6 +214,7 @@ export function OrganizationBuilder({
       manager: selected.node.manager,
       routingUserId: selected.node.routingUserId ?? "",
       qrEnabled: selected.node.qrEnabled,
+      isSupportArea: selected.node.isSupportArea,
       active: selected.node.active
     });
     setEditor({ mode: "edit", nodeId: selected.node.id, parentId: selected.parent?.id ?? null });
@@ -219,6 +236,24 @@ export function OrganizationBuilder({
       setMessageTone(result.ok ? "success" : "error");
       if (result.ok) {
         closeEditor();
+        router.refresh();
+      }
+    });
+  }
+
+  function runOrganizationAction(
+    event: FormEvent<HTMLFormElement>,
+    action: (formData: FormData) => Promise<{ ok: boolean; message: string }>,
+    afterSuccess?: () => void
+  ) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startSaving(async () => {
+      const result = await action(formData);
+      setMessage(result.message);
+      setMessageTone(result.ok ? "success" : "error");
+      if (result.ok) {
+        afterSuccess?.();
         router.refresh();
       }
     });
@@ -267,6 +302,7 @@ export function OrganizationBuilder({
   }
 
   if (!plant) {
+    const plantOptions = Object.values(structure);
     return (
       <section className="surface p-5 sm:p-7" aria-labelledby="plant-selector-title">
         <div className="mx-auto max-w-3xl">
@@ -276,15 +312,26 @@ export function OrganizationBuilder({
             <p className="mt-2 text-sm leading-6 text-slate-600">La planta se selecciona antes de mostrar areas, responsables o codigos para evitar mezclar Apodaca con El Carmen.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <button className="surface surface-interactive flex min-h-32 items-center gap-4 p-5 text-left" type="button" onClick={() => choosePlant("APO")}>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center bg-brand-500 text-white"><Factory className="h-6 w-6" aria-hidden /></span>
-              <span><strong className="block text-lg text-ink">Apodaca</strong><span className="mt-1 block text-sm text-slate-600">Codigo de planta APO · {countNodes(structure.APO.nodes)} elementos</span></span>
-            </button>
-            <button className="surface surface-interactive flex min-h-32 items-center gap-4 p-5 text-left" type="button" onClick={() => choosePlant("CAR")}>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center bg-ink text-white"><Warehouse className="h-6 w-6" aria-hidden /></span>
-              <span><strong className="block text-lg text-ink">El Carmen</strong><span className="mt-1 block text-sm text-slate-600">Codigo de planta CAR · {countNodes(structure.CAR.nodes)} elementos</span></span>
-            </button>
+            {plantOptions.map((option, index) => {
+              const PlantIcon = index % 2 === 0 ? Factory : Warehouse;
+              return (
+                <button className="surface surface-interactive flex min-h-32 items-center gap-4 p-5 text-left" type="button" onClick={() => choosePlant(option.code)} key={option.id}>
+                  <span className={`flex h-12 w-12 shrink-0 items-center justify-center text-white ${index % 2 === 0 ? "bg-brand-500" : "bg-ink"}`}><PlantIcon className="h-6 w-6" aria-hidden /></span>
+                  <span className="min-w-0"><strong className="block break-words text-lg text-ink">{option.name}</strong><span className="mt-1 block text-sm text-slate-600">Codigo {option.code} · {countNodes(option.nodes)} elementos</span></span>
+                </button>
+              );
+            })}
           </div>
+          <details className="details-panel mt-5 border-dashed border-slate-400">
+            <summary><span className="flex items-center gap-2 text-brand-700"><Plus className="h-4 w-4" aria-hidden />Agregar otra planta</span></summary>
+            <form className="grid gap-3 p-4 sm:grid-cols-2" onSubmit={(event) => runOrganizationAction(event, savePlantAction)}>
+              <label><span className="label">Nombre de la planta</span><input className="field" name="name" placeholder="Ej. Planta Norte" required /></label>
+              <label><span className="label">Codigo corto</span><input className="field uppercase" maxLength={12} name="code" placeholder="Ej. NOR" required /></label>
+              <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input defaultChecked name="active" type="checkbox" />Planta activa</label>
+              <button className="btn btn-primary" disabled={isSaving} type="submit"><Plus className="h-4 w-4" aria-hidden />Crear planta</button>
+            </form>
+          </details>
+          {message ? <div className={`alert mt-4 ${messageTone === "success" ? "alert-success" : "alert-danger"}`}><span className="font-bold">{message}</span></div> : null}
           <div className="mt-5 border-l-4 border-emerald-600 bg-emerald-50 p-4 text-sm text-emerald-900">
             <p className="font-extrabold">Conectado a la base de datos</p>
             <p className="mt-1 leading-5">Los cambios que guardes aqui se aplican al sistema y quedan registrados en auditoria.</p>
@@ -313,6 +360,15 @@ export function OrganizationBuilder({
           <button className="btn btn-secondary" type="button" onClick={() => { setPlant(null); setSelectedId(null); setMessage(""); }}><MapPin className="h-4 w-4" aria-hidden />Cambiar planta</button>
         </div>
       </section>
+
+      <details className="details-panel mb-5 border-rose-200">
+        <summary><span className="flex items-center gap-2 text-rose-700"><Trash2 className="h-4 w-4" aria-hidden />Eliminar {currentPlant.name}</span></summary>
+        <form className="grid gap-3 p-4 sm:grid-cols-[1fr_auto] sm:items-end" onSubmit={(event) => runOrganizationAction(event, deletePlantAction, () => { setPlant(null); setSelectedId(null); })}>
+          <input name="plantId" type="hidden" value={currentPlant.id} />
+          <label><span className="label">Escribe {currentPlant.code} para confirmar</span><input className="field" name="confirmation" required /></label>
+          <button className="btn btn-danger" disabled={isSaving} type="submit"><Trash2 className="h-4 w-4" aria-hidden />Eliminar planta</button>
+        </form>
+      </details>
 
       {message ? (
         <div className={`alert mb-5 ${messageTone === "success" ? "alert-success" : "alert-danger"}`} role="status">
@@ -359,7 +415,7 @@ export function OrganizationBuilder({
           </div>
         </section>
 
-        <aside className="surface min-w-0 p-5 xl:sticky xl:top-6" aria-live="polite">
+        <aside className="surface min-w-0 p-5" aria-live="polite">
           {selected ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
@@ -387,6 +443,8 @@ export function OrganizationBuilder({
                 </div>
               </dl>
 
+              <OrganizationHierarchyEditor allMemberships={allMemberships} node={selected.node} onSaved={() => router.refresh()} users={users} />
+
               {selected.node.qrEnabled && !selected.node.routingUser ? (
                 <div className="mt-5 border-l-4 border-amber-500 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
                   <strong className="block">Falta asignar el seguimiento</strong>
@@ -398,6 +456,15 @@ export function OrganizationBuilder({
                 <button className="btn btn-secondary" type="button" onClick={openEdit}><Pencil className="h-4 w-4" aria-hidden />Editar</button>
                 <button className="btn btn-secondary" type="button" onClick={() => openCreate(selected.node.id)}><Plus className="h-4 w-4" aria-hidden />Agregar dentro</button>
               </div>
+              <details className="details-panel mt-3 border-rose-200">
+                <summary><span className="flex items-center gap-2 text-rose-700"><Trash2 className="h-4 w-4" aria-hidden />Eliminar estructura</span></summary>
+                <form className="grid gap-3 p-3" onSubmit={(event) => runOrganizationAction(event, deleteOrganizationUnitAction, () => setSelectedId(null))}>
+                  <input name="unitId" type="hidden" value={selected.node.id} />
+                  <p className="text-xs leading-5 text-slate-600">Tambien elimina sus subdivisiones. Si existen ideas vinculadas, el sistema bloqueara la operacion.</p>
+                  <label><span className="label">Escribe {selected.node.code}</span><input className="field" name="confirmation" required /></label>
+                  <button className="btn btn-danger" disabled={isSaving} type="submit"><Trash2 className="h-4 w-4" aria-hidden />Eliminar definitivamente</button>
+                </form>
+              </details>
             </>
           ) : <p className="text-sm text-slate-600">Selecciona un elemento de la estructura.</p>}
         </aside>
@@ -433,6 +500,7 @@ export function OrganizationBuilder({
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <label className="flex items-center gap-3 border border-line bg-panel p-4 text-sm font-bold text-ink"><input checked={values.qrEnabled} name="qrEnabled" onChange={(event) => setValues((current) => ({ ...current, qrEnabled: event.target.checked }))} type="checkbox" />Habilitar QR de captura</label>
+              <label className="flex items-center gap-3 border border-line bg-panel p-4 text-sm font-bold text-ink"><input checked={values.isSupportArea} name="isSupportArea" onChange={(event) => setValues((current) => ({ ...current, isSupportArea: event.target.checked }))} type="checkbox" />Disponible como area de apoyo</label>
               <label className="flex items-center gap-3 border border-line bg-panel p-4 text-sm font-bold text-ink"><input checked={values.active} name="active" onChange={(event) => setValues((current) => ({ ...current, active: event.target.checked }))} type="checkbox" />Elemento activo</label>
             </div>
 

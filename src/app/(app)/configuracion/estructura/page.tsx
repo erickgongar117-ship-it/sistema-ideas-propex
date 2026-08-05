@@ -11,9 +11,9 @@ export default async function OrganizationStructurePage() {
   const [structure, users] = await Promise.all([
     getOrganizationStructure(),
     prisma.user.findMany({
-      where: { active: true, role: { not: "COLABORADOR" } },
+      where: { active: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, email: true, role: true }
+      select: { id: true, name: true, email: true, role: true, jobTitle: true }
     })
   ]);
 

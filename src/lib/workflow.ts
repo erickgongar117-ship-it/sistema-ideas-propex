@@ -84,23 +84,27 @@ export async function createValidationApprovals(ideaId: string) {
 }
 
 export async function updateStatusAfterValidations(ideaId: string) {
-  const approvals = await prisma.approval.findMany({
-    where: { ideaId, type: { in: validationOrder } },
-    orderBy: { createdAt: "asc" }
-  });
+  const [approvals, supportRequests] = await Promise.all([
+    prisma.approval.findMany({
+      where: { ideaId, type: { in: validationOrder } },
+      orderBy: { createdAt: "asc" }
+    }),
+    prisma.ideaSupportRequest.findMany({ where: { ideaId, activatedAt: { not: null } }, orderBy: { createdAt: "asc" } })
+  ]);
 
-  if (approvals.some((approval) => approval.status === "REJECTED")) {
+  if (approvals.some((approval) => approval.status === "REJECTED") || supportRequests.some((request) => request.status === "REJECTED")) {
     await prisma.idea.update({ where: { id: ideaId }, data: { status: "RECHAZADA_VALIDACION" } });
     return "RECHAZADA_VALIDACION" satisfies IdeaStatus;
   }
 
-  if (approvals.some((approval) => approval.status === "MORE_INFO")) {
+  if (approvals.some((approval) => approval.status === "MORE_INFO") || supportRequests.some((request) => request.status === "MORE_INFO")) {
     await prisma.idea.update({ where: { id: ideaId }, data: { status: "SOLICITUD_INFORMACION" } });
     return "SOLICITUD_INFORMACION" satisfies IdeaStatus;
   }
 
   const pending = approvals.filter((approval) => approval.status === "PENDING").map((approval) => approval.type);
-  if (pending.length === 0) {
+  const dynamicPending = supportRequests.some((request) => request.status === "PENDING");
+  if (pending.length === 0 && !dynamicPending) {
     const idea = await prisma.idea.update({
       where: { id: ideaId },
       data: { status: "APROBADA_PARA_IMPLEMENTAR" },
@@ -125,6 +129,11 @@ export async function updateStatusAfterValidations(ideaId: string) {
     return "APROBADA_PARA_IMPLEMENTAR" satisfies IdeaStatus;
   }
 
+  if (pending.length === 0 && dynamicPending) {
+    await prisma.idea.update({ where: { id: ideaId }, data: { status: "APROBADA_SUPERVISOR" } });
+    return "APROBADA_SUPERVISOR" satisfies IdeaStatus;
+  }
+
   const nextStatus = statusForApprovalType(pending[0]);
   await prisma.idea.update({ where: { id: ideaId }, data: { status: nextStatus } });
   return nextStatus;
@@ -138,7 +147,8 @@ export async function approveSupervisor(ideaId: string, userId: string) {
   });
 
   const required = await createValidationApprovals(ideaId);
-  const status = required.length ? nextValidationStatus(required) : "APROBADA_PARA_IMPLEMENTAR";
+  const dynamicPending = await prisma.ideaSupportRequest.count({ where: { ideaId, activatedAt: { not: null }, status: "PENDING" } });
+  const status = required.length ? nextValidationStatus(required) : dynamicPending ? "APROBADA_SUPERVISOR" : "APROBADA_PARA_IMPLEMENTAR";
   await prisma.idea.update({
     where: { id: ideaId },
     data: {
@@ -148,7 +158,7 @@ export async function approveSupervisor(ideaId: string, userId: string) {
     }
   });
   await auditLog({ entity: "Idea", entityId: ideaId, action: "SUPERVISOR_APPROVED", userId, details: { status } });
-  if (!required.length) await updateStatusAfterValidations(ideaId);
+  if (!required.length && !dynamicPending) await updateStatusAfterValidations(ideaId);
 }
 
 export async function notifyIdeaClosed(ideaId: string, options: { coinsUpdated?: boolean } = {}) {

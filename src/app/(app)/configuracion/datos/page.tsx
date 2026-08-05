@@ -119,6 +119,7 @@ export default async function DataControlPage({ searchParams }: DataControlPageP
   const resolvedFiles = countParam(query, "files");
   const fileWarnings = countParam(query, "fileWarnings");
   const detached = countParam(query, "detached");
+  const deletedParticipants = countParam(query, "participants");
   const successMessage = success === "eliminado"
     ? `${first(query.folio) ?? "El registro"} fue eliminado definitivamente.`
     : success === "reiniciado"
@@ -135,7 +136,7 @@ export default async function DataControlPage({ searchParams }: DataControlPageP
       icon: Lightbulb,
       tone: "border-l-red-600",
       recent: recentIdeas.map((idea) => ({ folio: idea.folio, name: idea.problem, status: statusLabels[idea.status] ?? idea.status })),
-      note: "Si una idea genero un Kaizen, el proyecto se conserva y queda desacoplado. Para borrar ambos, selecciona Ideas y Kaizen en el reinicio."
+      note: "Si una idea genero un Kaizen, el proyecto se conserva y queda desacoplado. Los participantes anonimos sin saldo ni entrenamientos se limpian; para borrar idea y Kaizen, selecciona ambos modulos en el reinicio."
     },
     {
       key: "KAIZEN" as const,
@@ -181,6 +182,7 @@ export default async function DataControlPage({ searchParams }: DataControlPageP
             <p className="mt-1 text-sm leading-5">
               {resolvedFiles ? `${formatCount(resolvedFiles)} archivos administrados fueron eliminados o ya no existian. ` : ""}
               {detached ? `${formatCount(detached)} vinculos de origen se desacoplaron para conservar el modulo no seleccionado. ` : ""}
+              {deletedParticipants ? `${formatCount(deletedParticipants)} participantes sin cuenta, saldo ni entrenamientos tambien se limpiaron. ` : ""}
               {fileWarnings ? `${formatCount(fileWarnings)} archivos externos o Blob no pudieron confirmarse; revisa la configuracion de almacenamiento.` : ""}
             </p>
           </div>

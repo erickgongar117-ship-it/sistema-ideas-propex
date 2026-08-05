@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Check, HardHat, PackageCheck, UsersRound, Wrench } from "lucide-react";
+import { Building2, Check, HardHat, PackageCheck, Settings, UsersRound, Wrench } from "lucide-react";
 
 type Category = "A" | "B" | "C";
 
@@ -9,14 +9,14 @@ const categories = [
   {
     value: "A" as const,
     title: "Categoría A",
-    subtitle: "Operador + supervisor",
+    subtitle: "Tú + tu jefe directo",
     description: "Es sencilla, no requiere inversión ni apoyo de otro departamento."
   },
   {
     value: "B" as const,
     title: "Categoría B",
     subtitle: "Apoyo interno",
-    description: "Necesita ayuda de Calidad, Seguridad o Mantenimiento."
+    description: "Necesita ayuda de una o mas areas internas."
   },
   {
     value: "C" as const,
@@ -26,13 +26,18 @@ const categories = [
   }
 ];
 
-const departments = [
-  { name: "impactsQuality", title: "Calidad / Inocuidad", description: "Producto, limpieza, empaque o proceso", icon: PackageCheck, tone: "peer-checked:border-red-400 peer-checked:bg-red-50 peer-checked:text-red-900" },
-  { name: "impactsSafety", title: "Seguridad", description: "Riesgo, ergonomía o condición insegura", icon: HardHat, tone: "peer-checked:border-slate-500 peer-checked:bg-slate-100 peer-checked:text-slate-900" },
-  { name: "requiresMaintenance", title: "Mantenimiento", description: "Reparación, instalación o ajuste técnico", icon: Wrench, tone: "peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:text-blue-900" }
-];
+type SupportArea = { id: string; code: string; name: string };
 
-export function CaptureClassification({ initialCategory = "A" }: { initialCategory?: Category }) {
+function supportPresentation(area: SupportArea) {
+  const value = `${area.name} ${area.code}`.toLowerCase();
+  if (value.includes("calidad") || value.includes("inocuidad")) return { icon: PackageCheck, description: "Producto, limpieza, empaque o proceso", tone: "peer-checked:border-red-400 peer-checked:bg-red-50 peer-checked:text-red-900" };
+  if (value.includes("seguridad") || value.includes("ambiente")) return { icon: HardHat, description: "Riesgo, ergonomia, ambiente o condicion insegura", tone: "peer-checked:border-slate-500 peer-checked:bg-slate-100 peer-checked:text-slate-900" };
+  if (value.includes("mantenimiento") || value.includes("servicio")) return { icon: Wrench, description: "Reparacion, instalacion o ajuste tecnico", tone: "peer-checked:border-blue-400 peer-checked:bg-blue-50 peer-checked:text-blue-900" };
+  if (value.includes("mejora")) return { icon: Settings, description: "Analisis, facilitacion o seguimiento especial", tone: "peer-checked:border-slate-950 peer-checked:bg-slate-100 peer-checked:text-slate-950" };
+  return { icon: Building2, description: "Revision o apoyo de esta area", tone: "peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:text-emerald-950" };
+}
+
+export function CaptureClassification({ initialCategory = "A", supportAreas }: { initialCategory?: Category; supportAreas: SupportArea[] }) {
   const [category, setCategory] = useState<Category>(initialCategory);
 
   return (
@@ -74,27 +79,29 @@ export function CaptureClassification({ initialCategory = "A" }: { initialCatego
             Marca todos los que apliquen. Si todavía no estás seguro, el supervisor puede pedir el apoyo después.
           </p>
           <div className="grid gap-2 lg:grid-cols-3">
-            {departments.map((department) => {
-              const Icon = department.icon;
+            {supportAreas.map((area) => {
+              const presentation = supportPresentation(area);
+              const Icon = presentation.icon;
               return (
-                <label className="capture-choice cursor-pointer" key={department.name}>
-                  <input className="peer sr-only" name={department.name} type="checkbox" />
-                  <span className={`flex min-h-20 items-start gap-3 rounded-lg border border-line bg-white p-3 transition ${department.tone}`}>
+                <label className="capture-choice cursor-pointer" key={area.id}>
+                  <input className="peer sr-only" name="supportUnitIds" type="checkbox" value={area.id} />
+                  <span className={`flex min-h-20 items-start gap-3 rounded-lg border border-line bg-white p-3 transition ${presentation.tone}`}>
                     <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
                     <span>
-                      <span className="block text-sm font-extrabold">{department.title}</span>
-                      <span className="mt-1 block text-xs leading-4 opacity-75">{department.description}</span>
+                      <span className="block text-sm font-extrabold">{area.name}</span>
+                      <span className="mt-1 block text-xs leading-4 opacity-75">{presentation.description}</span>
                     </span>
                   </span>
                 </label>
               );
             })}
           </div>
+          {!supportAreas.length ? <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-900">Todavia no hay areas de apoyo activas para esta planta. El supervisor podra solicitar apoyo despues.</p> : null}
         </fieldset>
       ) : (
         <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
           <Check className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-          <div><p className="text-sm font-extrabold">La realizarán el operador y el supervisor</p><p className="mt-1 text-xs leading-5">No necesitas seleccionar otro departamento.</p></div>
+          <div><p className="text-sm font-extrabold">La realizarán tú y tu jefe directo</p><p className="mt-1 text-xs leading-5">No necesitas seleccionar otro departamento.</p></div>
         </div>
       )}
 

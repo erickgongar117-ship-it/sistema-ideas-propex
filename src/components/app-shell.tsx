@@ -13,10 +13,13 @@ import {
   ChevronDown,
   ClipboardCheck,
   ClipboardList,
+  Coins,
+  Database,
   Download,
   Footprints,
   FolderKanban,
   Gauge,
+  GraduationCap,
   KanbanSquare,
   LayoutDashboard,
   ListChecks,
@@ -56,7 +59,9 @@ type NavItem = {
 };
 
 const ideaNav: NavItem[] = [
+  { href: "/panorama", label: "Panorama PROpEx", shortLabel: "Panorama", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
   { href: "/dashboard", label: "Hoy", shortLabel: "Hoy", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/seguimientos", label: "Mis seguimientos", shortLabel: "Pendientes", icon: ListChecks, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "work" },
   { href: "/supervisor", label: "Bandeja de supervisor", shortLabel: "Bandeja", icon: UserCheck, roles: ["ADMIN", "SUPERVISOR"], group: "work" },
   { href: "/validaciones/calidad", label: "Calidad e inocuidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "work" },
   { href: "/validaciones/seguridad", label: "Seguridad industrial", shortLabel: "Seguridad", icon: ClipboardCheck, roles: ["ADMIN", "SEGURIDAD"], group: "work" },
@@ -68,9 +73,12 @@ const ideaNav: NavItem[] = [
   { href: "/vencidas", label: "Compromisos vencidos", shortLabel: "Vencidas", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
   { href: "/qr", label: "QR por planta", shortLabel: "QR", icon: QrCode, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
   { href: "/reportes", label: "Reportes", icon: Download, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
-  { href: "/notificaciones", label: "Notificaciones", shortLabel: "Avisos", icon: Bell, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"], group: "system" },
+  { href: "/entrenamientos", label: "Entrenamientos", shortLabel: "Cursos", icon: GraduationCap, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
+  { href: "/probocacoins", label: "Finanzas ProbocaCoins", shortLabel: "Coins", icon: Coins, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
+  { href: "/notificaciones", label: "Notificaciones", shortLabel: "Avisos", icon: Bell, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "system" },
   { href: "/auditoria", label: "Auditoría", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
   { href: "/configuracion/estructura", label: "Estructura organizacional", shortLabel: "Estructura", icon: Network, roles: ["ADMIN"], group: "system" },
+  { href: "/configuracion/datos", label: "Control de datos", shortLabel: "Datos", icon: Database, roles: ["ADMIN"], group: "system" },
   { href: "/configuracion", label: "Configuración", shortLabel: "Ajustes", icon: Settings, roles: ["ADMIN"], group: "system" }
 ];
 
@@ -90,11 +98,11 @@ const genbaNav: NavItem[] = [
 const roleTheme: Record<Role, { accent: string; soft: string; home: string; context: string }> = {
   ADMIN: { accent: "#171717", soft: "#f0f0f0", home: "/dashboard", context: "Control del sistema" },
   MEJORA_CONTINUA: { accent: "#171717", soft: "#f0f0f0", home: "/dashboard", context: "Seguimiento global" },
-  SUPERVISOR: { accent: "#14835f", soft: "#e9f6f0", home: "/supervisor", context: "Seguimiento de tu área" },
-  CALIDAD: { accent: "#d32236", soft: "#fff0f2", home: "/validaciones/calidad", context: "Calidad e inocuidad" },
-  SEGURIDAD: { accent: "#626a70", soft: "#f0f2f3", home: "/validaciones/seguridad", context: "Seguridad industrial" },
-  MANTENIMIENTO: { accent: "#176fc1", soft: "#edf5fc", home: "/validaciones/mantenimiento", context: "Factibilidad técnica" },
-  COLABORADOR: { accent: "#ea0029", soft: "#fff1f4", home: "/", context: "Captura pública" }
+  SUPERVISOR: { accent: "#14835f", soft: "#e9f6f0", home: "/seguimientos", context: "Seguimiento de tu área" },
+  CALIDAD: { accent: "#d32236", soft: "#fff0f2", home: "/seguimientos", context: "Calidad e inocuidad" },
+  SEGURIDAD: { accent: "#626a70", soft: "#f0f2f3", home: "/seguimientos", context: "Seguridad industrial" },
+  MANTENIMIENTO: { accent: "#176fc1", soft: "#edf5fc", home: "/seguimientos", context: "Factibilidad técnica" },
+  COLABORADOR: { accent: "#ea0029", soft: "#fff1f4", home: "/seguimientos", context: "Trabajo asignado" }
 };
 
 const groupLabels = {
@@ -188,7 +196,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess }:
   }, [currentModule, user.role]);
   const mobileItems = useMemo(() => {
     const preferred = currentModule === "ideas"
-      ? [theme.home, user.role === "ADMIN" || user.role === "MEJORA_CONTINUA" ? "/ideas" : "/implementacion", "/notificaciones"]
+      ? [theme.home, user.role === "ADMIN" || user.role === "MEJORA_CONTINUA" ? "/panorama" : "/seguimientos", "/notificaciones"]
       : currentModule === "kaizen"
         ? ["/kaizen", "/kaizen/gantt", "/kaizen/kanban"]
         : ["/genba", "/genba/kanban"];

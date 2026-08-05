@@ -18,6 +18,7 @@ export type FileCleanupSummary = {
 
 export type HardDeleteResult = {
   ideas: number;
+  orphanParticipants: number;
   kaizenProjects: number;
   kaizenActivities: number;
   genbaWalks: number;
@@ -32,6 +33,7 @@ type TransactionClient = Prisma.TransactionClient;
 
 const emptySnapshot = (): DeleteSnapshot => ({
   ideas: 0,
+  orphanParticipants: 0,
   kaizenProjects: 0,
   kaizenActivities: 0,
   genbaWalks: 0,
@@ -151,6 +153,7 @@ async function deleteIdeasInTransaction(
     select: {
       id: true,
       folio: true,
+      participantId: true,
       attachments: { select: { id: true, path: true } },
       approvals: { select: { id: true } },
       comments: { select: { id: true } },
@@ -164,6 +167,7 @@ async function deleteIdeasInTransaction(
 
   const ideaIds = ideas.map((idea) => idea.id);
   const folios = ideas.map((idea) => idea.folio);
+  const participantIds = unique(ideas.map((idea) => idea.participantId));
   const attachmentIds = ideas.flatMap((idea) => idea.attachments.map((item) => item.id));
   const dependencyIds = ideas.flatMap((idea) => [
     ...idea.approvals.map((item) => item.id),
@@ -197,10 +201,22 @@ async function deleteIdeasInTransaction(
   await tx.notificationOutbox.deleteMany({ where: { ideaId: { in: ideaIds } } });
   if (attachmentIds.length) await tx.attachment.deleteMany({ where: { id: { in: attachmentIds } } });
   const deleted = await tx.idea.deleteMany({ where: { id: { in: ideaIds } } });
+  const deletedParticipants = participantIds.length
+    ? await tx.participant.deleteMany({
+        where: {
+          id: { in: participantIds },
+          userId: null,
+          ideas: { none: {} },
+          enrollments: { none: {} },
+          coinTransactions: { none: {} }
+        }
+      })
+    : { count: 0 };
 
   return {
     ...emptySnapshot(),
     ideas: deleted.count,
+    orphanParticipants: deletedParticipants.count,
     detachedKaizenFromIdeas: detached.count,
     filePaths: ideas.flatMap((idea) => idea.attachments.map((item) => item.path))
   };
@@ -332,6 +348,7 @@ async function deleteGenbasInTransaction(
 function mergeSnapshots(snapshots: DeleteSnapshot[]) {
   return snapshots.reduce<DeleteSnapshot>((total, current) => ({
     ideas: total.ideas + current.ideas,
+    orphanParticipants: total.orphanParticipants + current.orphanParticipants,
     kaizenProjects: total.kaizenProjects + current.kaizenProjects,
     kaizenActivities: total.kaizenActivities + current.kaizenActivities,
     genbaWalks: total.genbaWalks + current.genbaWalks,

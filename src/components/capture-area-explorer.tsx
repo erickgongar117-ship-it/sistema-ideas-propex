@@ -75,13 +75,13 @@ export function CaptureAreaExplorer({ structure }: { structure: OrganizationStru
   const [plant, setPlant] = useState<PlantCode | null>(null);
   const [query, setQuery] = useState("");
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
-  const groups = useMemo(() => ({
-    APO: buildGroups(structure.APO.nodes),
-    CAR: buildGroups(structure.CAR.nodes)
-  }), [structure]);
+  const groups = useMemo<Record<string, CaptureGroup[]>>(
+    () => Object.fromEntries(Object.values(structure).map((organizationPlant) => [organizationPlant.code, buildGroups(organizationPlant.nodes)])),
+    [structure]
+  );
 
   function selectPlant(code: PlantCode) {
-    const production = groups[code].find((group) => group.code.endsWith("-PROD"));
+    const production = (groups[code] ?? []).find((group) => group.code.endsWith("-PROD"));
     setPlant(code);
     setQuery("");
     setOpenGroups(new Set(production ? [production.id] : []));
@@ -97,26 +97,28 @@ export function CaptureAreaExplorer({ structure }: { structure: OrganizationStru
   }
 
   if (!plant) {
+    const plantOptions = Object.values(structure);
     return (
       <div className="border border-line bg-white">
         <div className="grid sm:grid-cols-2">
-          <button className="group flex min-h-28 items-center gap-4 border-b border-line p-5 text-left transition hover:bg-brand-50 sm:border-b-0 sm:border-r" onClick={() => selectPlant("APO")} type="button">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center bg-brand-500 text-white"><Factory className="h-6 w-6" aria-hidden /></span>
-            <span className="min-w-0 flex-1"><strong className="block text-lg text-ink">Planta Apodaca</strong><span className="mt-1 block text-sm text-slate-600">{groups.APO.length} departamentos disponibles</span></span>
-            <ArrowRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden />
-          </button>
-          <button className="group flex min-h-28 items-center gap-4 p-5 text-left transition hover:bg-slate-50" onClick={() => selectPlant("CAR")} type="button">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center bg-slate-950 text-white"><Warehouse className="h-6 w-6" aria-hidden /></span>
-            <span className="min-w-0 flex-1"><strong className="block text-lg text-ink">Planta El Carmen</strong><span className="mt-1 block text-sm text-slate-600">{groups.CAR.length} departamentos disponibles</span></span>
-            <ArrowRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-950" aria-hidden />
-          </button>
+          {plantOptions.map((option, index) => {
+            const PlantIcon = index % 2 === 0 ? Factory : Warehouse;
+            return (
+              <button className="group flex min-h-28 items-center gap-4 border-b border-line p-5 text-left transition hover:bg-brand-50 sm:border-r" onClick={() => selectPlant(option.code)} type="button" key={option.id}>
+                <span className={`flex h-12 w-12 shrink-0 items-center justify-center text-white ${index % 2 === 0 ? "bg-brand-500" : "bg-slate-950"}`}><PlantIcon className="h-6 w-6" aria-hidden /></span>
+                <span className="min-w-0 flex-1"><strong className="block break-words text-lg text-ink">{option.name}</strong><span className="mt-1 block text-sm text-slate-600">{(groups[option.code] ?? []).length} departamentos disponibles</span></span>
+                <ArrowRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden />
+              </button>
+            );
+          })}
         </div>
       </div>
     );
   }
 
   const normalizedQuery = normalize(query.trim());
-  const visibleGroups = normalizedQuery ? groups[plant].filter((group) => groupMatches(group, normalizedQuery)) : groups[plant];
+  const activeGroups = groups[plant] ?? [];
+  const visibleGroups = normalizedQuery ? activeGroups.filter((group) => groupMatches(group, normalizedQuery)) : activeGroups;
 
   return (
     <div className="border border-line bg-white">

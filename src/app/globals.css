@@ -324,6 +324,7 @@ summary:focus-visible {
 
 .app-shell {
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .app-sidebar {
@@ -838,7 +839,12 @@ input[type="file"]::file-selector-button {
 }
 
 .table-wrap {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  contain: inline-size;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -1449,6 +1455,12 @@ html[data-theme="dark"] .app-shell[data-module="kaizen"] { --role-accent: #f2bf4
 html[data-theme="dark"] .app-shell[data-module="genba"] { --role-accent: #ff5572 !important; --role-soft: #35171e !important; }
 html[data-theme="dark"] .capture-theme { --role-accent: #55d6a7; --role-soft: #133229; }
 
+html[data-theme="dark"] .app-nav-link,
+html[data-theme="dark"] .module-switcher-link { color: #c7ced8; }
+html[data-theme="dark"] .mobile-bottom-link { color: #aeb8c5; }
+html[data-theme="dark"] .app-nav-link:hover,
+html[data-theme="dark"] .module-switcher-link:hover { color: #ffffff; }
+
 html[data-theme="dark"] .app-shell:is([data-role="ADMIN"], [data-role="MEJORA_CONTINUA"]) .btn-primary {
   background: var(--brand-red);
 }
@@ -1511,6 +1523,12 @@ html[data-theme="dark"] .alert-info { border-color: #24547c; background: #142638
 }
 
 @media (min-width: 640px) {
+  .app-content,
+  .app-main {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .app-main {
     padding: 1.75rem 1.5rem 6.5rem;
   }

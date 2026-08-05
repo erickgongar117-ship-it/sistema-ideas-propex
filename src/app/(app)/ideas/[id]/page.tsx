@@ -18,17 +18,21 @@ import {
   Tag,
   Trash2,
   UserRound,
+  UserPlus,
   Wrench,
   XCircle
 } from "lucide-react";
 import {
   addCommentAction,
+  addIdeaFollowerAction,
   assignImplementationAction,
   cancelIdeaAction,
   classifyIdeaAction,
   implementationUpdateAction,
   removeIdeaPointsAction,
   reopenRejectedIdeaAction,
+  removeIdeaFollowerAction,
+  supportDecisionAction,
   supervisorDecisionAction,
   validationDecisionAction
 } from "@/app/actions";
@@ -53,6 +57,7 @@ import {
 } from "@/lib/domain";
 import { requireUser } from "@/lib/auth";
 import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
+import { canViewIdea } from "@/lib/idea-access";
 import { automaticManagerialEvaluation, automaticPointRules } from "@/lib/points";
 import { prisma } from "@/lib/prisma";
 
@@ -77,37 +82,34 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
   const user = await requireUser();
   const { id } = await params;
   const query = await searchParams;
-  const [idea, owners, pointRules] = await Promise.all([
+  const [idea, owners, pointRules, supportAreas, userMemberships] = await Promise.all([
     prisma.idea.findUnique({
       where: { id },
       include: {
-        area: { include: { supervisor: true } },
+        area: { include: { supervisor: true, organizationUnit: { include: { plant: true } } } },
         supervisor: true,
         implementationOwner: true,
         approvals: { include: { assignedTo: true }, orderBy: { createdAt: "asc" } },
         attachments: { orderBy: { createdAt: "asc" } },
         comments: { include: { user: true }, orderBy: { createdAt: "asc" } },
         pointRuleSelections: { include: { pointRule: true } },
-        kaizenProject: true
+        kaizenProject: true,
+        escalationRule: { include: { reviewerMembership: { include: { user: true } } } },
+        supportRequests: { include: { orgUnit: true, assignedTo: true }, orderBy: { createdAt: "asc" } },
+        followers: { include: { user: true }, orderBy: { createdAt: "asc" } }
       }
     }),
-    prisma.user.findMany({ where: { role: { in: ["MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR", "ADMIN"] }, active: true }, orderBy: { name: "asc" } }),
-    prisma.pointRule.findMany({ where: { active: true }, orderBy: { createdAt: "asc" } })
+    prisma.user.findMany({ where: { active: true }, orderBy: [{ name: "asc" }, { email: "asc" }] }),
+    prisma.pointRule.findMany({ where: { active: true }, orderBy: { createdAt: "asc" } }),
+    prisma.orgUnit.findMany({ where: { active: true, isSupportArea: true }, orderBy: [{ plantId: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true, code: true, plantId: true } }),
+    prisma.orgMembership.findMany({ where: { userId: user.id, active: true }, select: { orgUnitId: true, canReceiveIdeas: true, canReviewTeam: true, canManageActivities: true } })
   ]);
 
   if (!idea) notFound();
 
-  const canViewIdea =
-    user.role === "ADMIN" ||
-    user.role === "MEJORA_CONTINUA" ||
-    (user.role === "SUPERVISOR" && idea.supervisorId === user.id) ||
-    (user.role === "CALIDAD" && idea.approvals.some((approval) => approval.type === "CALIDAD")) ||
-    (user.role === "SEGURIDAD" && idea.approvals.some((approval) => approval.type === "SEGURIDAD")) ||
-    (user.role === "MANTENIMIENTO" && (idea.approvals.some((approval) => approval.type === "MANTENIMIENTO") || ["EN_IMPLEMENTACION", "IMPLEMENTADA", "VENCIDA"].includes(idea.status)));
+  if (!(await canViewIdea(user, idea.id))) redirect(roleHomePath(user.role));
 
-  if (!canViewIdea) redirect(roleHomePath(user.role));
-
-  const canSupervisor = user.role === "ADMIN" || (user.role === "SUPERVISOR" && idea.supervisorId === user.id);
+  const canSupervisor = user.role === "ADMIN" || idea.supervisorId === user.id || idea.escalationRule?.reviewerMembership.userId === user.id;
   const roleApprovalType = approvalTypeForRole(user.role);
   const validationTypes: ApprovalType[] = user.role === "ADMIN"
     ? ["CALIDAD", "SEGURIDAD", "MANTENIMIENTO"]
@@ -115,6 +117,16 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
       ? [roleApprovalType].filter((type) => type !== "SUPERVISOR" && type !== "MEJORA_CONTINUA_FINAL")
       : [];
   const canMC = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
+  const supportAreasForPlant = supportAreas.filter((area) => !idea.area.organizationUnit?.plantId || area.plantId === idea.area.organizationUnit.plantId);
+  const selectedSupportIds = new Set(idea.supportRequests.map((request) => request.orgUnitId));
+  for (const area of supportAreasForPlant) {
+    const value = `${area.code} ${area.name}`.toLowerCase();
+    if ((idea.impactsQuality && (value.includes("calidad") || value.includes("inocuidad") || value.includes("-cal"))) ||
+      (idea.impactsSafety && (value.includes("seguridad") || value.includes("ambiente") || value.includes("-seg"))) ||
+      (idea.requiresMaintenance && (value.includes("mantenimiento") || value.includes("servicio") || value.includes("-man")))) {
+      selectedSupportIds.add(area.id);
+    }
+  }
   const hasAfterEvidence = idea.attachments.some((attachment) => attachment.type === "AFTER");
   const automaticPoints = automaticPointRules(idea, pointRules);
   const standardPointRules = pointRules.filter((rule) => !isManagerialEvaluationRule(rule.id));
@@ -124,13 +136,15 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
   const currentCoinSelections = idea.pointRuleSelections.map((selection) => ({ pointRuleId: selection.pointRuleId, points: selection.points }));
   const suggestedStandardRuleIds = automaticPoints.selectedRules.map((rule) => rule.id);
   const isClosed = idea.status === "CERRADA";
-  const canUpdateProgress = ["EN_IMPLEMENTACION", "IMPLEMENTADA", "VENCIDA"].includes(idea.status);
+  const canManageAreaActivities = userMemberships.some((membership) => membership.orgUnitId === idea.area.organizationUnit?.id && membership.canManageActivities);
+  const canUpdateProgress = ["EN_IMPLEMENTACION", "IMPLEMENTADA", "VENCIDA"].includes(idea.status) &&
+    (canMC || idea.implementationOwnerId === user.id || idea.supervisorId === user.id || canManageAreaActivities);
   const canReviewClose = canMC && (["IMPLEMENTADA", "EN_VALIDACION_FINAL", "CERRADA"].includes(idea.status));
   const canAssign = canMC && !["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
   const canClassify = canMC && !["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
   const canReopen = canMC && ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
   const impacts = parseImpactTypes(idea.impactTypes);
-  const returnPath = roleHomePath(user.role);
+  const returnPath = canMC ? roleHomePath(user.role) : "/seguimientos";
   const parsedReward = Number.parseInt(query.coins ?? "", 10);
   const rewardAmount = Number.isFinite(parsedReward) ? Math.max(0, Math.min(parsedReward, 999_999)) : null;
 
@@ -197,7 +211,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
           </article>
 
           <article className="surface rounded-lg p-5 sm:p-6">
-            <SectionHeading count={idea.approvals.length} description="Decisiones registradas por cada departamento." title="Validaciones" />
+            <SectionHeading count={idea.approvals.length + idea.supportRequests.length} description="Decisiones registradas por cada departamento y apoyo solicitado." title="Validaciones" />
             <div className="space-y-3">
               {idea.approvals.map((approval) => {
                 const tone = approvalTone[approval.type];
@@ -215,6 +229,39 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                       <span className="w-fit rounded-full border border-white bg-white px-2.5 py-1 text-[11px] font-extrabold text-slate-700">{approvalStatusLabels[approval.status]}</span>
                     </div>
                     {approval.comments ? <p className="mt-3 border-t border-black/5 pt-2 text-sm leading-5 text-slate-700">{approval.comments}</p> : null}
+                  </div>
+                );
+              })}
+              {idea.supportRequests.map((request) => {
+                const canRespond = Boolean(request.activatedAt) &&
+                  !["APPROVED", "REJECTED"].includes(request.status) &&
+                  (canMC || request.assignedToId === user.id || userMemberships.some((membership) => membership.orgUnitId === request.orgUnitId && membership.canReceiveIdeas));
+                return (
+                  <div className="border-l-4 border-slate-950 bg-slate-50 p-3.5" key={request.id}>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <ClipboardCheck className="h-5 w-5 shrink-0 text-slate-900" aria-hidden />
+                        <div>
+                          <p className="text-sm font-extrabold text-slate-950">{request.orgUnit.name}</p>
+                          <p className="mt-0.5 text-xs text-slate-600">{request.assignedTo?.name ?? "Equipo del departamento"}</p>
+                        </div>
+                      </div>
+                      <span className="w-fit rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-extrabold text-slate-700">
+                        {request.activatedAt ? approvalStatusLabels[request.status] : "Pendiente de envio por supervisor"}
+                      </span>
+                    </div>
+                    {request.comments ? <p className="mt-3 border-t border-black/5 pt-2 text-sm leading-5 text-slate-700">{request.comments}</p> : null}
+                    {canRespond ? (
+                      <form action={supportDecisionAction} className="mt-3 grid gap-2 border-t border-slate-200 pt-3">
+                        <input name="requestId" type="hidden" value={request.id} />
+                        <textarea className="field min-h-20" name="comments" placeholder={`Comentario de ${request.orgUnit.name}`} />
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <button className="btn btn-success" name="decision" type="submit" value="APROBAR"><Check className="h-4 w-4" aria-hidden />Aprobar</button>
+                          <button className="btn btn-secondary" name="decision" type="submit" value="SOLICITAR_INFORMACION">Pedir datos</button>
+                          <button className="btn btn-danger" name="decision" type="submit" value="RECHAZAR">Rechazar</button>
+                        </div>
+                      </form>
+                    ) : null}
                   </div>
                 );
               })}
@@ -277,7 +324,11 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
             <dl className="mt-4 divide-y divide-line text-sm">
               {[
                 ["Área", `${idea.area.code} · ${idea.area.name}`],
+                ["Planta", idea.area.organizationUnit?.plant.name ?? "Sin planta"],
+                ["Departamento", idea.area.organizationUnit?.name ?? idea.area.name],
                 ["Colaborador", idea.collaboratorName],
+                ["Puesto / nivel", idea.submitterPosition ?? "No especificado"],
+                ["Ruta de revisión", idea.escalationRule?.name ?? "Ruta predeterminada"],
                 ["Turno", idea.shift],
                 ["Categoría", ideaCategoryLabels[idea.category]],
                 ["Supervisor", idea.supervisor?.name ?? "Sin supervisor"],
@@ -295,6 +346,38 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
             </dl>
           </article>
 
+          {canMC ? (
+            <article className="surface rounded-lg p-5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-900"><UserPlus className="h-4 w-4" aria-hidden /></span>
+                <div>
+                  <h2 className="text-base font-extrabold text-ink">Seguimiento compartido</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">Agrega gerentes, jefes o participantes que deban ver esta idea en su bandeja.</p>
+                </div>
+              </div>
+              {idea.followers.length ? (
+                <div className="mt-4 divide-y divide-line border-y border-line">
+                  {idea.followers.map((follower) => (
+                    <div className="flex items-center justify-between gap-3 py-3" key={follower.id}>
+                      <div className="min-w-0"><p className="truncate text-xs font-extrabold text-ink">{follower.user.name}</p><p className="truncate text-[11px] text-slate-500">{follower.label}</p></div>
+                      <form action={removeIdeaFollowerAction}>
+                        <input name="ideaId" type="hidden" value={idea.id} />
+                        <input name="followerId" type="hidden" value={follower.userId} />
+                        <button aria-label={`Quitar seguimiento de ${follower.user.name}`} className="icon-button h-9 w-9 min-w-9 text-rose-700" title="Quitar seguimiento" type="submit"><Trash2 className="h-4 w-4" aria-hidden /></button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="mt-4 text-xs text-slate-500">No hay seguidores adicionales.</p>}
+              <form action={addIdeaFollowerAction} className="mt-4 grid gap-3">
+                <input name="ideaId" type="hidden" value={idea.id} />
+                <label><span className="label">Persona</span><select className="field" name="followerId" required><option value="">Seleccionar persona</option>{owners.filter((owner) => !idea.followers.some((follower) => follower.userId === owner.id)).map((owner) => <option key={owner.id} value={owner.id}>{owner.name} · {roleLabels[owner.role]}</option>)}</select></label>
+                <label><span className="label">Motivo del seguimiento</span><input className="field" name="label" placeholder="Ej. Gerente del departamento" /></label>
+                <button className="btn btn-secondary" type="submit"><UserPlus className="h-4 w-4" aria-hidden />Agregar seguimiento</button>
+              </form>
+            </article>
+          ) : null}
+
           {canSupervisor && ["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"].includes(idea.status) ? (
             <article className="surface overflow-hidden rounded-lg">
               <div className="h-1 bg-emerald-600" />
@@ -307,9 +390,13 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                     <legend className="px-1 text-xs font-extrabold text-ink">Apoyo requerido</legend>
                     <p className="mb-2 text-xs leading-5 text-slate-500">Puedes agregar o quitar áreas antes de aprobar.</p>
                     <div className="grid gap-2">
-                      <label className="flex items-center gap-2 text-xs font-bold"><input defaultChecked={idea.impactsQuality} name="impactsQuality" type="checkbox" />Calidad / Inocuidad</label>
-                      <label className="flex items-center gap-2 text-xs font-bold"><input defaultChecked={idea.impactsSafety} name="impactsSafety" type="checkbox" />Seguridad</label>
-                      <label className="flex items-center gap-2 text-xs font-bold"><input defaultChecked={idea.requiresMaintenance} name="requiresMaintenance" type="checkbox" />Mantenimiento</label>
+                      {supportAreasForPlant.map((area) => (
+                        <label className="flex items-center gap-2 rounded-md border border-line bg-white p-2.5 text-xs font-bold" key={area.id}>
+                          <input defaultChecked={selectedSupportIds.has(area.id)} name="supportUnitIds" type="checkbox" value={area.id} />
+                          <span>{area.name}</span>
+                        </label>
+                      ))}
+                      {!supportAreasForPlant.length ? <p className="text-xs text-slate-500">No hay departamentos de apoyo configurados para esta planta.</p> : null}
                     </div>
                   </fieldset>
                   <textarea className="field min-h-20" name="comments" placeholder="Comentario de la decision" />
@@ -331,9 +418,13 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                 <fieldset>
                   <legend className="label">Solicitar apoyo a</legend>
                   <div className="grid gap-2">
-                    <label className="flex items-center gap-2 rounded-lg border border-line p-3 text-xs font-bold"><input defaultChecked={idea.impactsQuality} name="impactsQuality" type="checkbox" />Calidad / Inocuidad</label>
-                    <label className="flex items-center gap-2 rounded-lg border border-line p-3 text-xs font-bold"><input defaultChecked={idea.impactsSafety} name="impactsSafety" type="checkbox" />Seguridad</label>
-                    <label className="flex items-center gap-2 rounded-lg border border-line p-3 text-xs font-bold"><input defaultChecked={idea.requiresMaintenance} name="requiresMaintenance" type="checkbox" />Mantenimiento</label>
+                    {supportAreasForPlant.map((area) => (
+                      <label className="flex items-center gap-2 rounded-lg border border-line p-3 text-xs font-bold" key={area.id}>
+                        <input defaultChecked={selectedSupportIds.has(area.id)} name="supportUnitIds" type="checkbox" value={area.id} />
+                        {area.name}
+                      </label>
+                    ))}
+                    {!supportAreasForPlant.length ? <p className="text-xs text-slate-500">Configura departamentos de apoyo en Estructura organizacional.</p> : null}
                   </div>
                 </fieldset>
                 <button className="btn btn-primary" type="submit"><RotateCcw className="h-4 w-4" aria-hidden />Reabrir y enviar a validación</button>

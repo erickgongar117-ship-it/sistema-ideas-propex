@@ -9,6 +9,7 @@ type SeedNode = {
   responsible: string;
   manager: string;
   qrEnabled?: boolean;
+  isSupportArea?: boolean;
   captureAreaCode?: string;
   routingRole?: Role;
   children?: SeedNode[];
@@ -65,11 +66,11 @@ const seedPlants: Array<{ code: PlantCode; name: string; nodes: SeedNode[] }> = 
               { code: "APO-LOG-TAR", name: "Tarimas", type: "PROCESO", responsible: "Responsable por asignar", manager: "Jefatura de Logistica", qrEnabled: true }
             ]
           },
-          { code: "APO-MC", name: "Mejora Continua", type: "DEPARTAMENTO", responsible: "Equipo de Mejora Continua (2 personas)", manager: "Gerencia de Mejora Continua", qrEnabled: true, routingRole: "MEJORA_CONTINUA" },
+          { code: "APO-MC", name: "Mejora Continua", type: "DEPARTAMENTO", responsible: "Equipo de Mejora Continua (2 personas)", manager: "Gerencia de Mejora Continua", qrEnabled: true, isSupportArea: true, routingRole: "MEJORA_CONTINUA" },
           { code: "APO-PROY", name: "Proyectos", type: "DEPARTAMENTO", responsible: "Responsable de Proyectos", manager: "Gerencia de Proyectos", qrEnabled: true, routingRole: "MEJORA_CONTINUA" },
-          { code: "APO-CAL", name: "Calidad e Inocuidad", type: "DEPARTAMENTO", responsible: "Jefatura de Calidad", manager: "Gerencia de Calidad", qrEnabled: true, routingRole: "CALIDAD" },
-          { code: "APO-MAN", name: "Mantenimiento y Servicios", type: "DEPARTAMENTO", responsible: "Jefatura de Mantenimiento", manager: "Gerencia de Mantenimiento", qrEnabled: true, routingRole: "MANTENIMIENTO" },
-          { code: "APO-SEG", name: "Seguridad, Salud y Ambiente", type: "DEPARTAMENTO", responsible: "Responsable de Seguridad", manager: "Gerencia responsable", qrEnabled: true, routingRole: "SEGURIDAD" }
+          { code: "APO-CAL", name: "Calidad e Inocuidad", type: "DEPARTAMENTO", responsible: "Jefatura de Calidad", manager: "Gerencia de Calidad", qrEnabled: true, isSupportArea: true, routingRole: "CALIDAD" },
+          { code: "APO-MAN", name: "Mantenimiento y Servicios", type: "DEPARTAMENTO", responsible: "Jefatura de Mantenimiento", manager: "Gerencia de Mantenimiento", qrEnabled: true, isSupportArea: true, routingRole: "MANTENIMIENTO" },
+          { code: "APO-SEG", name: "Seguridad, Salud y Ambiente", type: "DEPARTAMENTO", responsible: "Responsable de Seguridad", manager: "Gerencia responsable", qrEnabled: true, isSupportArea: true, routingRole: "SEGURIDAD" }
         ]
       }
     ]
@@ -104,10 +105,10 @@ const seedPlants: Array<{ code: PlantCode; name: string; nodes: SeedNode[] }> = 
               { code: "CAR-LOG-EMB", name: "Embarques", type: "PROCESO", responsible: "Supervisor de Embarques", manager: "Jefatura de Logistica El Carmen", qrEnabled: true }
             ]
           },
-          { code: "CAR-MC", name: "Mejora Continua", type: "DEPARTAMENTO", responsible: "Responsable por asignar", manager: "Gerencia de Mejora Continua", qrEnabled: true, routingRole: "MEJORA_CONTINUA" },
+          { code: "CAR-MC", name: "Mejora Continua", type: "DEPARTAMENTO", responsible: "Responsable por asignar", manager: "Gerencia de Mejora Continua", qrEnabled: true, isSupportArea: true, routingRole: "MEJORA_CONTINUA" },
           { code: "CAR-PROY", name: "Proyectos", type: "DEPARTAMENTO", responsible: "Responsable de Proyectos", manager: "Gerencia de Proyectos", qrEnabled: true, routingRole: "MEJORA_CONTINUA" },
-          { code: "CAR-CAL", name: "Calidad e Inocuidad", type: "DEPARTAMENTO", responsible: "Jefatura de Calidad El Carmen", manager: "Gerencia de Calidad", qrEnabled: true, routingRole: "CALIDAD" },
-          { code: "CAR-MAN", name: "Mantenimiento y Servicios", type: "DEPARTAMENTO", responsible: "Jefatura de Mantenimiento El Carmen", manager: "Gerencia de Mantenimiento", qrEnabled: true, routingRole: "MANTENIMIENTO" }
+          { code: "CAR-CAL", name: "Calidad e Inocuidad", type: "DEPARTAMENTO", responsible: "Jefatura de Calidad El Carmen", manager: "Gerencia de Calidad", qrEnabled: true, isSupportArea: true, routingRole: "CALIDAD" },
+          { code: "CAR-MAN", name: "Mantenimiento y Servicios", type: "DEPARTAMENTO", responsible: "Jefatura de Mantenimiento El Carmen", manager: "Gerencia de Mantenimiento", qrEnabled: true, isSupportArea: true, routingRole: "MANTENIMIENTO" }
         ]
       }
     ]
@@ -143,6 +144,7 @@ async function createSeedNode(input: { plantId: string; parentId: string | null;
       routingUserId,
       captureAreaId: captureArea?.id ?? null,
       qrEnabled: Boolean(input.node.qrEnabled),
+      isSupportArea: Boolean(input.node.isSupportArea),
       active: true,
       sortOrder: input.sortOrder
     }
@@ -153,8 +155,53 @@ async function createSeedNode(input: { plantId: string; parentId: string | null;
   }
 }
 
+async function ensureDefaultRoutingMemberships() {
+  const routedUnits = await prisma.orgUnit.findMany({
+    where: { routingUserId: { not: null } },
+    include: { escalationRules: true }
+  });
+  for (const unit of routedUnits) {
+    if (!unit.routingUserId) continue;
+    const membership = await prisma.orgMembership.upsert({
+      where: { userId_orgUnitId: { userId: unit.routingUserId, orgUnitId: unit.id } },
+      update: {},
+      create: {
+        userId: unit.routingUserId,
+        orgUnitId: unit.id,
+        title: unit.responsible,
+        level: 1,
+        canReviewTeam: true,
+        canReceiveIdeas: true,
+        canManageActivities: true,
+        active: true
+      }
+    });
+    if (!unit.escalationRules.length) {
+      await prisma.orgEscalationRule.create({
+        data: {
+          orgUnitId: unit.id,
+          name: "Ruta principal",
+          submitterLabel: "Personal operativo o colaborador",
+          circumstance: "Ruta inicial heredada del responsable del QR",
+          submitterLevel: 0,
+          reviewerMembershipId: membership.id,
+          isDefault: true,
+          active: true
+        }
+      });
+    }
+  }
+}
+
 export async function ensureOrganizationStructure() {
-  if (await prisma.orgUnit.count()) return;
+  if (await prisma.orgUnit.count()) {
+    await prisma.orgUnit.updateMany({
+      where: { code: { in: ["APO-MC", "APO-CAL", "APO-MAN", "APO-SEG", "CAR-MC", "CAR-CAL", "CAR-MAN"] } },
+      data: { isSupportArea: true }
+    });
+    await ensureDefaultRoutingMemberships();
+    return;
+  }
 
   for (const plantInput of seedPlants) {
     const plant = await prisma.plant.upsert({
@@ -166,6 +213,7 @@ export async function ensureOrganizationStructure() {
       await createSeedNode({ plantId: plant.id, parentId: null, node, sortOrder: index });
     }
   }
+  await ensureDefaultRoutingMemberships();
 }
 
 function buildTree(flatNodes: Omit<OrganizationNode, "children">[]): OrganizationNode[] {
@@ -187,10 +235,21 @@ function buildTree(flatNodes: Omit<OrganizationNode, "children">[]): Organizatio
 export async function getOrganizationStructure(): Promise<OrganizationStructure> {
   await ensureOrganizationStructure();
   const plants = await prisma.plant.findMany({
-    where: { code: { in: ["APO", "CAR"] } },
+    orderBy: [{ active: "desc" }, { name: "asc" }],
     include: {
       orgUnits: {
-        include: { routingUser: true, captureArea: true },
+        include: {
+          routingUser: true,
+          captureArea: true,
+          memberships: {
+            include: { user: true, managerMembership: { include: { user: true } } },
+            orderBy: [{ level: "asc" }, { sortOrder: "asc" }]
+          },
+          escalationRules: {
+            include: { reviewerMembership: { include: { user: true } } },
+            orderBy: [{ sortOrder: "asc" }, { submitterLevel: "asc" }]
+          }
+        },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
       }
     }
@@ -211,11 +270,59 @@ export async function getOrganizationStructure(): Promise<OrganizationStructure>
       responsible: unit.responsible,
       manager: unit.manager,
       routingUserId: unit.routingUserId,
-      routingUser: unit.routingUser ? { id: unit.routingUser.id, name: unit.routingUser.name, email: unit.routingUser.email, role: unit.routingUser.role } : null,
+      routingUser: unit.routingUser ? { id: unit.routingUser.id, name: unit.routingUser.name, email: unit.routingUser.email, role: unit.routingUser.role, jobTitle: unit.routingUser.jobTitle } : null,
       captureArea: unit.captureArea ? { id: unit.captureArea.id, code: unit.captureArea.code, active: unit.captureArea.active, supervisorId: unit.captureArea.supervisorId } : null,
       qrEnabled: unit.qrEnabled,
+      isSupportArea: unit.isSupportArea,
       active: unit.active,
-      sortOrder: unit.sortOrder
+      sortOrder: unit.sortOrder,
+      memberships: unit.memberships.map((membership) => ({
+        id: membership.id,
+        userId: membership.userId,
+        orgUnitId: membership.orgUnitId,
+        title: membership.title,
+        level: membership.level,
+        managerMembershipId: membership.managerMembershipId,
+        canReviewTeam: membership.canReviewTeam,
+        canReceiveIdeas: membership.canReceiveIdeas,
+        canManageActivities: membership.canManageActivities,
+        active: membership.active,
+        sortOrder: membership.sortOrder,
+        user: { id: membership.user.id, name: membership.user.name, email: membership.user.email, role: membership.user.role, jobTitle: membership.user.jobTitle },
+        managerMembership: membership.managerMembership ? {
+          id: membership.managerMembership.id,
+          title: membership.managerMembership.title,
+          user: {
+            id: membership.managerMembership.user.id,
+            name: membership.managerMembership.user.name,
+            email: membership.managerMembership.user.email,
+            role: membership.managerMembership.user.role,
+            jobTitle: membership.managerMembership.user.jobTitle
+          }
+        } : null
+      })),
+      escalationRules: unit.escalationRules.map((rule) => ({
+        id: rule.id,
+        name: rule.name,
+        submitterLabel: rule.submitterLabel,
+        circumstance: rule.circumstance,
+        submitterLevel: rule.submitterLevel,
+        reviewerMembershipId: rule.reviewerMembershipId,
+        isDefault: rule.isDefault,
+        active: rule.active,
+        sortOrder: rule.sortOrder,
+        reviewerMembership: {
+          id: rule.reviewerMembership.id,
+          title: rule.reviewerMembership.title,
+          user: {
+            id: rule.reviewerMembership.user.id,
+            name: rule.reviewerMembership.user.name,
+            email: rule.reviewerMembership.user.email,
+            role: rule.reviewerMembership.user.role,
+            jobTitle: rule.reviewerMembership.user.jobTitle
+          }
+        }
+      }))
     })))
   }]);
 

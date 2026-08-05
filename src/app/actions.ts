@@ -7,13 +7,16 @@ import { z } from "zod";
 import { Prisma, type ApprovalType, type Classification, type GenbaStatus, type IdeaCategory, type KaizenStatus, type Priority, type Role, type WorkItemStatus } from "@prisma/client";
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
-import { approvalTypeForRole, genbaDepartments, impactOptions, nextValidationStatus, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
+import { approvalTypeForRole, genbaDepartments, impactOptions, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
 import { saveUpload } from "@/lib/files";
 import { createKaizenFromIdea } from "@/lib/kaizen-from-idea";
 import { managerialFactorForRule } from "@/lib/managerial-evaluation";
 import { userModuleAccess } from "@/lib/module-access";
 import { ideaMailBody, notify } from "@/lib/notifications";
+import { resolveParticipantFromCollaborator, resolveParticipantFromUser, upsertCoinTransaction } from "@/lib/coins";
+import { canViewIdea } from "@/lib/idea-access";
 import { prisma } from "@/lib/prisma";
+import { managerFollowersForMembership, supportFlags, syncIdeaSupportRequests, validSupportUnits } from "@/lib/support-routing";
 import { appBaseUrl } from "@/lib/url";
 import { approveSupervisor, createValidationApprovals, markOverdueIdeas, nextFolio, notifyIdeaClosed, updateStatusAfterValidations } from "@/lib/workflow";
 
@@ -41,12 +44,18 @@ const ideaSchema = z.object({
   category: z.enum(["A", "B", "C"])
 });
 
-const userRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"];
+const userRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"];
 const emailSchema = z.string().trim().toLowerCase().email();
 
 async function userWithNormalizedEmail(email: string) {
-  const users = await prisma.user.findMany({ select: { id: true, email: true } });
-  return users.find((user) => user.email.trim().toLowerCase() === email) ?? null;
+  const users = await prisma.user.findMany();
+  const normalized = email.trim().toLowerCase();
+  return users.find((user) => user.email.trim().toLowerCase() === normalized) ?? null;
+}
+
+function userUniqueError(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return null;
+  return JSON.stringify(error.meta ?? {}).toLowerCase().includes("employeenumber") ? "empleado" : "correo";
 }
 
 async function notifyModuleAssignment(input: { to?: string | null; subject: string; lines: string[]; path: string }) {
@@ -130,10 +139,10 @@ async function refreshGenbaWalk(walkId: string) {
 }
 
 export async function loginAction(formData: FormData) {
-  const email = text(formData, "email");
+  const email = text(formData, "email").toLowerCase();
   const password = text(formData, "password");
   const destination = text(formData, "destination");
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await userWithNormalizedEmail(email);
 
   if (!user || !user.active) {
     redirect("/login?error=credenciales");
@@ -176,23 +185,50 @@ export async function submitIdeaAction(formData: FormData) {
 
   const area = await prisma.area.findFirst({
     where: { code: parsed.data.areaCode, active: true },
-    include: { supervisor: true }
+    include: { supervisor: true, organizationUnit: true }
   });
   if (!area) redirect(`/captura/${areaCode}?error=area`);
+
+  const requestedRouteId = text(formData, "escalationRuleId");
+  const escalationRule = area.organizationUnit?.id
+    ? await prisma.orgEscalationRule.findFirst({
+        where: {
+          orgUnitId: area.organizationUnit.id,
+          active: true,
+          ...(requestedRouteId ? { id: requestedRouteId } : { isDefault: true })
+        },
+        include: { reviewerMembership: { include: { user: true } } }
+      }) ?? await prisma.orgEscalationRule.findFirst({
+        where: { orgUnitId: area.organizationUnit.id, active: true },
+        include: { reviewerMembership: { include: { user: true } } },
+        orderBy: [{ sortOrder: "asc" }, { submitterLevel: "asc" }]
+      })
+    : null;
+  if (requestedRouteId && !escalationRule) redirect(`/captura/${areaCode}?error=ruta`);
+  const supervisorId = escalationRule?.reviewerMembership.userId ?? area.supervisorId;
+  const supervisor = escalationRule?.reviewerMembership.user ?? area.supervisor;
 
   const selectedImpacts = formData
     .getAll("impactTypes")
     .map(String)
     .filter((impact) => impactOptions.includes(impact));
-  const selectedSupport = {
-    impactsQuality: parsed.data.category === "A" ? false : checked(formData, "impactsQuality"),
-    impactsSafety: parsed.data.category === "A" ? false : checked(formData, "impactsSafety"),
-    requiresMaintenance: parsed.data.category === "A" ? false : checked(formData, "requiresMaintenance")
-  };
+  const supportUnitIds = parsed.data.category === "A" ? [] : formData.getAll("supportUnitIds").map(String).filter(Boolean);
+  const selectedSupportUnits = await validSupportUnits(supportUnitIds, area.organizationUnit?.plantId);
+  const selectedSupport = parsed.data.category === "A"
+    ? { impactsQuality: false, impactsSafety: false, requiresMaintenance: false }
+    : supportFlags(selectedSupportUnits);
   const externalSupportDetails = text(formData, "externalSupportDetails");
   if (parsed.data.category === "C" && externalSupportDetails.length < 3) {
     redirect(`/captura/${areaCode}?error=datos&campos=externalSupportDetails&categoria=C`);
   }
+
+  const participant = await resolveParticipantFromCollaborator({
+    name: parsed.data.collaboratorName,
+    employeeNumber: text(formData, "employeeNumber") || null,
+    email: text(formData, "collaboratorEmail") || null,
+    jobTitle: escalationRule?.submitterLabel ?? null,
+    orgUnitId: area.organizationUnit?.id
+  });
 
   const idea = await createIdeaWithUniqueFolio({
       collaboratorName: parsed.data.collaboratorName,
@@ -209,14 +245,33 @@ export async function submitIdeaAction(formData: FormData) {
       requiresExternalSupport: parsed.data.category === "C",
       externalSupportDetails: parsed.data.category === "C" ? externalSupportDetails : null,
       status: "EN_REVISION_SUPERVISOR",
-      supervisorId: area.supervisorId
+      supervisorId,
+      escalationRuleId: escalationRule?.id ?? null,
+      submitterPosition: escalationRule?.submitterLabel ?? null,
+      participantId: participant.id
   });
+
+  await syncIdeaSupportRequests({
+    ideaId: idea.id,
+    unitIds: selectedSupportUnits.map((unit) => unit.id),
+    plantId: area.organizationUnit?.plantId,
+    activate: false
+  });
+
+  const followerIds = await managerFollowersForMembership(escalationRule?.reviewerMembership.id);
+  for (const userId of followerIds) {
+    await prisma.ideaFollower.upsert({
+      where: { ideaId_userId: { ideaId: idea.id, userId } },
+      update: { label: "Jefatura de la ruta" },
+      create: { ideaId: idea.id, userId, label: "Jefatura de la ruta" }
+    });
+  }
 
   await prisma.approval.create({
     data: {
       ideaId: idea.id,
       type: "SUPERVISOR",
-      assignedToId: area.supervisorId,
+      assignedToId: supervisorId,
       status: "PENDING"
     }
   });
@@ -238,12 +293,12 @@ export async function submitIdeaAction(formData: FormData) {
     entity: "Idea",
     entityId: idea.id,
     action: "IDEA_CREATED",
-    details: { area: area.code, supervisorId: area.supervisorId }
+    details: { area: area.code, supervisorId, escalationRuleId: escalationRule?.id ?? null, supportUnitIds }
   });
 
   await notify({
     ideaId: idea.id,
-    to: area.supervisor?.email ?? "",
+    to: supervisor?.email ?? "",
     subject: `Nueva idea de mejora pendiente de revision - Folio ${idea.folio} - Area ${area.code}`,
     body: ideaMailBody({
       folio: idea.folio,
@@ -255,6 +310,24 @@ export async function submitIdeaAction(formData: FormData) {
     }),
     channels: ["EMAIL", "TEAMS"]
   });
+  if (followerIds.length) {
+    const followers = await prisma.user.findMany({ where: { id: { in: followerIds }, active: true }, select: { email: true } });
+    for (const follower of followers) {
+      await notify({
+        ideaId: idea.id,
+        to: follower.email,
+        subject: `Nueva idea de tu equipo - Folio ${idea.folio} - Area ${area.code}`,
+        body: ideaMailBody({
+          folio: idea.folio,
+          area: area.code,
+          problem: idea.problem,
+          proposal: idea.proposal,
+          action: "Seguimiento de la ruta jerarquica",
+          ideaId: idea.id
+        })
+      });
+    }
+  }
 
   revalidatePath("/");
   redirect(`/captura/gracias?folio=${encodeURIComponent(idea.folio)}&area=${encodeURIComponent(area.code)}`);
@@ -268,7 +341,7 @@ export async function supervisorDecisionAction(formData: FormData) {
 
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
-    include: { area: true, supervisor: true }
+    include: { area: { include: { organizationUnit: true } }, supervisor: true, supportRequests: true }
   });
   if (user.role === "SUPERVISOR" && idea.supervisorId !== user.id) redirect("/supervisor");
 
@@ -335,14 +408,30 @@ export async function supervisorDecisionAction(formData: FormData) {
   }
 
   if (decision === "APROBAR") {
+    const supportUnitIds = formData.getAll("supportUnitIds").map(String).filter(Boolean);
+    const dynamicSupport = await syncIdeaSupportRequests({
+      ideaId,
+      unitIds: supportUnitIds,
+      plantId: idea.area.organizationUnit?.plantId,
+      activate: true
+    });
+    const dynamicFlags = supportFlags(dynamicSupport.units);
     const support = {
-      impactsQuality: checked(formData, "impactsQuality"),
-      impactsSafety: checked(formData, "impactsSafety"),
-      requiresMaintenance: checked(formData, "requiresMaintenance")
+      impactsQuality: checked(formData, "impactsQuality") || dynamicFlags.impactsQuality,
+      impactsSafety: checked(formData, "impactsSafety") || dynamicFlags.impactsSafety,
+      requiresMaintenance: checked(formData, "requiresMaintenance") || dynamicFlags.requiresMaintenance
     };
-    const category: IdeaCategory = idea.category === "C" ? "C" : Object.values(support).some(Boolean) ? "B" : "A";
+    const category: IdeaCategory = idea.category === "C" ? "C" : dynamicSupport.units.length || Object.values(support).some(Boolean) ? "B" : "A";
     await prisma.idea.update({ where: { id: ideaId }, data: { ...support, category } });
     await approveSupervisor(ideaId, user.id);
+    for (const request of dynamicSupport.requests) {
+      await notifyModuleAssignment({
+        to: request.assignedTo?.email,
+        subject: `Apoyo solicitado para la idea ${idea.folio}`,
+        lines: [`Area solicitante: ${idea.area.code}`, `Apoyo requerido de: ${request.orgUnit.name}`, `Problema: ${idea.problem}`],
+        path: `/ideas/${idea.id}`
+      });
+    }
   }
 
   revalidatePath("/");
@@ -415,6 +504,61 @@ export async function validationDecisionAction(formData: FormData) {
   redirect(`/ideas/${ideaId}`);
 }
 
+export async function supportDecisionAction(formData: FormData) {
+  const user = await requireUser();
+  const requestId = text(formData, "requestId");
+  const decision = text(formData, "decision");
+  const comments = text(formData, "comments");
+  if (!['APROBAR', 'RECHAZAR', 'SOLICITAR_INFORMACION'].includes(decision)) redirect("/seguimientos");
+  if ((decision === "RECHAZAR" || decision === "SOLICITAR_INFORMACION") && !comments) redirect("/seguimientos?error=justificacion");
+
+  const request = await prisma.ideaSupportRequest.findUniqueOrThrow({
+    where: { id: requestId },
+    include: { idea: { include: { area: true, supervisor: true } }, orgUnit: true }
+  });
+  const membership = await prisma.orgMembership.findFirst({
+    where: { userId: user.id, orgUnitId: request.orgUnitId, active: true, canReceiveIdeas: true }
+  });
+  const authorized = isImprovementManager(user.role) || request.assignedToId === user.id || Boolean(membership);
+  if (!authorized || !request.activatedAt) redirect(roleHomePath(user.role));
+
+  const status = decision === "APROBAR" ? "APPROVED" : decision === "RECHAZAR" ? "REJECTED" : "MORE_INFO";
+  await prisma.ideaSupportRequest.update({
+    where: { id: request.id },
+    data: {
+      assignedToId: user.id,
+      status,
+      decision: decision === "APROBAR" ? "APROBAR" : decision === "RECHAZAR" ? "RECHAZAR" : "SOLICITAR_INFORMACION",
+      comments: comments || null,
+      decidedAt: new Date()
+    }
+  });
+  if (decision === "RECHAZAR") {
+    await prisma.idea.update({ where: { id: request.ideaId }, data: { status: "RECHAZADA_VALIDACION", rejectionReason: comments } });
+  } else if (decision === "SOLICITAR_INFORMACION") {
+    await prisma.idea.update({ where: { id: request.ideaId }, data: { status: "SOLICITUD_INFORMACION", moreInfoRequest: comments } });
+  } else {
+    await updateStatusAfterValidations(request.ideaId);
+  }
+  await auditLog({ entity: "IdeaSupportRequest", entityId: request.id, action: `DYNAMIC_SUPPORT_${decision}`, userId: user.id, details: { ideaId: request.ideaId, orgUnitId: request.orgUnitId, comments } });
+
+  const recipients = new Set<string>();
+  if (request.idea.supervisor?.email) recipients.add(request.idea.supervisor.email);
+  const mcUsers = await prisma.user.findMany({ where: { role: { in: ["MEJORA_CONTINUA", "ADMIN"] }, active: true }, select: { email: true } });
+  mcUsers.forEach((person) => recipients.add(person.email));
+  for (const to of recipients) {
+    await notify({
+      ideaId: request.ideaId,
+      to,
+      subject: `${request.orgUnit.name}: ${decision.toLowerCase()} - ${request.idea.folio}`,
+      body: ideaMailBody({ folio: request.idea.folio, area: request.idea.area.code, problem: request.idea.problem, proposal: request.idea.proposal, action: `${request.orgUnit.name}: ${comments || decision}`, ideaId: request.ideaId })
+    });
+  }
+  revalidatePath("/seguimientos");
+  revalidatePath(`/ideas/${request.ideaId}`);
+  redirect(`/ideas/${request.ideaId}`);
+}
+
 export async function reopenRejectedIdeaAction(formData: FormData) {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const ideaId = text(formData, "ideaId");
@@ -423,14 +567,22 @@ export async function reopenRejectedIdeaAction(formData: FormData) {
 
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
-    include: { area: true, supervisor: true }
+    include: { area: { include: { organizationUnit: true } }, supervisor: true }
   });
   if (!["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status)) redirect(`/ideas/${ideaId}`);
 
+  const supportUnitIds = formData.getAll("supportUnitIds").map(String).filter(Boolean);
+  const dynamicSupport = await syncIdeaSupportRequests({
+    ideaId,
+    unitIds: supportUnitIds,
+    plantId: idea.area.organizationUnit?.plantId,
+    activate: true
+  });
+  const dynamicFlags = supportFlags(dynamicSupport.units);
   const support = {
-    impactsQuality: checked(formData, "impactsQuality"),
-    impactsSafety: checked(formData, "impactsSafety"),
-    requiresMaintenance: checked(formData, "requiresMaintenance")
+    impactsQuality: checked(formData, "impactsQuality") || dynamicFlags.impactsQuality,
+    impactsSafety: checked(formData, "impactsSafety") || dynamicFlags.impactsSafety,
+    requiresMaintenance: checked(formData, "requiresMaintenance") || dynamicFlags.requiresMaintenance
   };
   const category: IdeaCategory = idea.category === "C" ? "C" : Object.values(support).some(Boolean) ? "B" : "A";
 
@@ -450,15 +602,17 @@ export async function reopenRejectedIdeaAction(formData: FormData) {
     create: { ideaId, type: "SUPERVISOR", assignedToId: idea.supervisorId, status: "APPROVED", decision: "APROBAR", comments: `Revalidada por Mejora Continua: ${justification}`, decidedAt: new Date() }
   });
 
-  const required = await createValidationApprovals(ideaId);
-  const status = required.length ? nextValidationStatus(required) : "APROBADA_PARA_IMPLEMENTAR";
-  await prisma.idea.update({ where: { id: ideaId }, data: { status } });
+  await createValidationApprovals(ideaId);
+  const status = await updateStatusAfterValidations(ideaId);
   await prisma.comment.create({ data: { ideaId, userId: user.id, comment: `Mejora Continua reabrió la idea. Justificación: ${justification}` } });
   await auditLog({ entity: "Idea", entityId: ideaId, action: "MC_REOPENED_REJECTED_IDEA", userId: user.id, details: { justification, support, status } });
 
   const recipients = new Set<string>();
   if (idea.supervisor?.email) recipients.add(idea.supervisor.email);
   if (idea.collaboratorEmail) recipients.add(idea.collaboratorEmail);
+  for (const request of dynamicSupport.requests) {
+    if (request.assignedTo?.email) recipients.add(request.assignedTo.email);
+  }
   for (const to of recipients) {
     await notify({
       ideaId,
@@ -492,26 +646,6 @@ export async function classifyIdeaAction(formData: FormData) {
     }
   });
   await auditLog({ entity: "Idea", entityId: ideaId, action: "MC_CLASSIFIED", userId: user.id, details: { classification, priority } });
-  if (classification === "KAIZEN") {
-    const startDate = new Date();
-    const kaizenProject = await ensureKaizenTransfer({
-      ideaId,
-      actorId: user.id,
-      leaderId: user.id,
-      startDate,
-      endDate: new Date(startDate.getTime() + 90 * 86_400_000),
-      updateExisting: false
-    });
-    if (!kaizenProject) throw new Error("La idea no conservó la clasificación Kaizen.");
-    await auditLog({
-      entity: "KaizenProject",
-      entityId: kaizenProject.id,
-      action: "AUTO_CREATED_FROM_CLASSIFICATION",
-      userId: user.id,
-      details: { ideaId, folio: kaizenProject.folio }
-    });
-    revalidatePath("/kaizen");
-  }
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}`);
 }
@@ -580,16 +714,31 @@ export async function assignImplementationAction(formData: FormData) {
 }
 
 export async function implementationUpdateAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR"]);
+  const user = await requireUser();
   const ideaId = text(formData, "ideaId");
   const comments = text(formData, "comments");
   const markImplemented = checked(formData, "markImplemented");
 
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
-    include: { area: true, supervisor: true, implementationOwner: true }
+    include: { area: { include: { organizationUnit: true } }, supervisor: true, implementationOwner: true }
   });
-  if (user.role === "SUPERVISOR" && idea.supervisorId !== user.id) redirect(`/ideas/${ideaId}`);
+  const activityMembership = idea.area.organizationUnit?.id
+    ? await prisma.orgMembership.findFirst({
+        where: {
+          userId: user.id,
+          orgUnitId: idea.area.organizationUnit.id,
+          active: true,
+          canManageActivities: true
+        },
+        select: { id: true }
+      })
+    : null;
+  const canUpdate = isImprovementManager(user.role) ||
+    idea.implementationOwnerId === user.id ||
+    idea.supervisorId === user.id ||
+    Boolean(activityMembership);
+  if (!canUpdate) redirect(`/ideas/${ideaId}`);
 
   const afterEvidence = await saveUpload(formData.get("afterEvidence") as File | null, `${idea.folio}-after`);
   if (afterEvidence) {
@@ -731,6 +880,21 @@ export async function closeIdeaAction(formData: FormData) {
       pointsAssigned: totalPoints
     }
   });
+  if (idea.participantId && totalPoints > 0) {
+    await upsertCoinTransaction({
+      reference: `IDEA:${idea.id}`,
+      participantId: idea.participantId,
+      type: "AWARD",
+      sourceType: "IDEA",
+      sourceId: idea.id,
+      amount: totalPoints,
+      description: `ProbocaCoins por cierre de la idea ${idea.folio}`,
+      createdById: user.id,
+      occurredAt: idea.closedAt ?? new Date()
+    });
+  } else {
+    await prisma.coinTransaction.deleteMany({ where: { reference: `IDEA:${idea.id}` } });
+  }
   if (wasClosed) {
     await prisma.comment.create({
       data: {
@@ -793,6 +957,7 @@ export async function removeIdeaPointsAction(formData: FormData) {
 
   await prisma.ideaPointRule.deleteMany({ where: { ideaId } });
   await prisma.idea.update({ where: { id: ideaId }, data: { pointsAssigned: 0 } });
+  await prisma.coinTransaction.deleteMany({ where: { reference: `IDEA:${ideaId}` } });
   await prisma.comment.create({
     data: {
       ideaId,
@@ -832,8 +997,47 @@ export async function addCommentAction(formData: FormData) {
   const ideaId = text(formData, "ideaId");
   const comment = text(formData, "comment");
   if (!comment) redirect(`/ideas/${ideaId}`);
+  if (!(await canViewIdea(user, ideaId))) redirect(roleHomePath(user.role));
   await prisma.comment.create({ data: { ideaId, userId: user.id, comment } });
   await auditLog({ entity: "Idea", entityId: ideaId, action: "COMMENT_ADDED", userId: user.id, details: { comment } });
+  revalidatePath(`/ideas/${ideaId}`);
+  redirect(`/ideas/${ideaId}`);
+}
+
+export async function addIdeaFollowerAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const ideaId = text(formData, "ideaId");
+  const followerId = text(formData, "followerId");
+  const label = text(formData, "label") || "Seguimiento asignado";
+  const [idea, follower] = await Promise.all([
+    prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, include: { area: true } }),
+    prisma.user.findFirst({ where: { id: followerId, active: true } })
+  ]);
+  if (!follower) redirect(`/ideas/${ideaId}?error=responsable`);
+  await prisma.ideaFollower.upsert({
+    where: { ideaId_userId: { ideaId, userId: follower.id } },
+    update: { label, createdById: user.id },
+    create: { ideaId, userId: follower.id, label, createdById: user.id }
+  });
+  await notifyModuleAssignment({
+    to: follower.email,
+    subject: `Seguimiento asignado - ${idea.folio}`,
+    lines: [`Area: ${idea.area.code}`, `Motivo: ${label}`, `Problema: ${idea.problem}`],
+    path: `/ideas/${idea.id}`
+  });
+  await auditLog({ entity: "IdeaFollower", entityId: `${ideaId}:${follower.id}`, action: "FOLLOWER_ASSIGNED", userId: user.id, details: { label } });
+  revalidatePath("/seguimientos");
+  revalidatePath(`/ideas/${ideaId}`);
+  redirect(`/ideas/${ideaId}`);
+}
+
+export async function removeIdeaFollowerAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const ideaId = text(formData, "ideaId");
+  const followerId = text(formData, "followerId");
+  await prisma.ideaFollower.deleteMany({ where: { ideaId, userId: followerId } });
+  await auditLog({ entity: "IdeaFollower", entityId: `${ideaId}:${followerId}`, action: "FOLLOWER_REMOVED", userId: user.id });
+  revalidatePath("/seguimientos");
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}`);
 }
@@ -1448,6 +1652,8 @@ export async function createUserAction(formData: FormData) {
         name: text(formData, "name"),
         email,
         role,
+        jobTitle: text(formData, "jobTitle") || null,
+        employeeNumber: text(formData, "employeeNumber") || null,
         active: checked(formData, "active"),
         kaizenAccess: checked(formData, "kaizenAccess"),
         genbaAccess: checked(formData, "genbaAccess"),
@@ -1455,11 +1661,11 @@ export async function createUserAction(formData: FormData) {
       }
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      redirect("/configuracion?error=correo#usuarios");
-    }
+    const duplicate = userUniqueError(error);
+    if (duplicate) redirect(`/configuracion?error=${duplicate}#usuarios`);
     throw error;
   }
+  await resolveParticipantFromUser(user.id);
   await auditLog({ entity: "User", entityId: user.id, action: "USER_CREATED", userId: admin.id, details: { email, role } });
   revalidatePath("/configuracion");
   redirect(`/configuracion?success=usuario_creado&user=${encodeURIComponent(user.id)}#usuarios`);
@@ -1484,6 +1690,8 @@ export async function updateUserAction(formData: FormData) {
     name: text(formData, "name"),
     email,
     role,
+    jobTitle: text(formData, "jobTitle") || null,
+    employeeNumber: text(formData, "employeeNumber") || null,
     active: checked(formData, "active"),
     kaizenAccess: checked(formData, "kaizenAccess"),
     genbaAccess: checked(formData, "genbaAccess"),
@@ -1503,11 +1711,11 @@ export async function updateUserAction(formData: FormData) {
       return updated;
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      redirect(`/configuracion?error=correo&user=${encodeURIComponent(userId)}#usuarios`);
-    }
+    const duplicate = userUniqueError(error);
+    if (duplicate) redirect(`/configuracion?error=${duplicate}&user=${encodeURIComponent(userId)}#usuarios`);
     throw error;
   }
+  await resolveParticipantFromUser(user.id);
   if (admin.id === user.id) await setSession(user);
   await auditLog({
     entity: "User",

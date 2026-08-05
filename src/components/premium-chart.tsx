@@ -17,6 +17,14 @@ function record(value: unknown): LooseRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as LooseRecord : {};
 }
 
+function readableDarkColor(value: unknown) {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase();
+  return ["#000", "#000000", "#020617", "#0f172a", "#111318", "#111827", "#171717"].includes(normalized)
+    ? "#aeb8c5"
+    : value;
+}
+
 function themedAxis(value: unknown, dark: boolean) {
   const apply = (axisValue: unknown) => {
     const axis = record(axisValue);
@@ -42,25 +50,31 @@ function themedSeries(value: unknown, dark: boolean) {
     const keepLightLabel = currentColor === "#fff" || currentColor === "#ffffff";
     const isFunnel = series.type === "funnel";
     const funnelPalette = ["#657181", "#526173", "#3f5268", "#b81f3a", "#ea0029"];
-    const data = dark && isFunnel && Array.isArray(series.data)
+    const data = dark && Array.isArray(series.data)
       ? series.data.map((item, itemIndex) => {
         const entry = record(item);
         if (!Object.keys(entry).length) return item;
+        const entryStyle = record(entry.itemStyle);
         return {
           ...entry,
           itemStyle: {
-            ...record(entry.itemStyle),
-            color: funnelPalette[(itemIndex + seriesIndex) % funnelPalette.length]
+            ...entryStyle,
+            color: isFunnel
+              ? funnelPalette[(itemIndex + seriesIndex) % funnelPalette.length]
+              : readableDarkColor(entryStyle.color)
           }
         };
       })
       : series.data;
+    const itemStyle = record(series.itemStyle);
+    const lineStyle = record(series.lineStyle);
     return {
       ...series,
       data,
-      itemStyle: isFunnel && dark
-        ? { ...record(series.itemStyle), borderColor: "#111318" }
+      itemStyle: dark
+        ? { ...itemStyle, color: readableDarkColor(itemStyle.color), ...(isFunnel ? { borderColor: "#111318" } : {}) }
         : series.itemStyle,
+      lineStyle: dark ? { ...lineStyle, color: readableDarkColor(lineStyle.color) } : series.lineStyle,
       label: { ...label, color: keepLightLabel ? label.color : dark ? "#e5e7eb" : "#171717" }
     };
   });

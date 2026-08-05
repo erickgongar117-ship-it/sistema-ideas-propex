@@ -19,6 +19,40 @@ const unitSchema = z.object({
   manager: z.string().trim().min(2, "Indica el jefe directo o gerente."),
   routingUserId: z.string().trim().optional(),
   qrEnabled: z.boolean(),
+  isSupportArea: z.boolean(),
+  active: z.boolean()
+});
+
+const plantSchema = z.object({
+  plantId: z.string().trim().optional(),
+  name: z.string().trim().min(2, "Escribe el nombre de la planta."),
+  code: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{2,12}$/, "Usa un codigo de 2 a 12 caracteres, sin espacios."),
+  active: z.boolean()
+});
+
+const membershipSchema = z.object({
+  membershipId: z.string().trim().optional(),
+  orgUnitId: z.string().trim().min(1),
+  userId: z.string().trim().min(1),
+  title: z.string().trim().min(2, "Indica el puesto de la persona."),
+  level: z.number().int().min(0).max(99),
+  managerMembershipId: z.string().trim().optional(),
+  canReviewTeam: z.boolean(),
+  canReceiveIdeas: z.boolean(),
+  canManageActivities: z.boolean(),
+  setAsRoute: z.boolean(),
+  active: z.boolean()
+});
+
+const escalationSchema = z.object({
+  ruleId: z.string().trim().optional(),
+  orgUnitId: z.string().trim().min(1),
+  name: z.string().trim().min(2, "Indica un nombre para la ruta."),
+  submitterLabel: z.string().trim().min(2, "Indica quien inicia esta ruta."),
+  circumstance: z.string().trim().optional(),
+  submitterLevel: z.number().int().min(0).max(99),
+  reviewerMembershipId: z.string().trim().min(1),
+  isDefault: z.boolean(),
   active: z.boolean()
 });
 
@@ -50,6 +84,7 @@ export async function saveOrganizationUnitAction(formData: FormData): Promise<Or
     manager: value(formData, "manager"),
     routingUserId: value(formData, "routingUserId") || undefined,
     qrEnabled: isChecked(formData, "qrEnabled"),
+    isSupportArea: isChecked(formData, "isSupportArea"),
     active: isChecked(formData, "active")
   });
 
@@ -120,6 +155,7 @@ export async function saveOrganizationUnitAction(formData: FormData): Promise<Or
         manager: input.manager,
         routingUserId: routingUser?.id ?? null,
         qrEnabled: input.qrEnabled,
+        isSupportArea: input.isSupportArea,
         active: input.active,
         ...(captureArea ? { captureAreaId: captureArea.id } : {})
       };
@@ -141,7 +177,7 @@ export async function saveOrganizationUnitAction(formData: FormData): Promise<Or
       entityId: result.unit.id,
       action: input.unitId ? "ORG_UNIT_UPDATED" : "ORG_UNIT_CREATED",
       userId: admin.id,
-      details: { plant: plant.code, code: input.code, qrEnabled: input.qrEnabled, routingUserId: routingUser?.id ?? null }
+      details: { plant: plant.code, code: input.code, qrEnabled: input.qrEnabled, isSupportArea: input.isSupportArea, routingUserId: routingUser?.id ?? null }
     });
     refreshOrganizationPaths([result.oldCaptureCode, result.captureCode].filter((code): code is string => Boolean(code)));
 
@@ -162,4 +198,214 @@ export async function saveOrganizationUnitAction(formData: FormData): Promise<Or
     console.error("saveOrganizationUnitAction", error);
     return { ok: false, message: "No pudimos guardar la estructura. Intenta nuevamente." };
   }
+}
+
+export async function savePlantAction(formData: FormData): Promise<OrganizationActionResult> {
+  const admin = await requireUser(["ADMIN"]);
+  const parsed = plantSchema.safeParse({
+    plantId: value(formData, "plantId") || undefined,
+    name: value(formData, "name"),
+    code: value(formData, "code"),
+    active: isChecked(formData, "active")
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa los datos de la planta." };
+
+  const duplicate = await prisma.plant.findFirst({
+    where: { code: parsed.data.code, ...(parsed.data.plantId ? { id: { not: parsed.data.plantId } } : {}) }
+  });
+  if (duplicate) return { ok: false, message: `El codigo ${parsed.data.code} ya pertenece a ${duplicate.name}.` };
+
+  const plant = parsed.data.plantId
+    ? await prisma.plant.update({ where: { id: parsed.data.plantId }, data: { name: parsed.data.name, code: parsed.data.code, active: parsed.data.active } })
+    : await prisma.plant.create({ data: { name: parsed.data.name, code: parsed.data.code, active: parsed.data.active } });
+  await auditLog({ entity: "Plant", entityId: plant.id, action: parsed.data.plantId ? "PLANT_UPDATED" : "PLANT_CREATED", userId: admin.id, details: { code: plant.code } });
+  refreshOrganizationPaths();
+  return { ok: true, message: `${plant.name} quedo disponible para configurar areas y responsables.` };
+}
+
+export async function saveMembershipAction(formData: FormData): Promise<OrganizationActionResult> {
+  const admin = await requireUser(["ADMIN"]);
+  const parsed = membershipSchema.safeParse({
+    membershipId: value(formData, "membershipId") || undefined,
+    orgUnitId: value(formData, "orgUnitId"),
+    userId: value(formData, "userId"),
+    title: value(formData, "title"),
+    level: Number(value(formData, "level") || 0),
+    managerMembershipId: value(formData, "managerMembershipId") || undefined,
+    canReviewTeam: isChecked(formData, "canReviewTeam"),
+    canReceiveIdeas: isChecked(formData, "canReceiveIdeas"),
+    canManageActivities: isChecked(formData, "canManageActivities"),
+    setAsRoute: isChecked(formData, "setAsRoute"),
+    active: isChecked(formData, "active")
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa los datos de la persona." };
+  const input = parsed.data;
+  const [unit, person, manager] = await Promise.all([
+    prisma.orgUnit.findUnique({ where: { id: input.orgUnitId }, include: { captureArea: true } }),
+    prisma.user.findFirst({ where: { id: input.userId, active: true } }),
+    input.managerMembershipId ? prisma.orgMembership.findUnique({ where: { id: input.managerMembershipId } }) : null
+  ]);
+  if (!unit || !person) return { ok: false, message: "El area o la persona seleccionada ya no esta disponible." };
+  if (input.managerMembershipId && !manager) return { ok: false, message: "El jefe directo seleccionado ya no existe." };
+  if (input.membershipId && input.managerMembershipId === input.membershipId) return { ok: false, message: "Una persona no puede ser su propio jefe directo." };
+
+  try {
+    const membership = await prisma.$transaction(async (tx) => {
+      const data = {
+        userId: input.userId,
+        orgUnitId: input.orgUnitId,
+        title: input.title,
+        level: input.level,
+        managerMembershipId: input.managerMembershipId ?? null,
+        canReviewTeam: input.canReviewTeam,
+        canReceiveIdeas: input.canReceiveIdeas,
+        canManageActivities: input.canManageActivities,
+        active: input.active
+      };
+      const saved = input.membershipId
+        ? await tx.orgMembership.update({ where: { id: input.membershipId }, data })
+        : await tx.orgMembership.create({ data: { ...data, sortOrder: await tx.orgMembership.count({ where: { orgUnitId: input.orgUnitId } }) } });
+
+      if (input.setAsRoute) {
+        await tx.orgUnit.update({ where: { id: unit.id }, data: { routingUserId: person.id } });
+        if (unit.captureAreaId) await tx.area.update({ where: { id: unit.captureAreaId }, data: { supervisorId: person.id } });
+      }
+      return saved;
+    });
+    await auditLog({ entity: "OrgMembership", entityId: membership.id, action: input.membershipId ? "MEMBERSHIP_UPDATED" : "MEMBERSHIP_CREATED", userId: admin.id, details: { orgUnitId: unit.id, userId: person.id, title: input.title } });
+    refreshOrganizationPaths(unit.captureArea ? [unit.captureArea.code] : []);
+    return { ok: true, message: `${person.name} quedo configurado como ${input.title} en ${unit.name}.` };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { ok: false, message: `${person.name} ya pertenece a esta area. Edita su registro existente.` };
+    console.error("saveMembershipAction", error);
+    return { ok: false, message: "No pudimos guardar a la persona en esta area." };
+  }
+}
+
+export async function saveEscalationRuleAction(formData: FormData): Promise<OrganizationActionResult> {
+  const admin = await requireUser(["ADMIN"]);
+  const parsed = escalationSchema.safeParse({
+    ruleId: value(formData, "ruleId") || undefined,
+    orgUnitId: value(formData, "orgUnitId"),
+    name: value(formData, "name"),
+    submitterLabel: value(formData, "submitterLabel"),
+    circumstance: value(formData, "circumstance") || undefined,
+    submitterLevel: Number(value(formData, "submitterLevel") || 0),
+    reviewerMembershipId: value(formData, "reviewerMembershipId"),
+    isDefault: isChecked(formData, "isDefault"),
+    active: isChecked(formData, "active")
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa la ruta de escalamiento." };
+  const input = parsed.data;
+  const [unit, reviewer] = await Promise.all([
+    prisma.orgUnit.findUnique({ where: { id: input.orgUnitId }, include: { captureArea: true } }),
+    prisma.orgMembership.findUnique({ where: { id: input.reviewerMembershipId }, include: { user: true } })
+  ]);
+  if (!unit || !reviewer || !reviewer.active || !reviewer.user.active) return { ok: false, message: "El area o la persona revisora ya no esta disponible." };
+
+  const rule = await prisma.$transaction(async (tx) => {
+    if (input.isDefault) await tx.orgEscalationRule.updateMany({ where: { orgUnitId: input.orgUnitId }, data: { isDefault: false } });
+    const data = {
+      orgUnitId: input.orgUnitId,
+      name: input.name,
+      submitterLabel: input.submitterLabel,
+      circumstance: input.circumstance ?? null,
+      submitterLevel: input.submitterLevel,
+      reviewerMembershipId: input.reviewerMembershipId,
+      isDefault: input.isDefault,
+      active: input.active
+    };
+    const saved = input.ruleId
+      ? await tx.orgEscalationRule.update({ where: { id: input.ruleId }, data })
+      : await tx.orgEscalationRule.create({ data: { ...data, sortOrder: await tx.orgEscalationRule.count({ where: { orgUnitId: input.orgUnitId } }) } });
+    if (input.isDefault) {
+      await tx.orgUnit.update({ where: { id: input.orgUnitId }, data: { routingUserId: reviewer.userId } });
+      if (unit.captureAreaId) await tx.area.update({ where: { id: unit.captureAreaId }, data: { supervisorId: reviewer.userId } });
+    }
+    return saved;
+  });
+  await auditLog({ entity: "OrgEscalationRule", entityId: rule.id, action: input.ruleId ? "ESCALATION_UPDATED" : "ESCALATION_CREATED", userId: admin.id, details: { orgUnitId: unit.id, reviewerId: reviewer.userId, submitterLabel: input.submitterLabel } });
+  refreshOrganizationPaths(unit.captureArea ? [unit.captureArea.code] : []);
+  return { ok: true, message: `Ruta guardada: ${input.submitterLabel} enviara sus ideas a ${reviewer.user.name}.` };
+}
+
+export async function deleteEscalationRuleAction(formData: FormData): Promise<OrganizationActionResult> {
+  const admin = await requireUser(["ADMIN"]);
+  const ruleId = value(formData, "ruleId");
+  const rule = await prisma.orgEscalationRule.findUnique({ where: { id: ruleId }, include: { orgUnit: { include: { captureArea: true } } } });
+  if (!rule) return { ok: false, message: "La ruta ya no existe." };
+  await prisma.orgEscalationRule.delete({ where: { id: rule.id } });
+  await auditLog({ entity: "OrgEscalationRule", entityId: rule.id, action: "ESCALATION_DELETED", userId: admin.id, details: { name: rule.name } });
+  refreshOrganizationPaths(rule.orgUnit.captureArea ? [rule.orgUnit.captureArea.code] : []);
+  return { ok: true, message: `La ruta ${rule.name} fue eliminada.` };
+}
+
+export async function deleteMembershipAction(formData: FormData): Promise<OrganizationActionResult> {
+  const admin = await requireUser(["ADMIN"]);
+  const membershipId = value(formData, "membershipId");
+  const membership = await prisma.orgMembership.findUnique({ where: { id: membershipId }, include: { user: true, orgUnit: { include: { captureArea: true } } } });
+  if (!membership) return { ok: false, message: "La asignacion ya no existe." };
+  await prisma.$transaction(async (tx) => {
+    await tx.orgMembership.delete({ where: { id: membership.id } });
+    if (membership.orgUnit.routingUserId === membership.userId) {
+      await tx.orgUnit.update({ where: { id: membership.orgUnitId }, data: { routingUserId: null } });
+      if (membership.orgUnit.captureAreaId) await tx.area.update({ where: { id: membership.orgUnit.captureAreaId }, data: { supervisorId: null } });
+    }
+  });
+  await auditLog({ entity: "OrgMembership", entityId: membership.id, action: "MEMBERSHIP_DELETED", userId: admin.id, details: { userId: membership.userId, orgUnitId: membership.orgUnitId } });
+  refreshOrganizationPaths(membership.orgUnit.captureArea ? [membership.orgUnit.captureArea.code] : []);
+  return { ok: true, message: `${membership.user.name} fue retirado de ${membership.orgUnit.name}.` };
+}
+
+function descendantIds(rootId: string, units: Array<{ id: string; parentId: string | null }>) {
+  const result = new Set([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const unit of units) {
+      if (unit.parentId && result.has(unit.parentId) && !result.has(unit.id)) {
+        result.add(unit.id);
+        changed = true;
+      }
+    }
+  }
+  return [...result];
+}
+
+export async function deleteOrganizationUnitAction(formData: FormData): Promise<OrganizationActionResult> {
+  await requireUser(["ADMIN"]);
+  const unitId = value(formData, "unitId");
+  const confirmation = value(formData, "confirmation").toUpperCase();
+  const unit = await prisma.orgUnit.findUnique({ where: { id: unitId }, include: { plant: true } });
+  if (!unit) return { ok: false, message: "El elemento ya no existe." };
+  if (confirmation !== unit.code.toUpperCase()) return { ok: false, message: `Escribe ${unit.code} para confirmar la eliminacion.` };
+  const units = await prisma.orgUnit.findMany({ where: { plantId: unit.plantId }, select: { id: true, parentId: true, captureAreaId: true } });
+  const ids = descendantIds(unit.id, units);
+  const areaIds = units.filter((item) => ids.includes(item.id) && item.captureAreaId).map((item) => item.captureAreaId as string);
+  const ideaCount = areaIds.length ? await prisma.idea.count({ where: { areaId: { in: areaIds } } }) : 0;
+  if (ideaCount) return { ok: false, message: `Hay ${ideaCount} ideas vinculadas. Eliminalas desde Control de datos antes de borrar esta estructura.` };
+  await prisma.$transaction(async (tx) => {
+    await tx.orgUnit.deleteMany({ where: { id: { in: ids } } });
+    if (areaIds.length) await tx.area.deleteMany({ where: { id: { in: areaIds } } });
+  });
+  refreshOrganizationPaths();
+  return { ok: true, message: `${unit.name} y sus subdivisiones fueron eliminados definitivamente.` };
+}
+
+export async function deletePlantAction(formData: FormData): Promise<OrganizationActionResult> {
+  await requireUser(["ADMIN"]);
+  const plantId = value(formData, "plantId");
+  const confirmation = value(formData, "confirmation").toUpperCase();
+  const plant = await prisma.plant.findUnique({ where: { id: plantId }, include: { orgUnits: { select: { captureAreaId: true } } } });
+  if (!plant) return { ok: false, message: "La planta ya no existe." };
+  if (confirmation !== plant.code.toUpperCase()) return { ok: false, message: `Escribe ${plant.code} para confirmar la eliminacion.` };
+  const areaIds = plant.orgUnits.map((unit) => unit.captureAreaId).filter((id): id is string => Boolean(id));
+  const ideaCount = areaIds.length ? await prisma.idea.count({ where: { areaId: { in: areaIds } } }) : 0;
+  if (ideaCount) return { ok: false, message: `Hay ${ideaCount} ideas de esta planta. Usa Control de datos antes de eliminarla.` };
+  await prisma.$transaction(async (tx) => {
+    await tx.plant.delete({ where: { id: plant.id } });
+    if (areaIds.length) await tx.area.deleteMany({ where: { id: { in: areaIds } } });
+  });
+  refreshOrganizationPaths();
+  return { ok: true, message: `${plant.name} fue eliminada definitivamente.` };
 }

@@ -23,7 +23,12 @@ export async function createKaizenFromIdea(input: CreateKaizenFromIdeaInput) {
       if (!input.updateExisting) return existing;
       return prisma.kaizenProject.update({
         where: { id: existing.id },
-        data: { leaderId: input.leaderId, startDate: input.startDate, endDate }
+        data: {
+          leaderId: input.leaderId,
+          startDate: input.startDate,
+          endDate,
+          orgUnitId: idea.area.organizationUnit?.id ?? null
+        }
       });
     }
 
@@ -45,7 +50,8 @@ export async function createKaizenFromIdea(input: CreateKaizenFromIdeaInput) {
             endDate,
             leaderId: input.leaderId,
             createdById: input.createdById,
-            sourceIdeaId: idea.id
+            sourceIdeaId: idea.id,
+            orgUnitId: idea.area.organizationUnit?.id ?? null
           }
         });
       });

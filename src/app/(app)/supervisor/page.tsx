@@ -10,23 +10,40 @@ import { requireUser } from "@/lib/auth";
 import { approvalStatusLabels, approvalTypeLabels, ideaCategoryLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
-function SupportRequestFields({ idea }: { idea: { impactsQuality: boolean; impactsSafety: boolean; requiresMaintenance: boolean } }) {
+function SupportRequestFields({
+  idea,
+  supportAreas
+}: {
+  idea: {
+    impactsQuality: boolean;
+    impactsSafety: boolean;
+    requiresMaintenance: boolean;
+    area: { organizationUnit: { plantId: string } | null };
+    supportRequests: Array<{ orgUnitId: string }>;
+  };
+  supportAreas: Array<{ id: string; name: string; code: string; plantId: string }>;
+}) {
+  const selectedIds = new Set(idea.supportRequests.map((request) => request.orgUnitId));
+  const available = supportAreas.filter((area) => !idea.area.organizationUnit || area.plantId === idea.area.organizationUnit.plantId);
+  for (const area of available) {
+    const normalized = `${area.code} ${area.name}`.toLowerCase();
+    if (idea.impactsQuality && (normalized.includes("calidad") || normalized.includes("inocuidad") || normalized.includes("-cal"))) selectedIds.add(area.id);
+    if (idea.impactsSafety && (normalized.includes("seguridad") || normalized.includes("ambiente") || normalized.includes("-seg"))) selectedIds.add(area.id);
+    if (idea.requiresMaintenance && (normalized.includes("mantenimiento") || normalized.includes("servicio") || normalized.includes("-man"))) selectedIds.add(area.id);
+  }
   return (
     <fieldset className="rounded-lg border border-line bg-panel p-3">
       <legend className="px-1 text-xs font-extrabold text-ink">¿Necesitas apoyo para validar o realizar esta idea?</legend>
       <p className="mb-3 mt-1 text-xs leading-5 text-slate-500">Marca las áreas que deban revisarla. Al aprobar, les aparecerá automáticamente en su bandeja.</p>
       <div className="grid gap-2 sm:grid-cols-3">
-        {[
-          ["impactsQuality", "Calidad / Inocuidad", idea.impactsQuality, "accent-red-600"],
-          ["impactsSafety", "Seguridad", idea.impactsSafety, "accent-slate-700"],
-          ["requiresMaintenance", "Mantenimiento", idea.requiresMaintenance, "accent-blue-600"]
-        ].map(([name, label, selected, accent]) => (
-          <label className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-xs font-extrabold text-slate-700" key={String(name)}>
-            <input className={String(accent)} defaultChecked={Boolean(selected)} name={String(name)} type="checkbox" />
-            {String(label)}
+        {available.map((area) => (
+          <label className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-xs font-extrabold text-slate-700" key={area.id}>
+            <input defaultChecked={selectedIds.has(area.id)} name="supportUnitIds" type="checkbox" value={area.id} />
+            {area.name}
           </label>
         ))}
       </div>
+      {!available.length ? <p className="text-xs font-bold text-amber-800">No hay areas de apoyo configuradas para esta planta.</p> : null}
     </fieldset>
   );
 }
@@ -34,17 +51,22 @@ function SupportRequestFields({ idea }: { idea: { impactsQuality: boolean; impac
 export default async function SupervisorPage() {
   const user = await requireUser(["ADMIN", "SUPERVISOR"]);
   const supervisorWhere = user.role === "SUPERVISOR" ? { supervisorId: user.id } : {};
-  const [ideas, approvedIdeas] = await Promise.all([
+  const [ideas, approvedIdeas, supportAreas] = await Promise.all([
     prisma.idea.findMany({
       where: { status: { in: ["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"] }, ...supervisorWhere },
-      include: { area: true, supervisor: true },
+      include: { area: { include: { organizationUnit: true } }, supervisor: true, supportRequests: true },
       orderBy: { createdAt: "asc" }
     }),
     prisma.idea.findMany({
       where: { ...supervisorWhere, approvals: { some: { type: "SUPERVISOR", status: "APPROVED" } } },
-      include: { area: true, implementationOwner: true, approvals: { orderBy: { createdAt: "asc" } } },
+      include: { area: true, implementationOwner: true, approvals: { orderBy: { createdAt: "asc" } }, supportRequests: { include: { orgUnit: true }, orderBy: { createdAt: "asc" } } },
       orderBy: { updatedAt: "desc" },
       take: 40
+    }),
+    prisma.orgUnit.findMany({
+      where: { active: true, isSupportArea: true },
+      orderBy: [{ plantId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, code: true, plantId: true }
     })
   ]);
   const ideasInMotion = approvedIdeas.filter((idea) => !["CERRADA", "CANCELADA"].includes(idea.status)).length;
@@ -101,7 +123,7 @@ export default async function SupervisorPage() {
 
                 <form action={supervisorDecisionAction} className="mt-4 grid gap-3">
                   <input name="ideaId" type="hidden" value={idea.id} />
-                  <SupportRequestFields idea={idea} />
+                  <SupportRequestFields idea={idea} supportAreas={supportAreas} />
                   <label>
                     <span className="label">Comentario de la decision</span>
                     <textarea className="field min-h-20" name="comments" placeholder="Obligatorio al rechazar o solicitar información" />
@@ -155,11 +177,20 @@ export default async function SupervisorPage() {
                 <div className="mt-4 border-t border-line pt-3">
                   <p className="text-[10px] font-extrabold uppercase text-slate-500">Validaciones</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {supportApprovals.length ? supportApprovals.map((approval) => (
-                      <span className="rounded-full border border-line bg-panel px-2.5 py-1 text-[11px] font-bold text-slate-700" key={approval.id}>
-                        {approvalTypeLabels[approval.type]}: {approvalStatusLabels[approval.status]}
-                      </span>
-                    )) : <span className="text-xs text-slate-500">No requirió validaciones adicionales.</span>}
+                    {supportApprovals.length || idea.supportRequests.length ? (
+                      <>
+                        {supportApprovals.map((approval) => (
+                          <span className="rounded-full border border-line bg-panel px-2.5 py-1 text-[11px] font-bold text-slate-700" key={approval.id}>
+                            {approvalTypeLabels[approval.type]}: {approvalStatusLabels[approval.status]}
+                          </span>
+                        ))}
+                        {idea.supportRequests.map((request) => (
+                          <span className="rounded-full border border-line bg-panel px-2.5 py-1 text-[11px] font-bold text-slate-700" key={request.id}>
+                            {request.orgUnit.name}: {approvalStatusLabels[request.status]}
+                          </span>
+                        ))}
+                      </>
+                    ) : <span className="text-xs text-slate-500">No requirio validaciones adicionales.</span>}
                   </div>
                 </div>
 

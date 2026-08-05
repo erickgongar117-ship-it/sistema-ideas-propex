@@ -14,7 +14,7 @@ function averageHours(rows: Array<{ idea: { createdAt: Date }; decidedAt: Date |
 }
 
 export default async function DashboardPage() {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const [ideas, areas, supervisorApprovals, validationApprovals, kaizenProjects, genbaWalks] = await Promise.all([
     prisma.idea.findMany({
       include: { area: true, supervisor: true },
@@ -87,6 +87,7 @@ export default async function DashboardPage() {
         areas={areas.map((area) => area.code)}
         generatedAt={new Date().toISOString()}
         ideas={dashboardIdeas}
+        viewerRole={user.role === "ADMIN" ? "ADMIN" : "MEJORA_CONTINUA"}
         portfolio={{
           kaizen: {
             total: kaizenProjects.length,

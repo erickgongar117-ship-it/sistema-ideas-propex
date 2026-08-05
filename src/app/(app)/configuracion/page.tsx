@@ -7,7 +7,7 @@ import { roleLabels } from "@/lib/domain";
 import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
 import { prisma } from "@/lib/prisma";
 
-const configurableRoles = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO"] as const;
+const configurableRoles = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"] as const;
 
 type ConfigPageProps = {
   searchParams: Promise<{ error?: string; success?: string; user?: string }>;
@@ -19,7 +19,8 @@ const roleTone = {
   SUPERVISOR: "bg-emerald-50 text-emerald-800",
   CALIDAD: "bg-red-50 text-red-800",
   SEGURIDAD: "bg-slate-100 text-slate-700",
-  MANTENIMIENTO: "bg-blue-50 text-blue-800"
+  MANTENIMIENTO: "bg-blue-50 text-blue-800",
+  COLABORADOR: "bg-slate-100 text-slate-700"
 };
 
 export default async function ConfigPage({ searchParams }: ConfigPageProps) {
@@ -34,6 +35,8 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
 
   const errorMessage = query.error === "correo"
     ? "Ese correo ya pertenece a otro usuario."
+    : query.error === "empleado"
+      ? "Ese numero de empleado ya pertenece a otra persona. Puedes dejarlo vacio o usar el numero correcto."
     : query.error === "correo_invalido"
       ? "Escribe un correo valido, por ejemplo nombre@proboca.net."
     : query.error === "contrasena"
@@ -79,6 +82,8 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
             <label><span className="label">Nombre completo</span><input className="field" name="name" placeholder="Nombre y apellidos" required /></label>
             <label><span className="label">Correo de acceso y notificaciones</span><input autoComplete="off" className="field" name="email" placeholder="nombre@proboca.net" required type="email" /></label>
             <label><span className="label">Departamento / rol</span><select className="field" name="role" defaultValue="MEJORA_CONTINUA">{configurableRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></label>
+            <label><span className="label">Puesto</span><input className="field" name="jobTitle" placeholder="Ej. Tecnico, supervisor, gerente" /></label>
+            <label><span className="label">Numero de empleado</span><input className="field" name="employeeNumber" placeholder="Opcional" /></label>
             <label><span className="label">Contraseña temporal</span><input autoComplete="new-password" className="field" minLength={8} name="password" placeholder="Minimo 8 caracteres" required type="password" /></label>
             <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked name="active" type="checkbox" />Acceso activo</label>
             <fieldset className="rounded-lg border border-line bg-panel p-3"><legend className="px-1 text-xs font-extrabold text-ink">Módulos adicionales</legend><div className="mt-2 flex flex-wrap gap-4 text-sm font-bold text-slate-700"><label className="flex items-center gap-2"><input name="kaizenAccess" type="checkbox" />Kaizen</label><label className="flex items-center gap-2"><input name="genbaAccess" type="checkbox" />GENBA</label></div></fieldset>
@@ -101,6 +106,8 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
                 <label><span className="label">Nombre</span><input className="field" name="name" defaultValue={user.name} required /></label>
                 <label><span className="label">Correo real</span><input className="field" name="email" defaultValue={user.email} required type="email" /></label>
                 <label><span className="label">Departamento / rol</span><select className="field" name="role" defaultValue={user.role}>{configurableRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></label>
+                <label><span className="label">Puesto</span><input className="field" name="jobTitle" defaultValue={user.jobTitle ?? ""} placeholder="Puesto en la organizacion" /></label>
+                <label><span className="label">Numero de empleado</span><input className="field" name="employeeNumber" defaultValue={user.employeeNumber ?? ""} /></label>
                 <label><span className="label">Cambiar contraseña</span><input autoComplete="new-password" className="field" minLength={8} name="password" placeholder="Dejar vacio para conservar" type="password" /></label>
                 <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked={user.active} name="active" type="checkbox" />Acceso activo</label>
                 <fieldset className="rounded-lg border border-line bg-panel p-3"><legend className="px-1 text-xs font-extrabold text-ink">Módulos adicionales</legend><div className="mt-2 flex flex-wrap gap-4 text-sm font-bold text-slate-700"><label className="flex items-center gap-2"><input defaultChecked={user.kaizenAccess} name="kaizenAccess" type="checkbox" />Kaizen</label><label className="flex items-center gap-2"><input defaultChecked={user.genbaAccess} name="genbaAccess" type="checkbox" />GENBA</label></div></fieldset>

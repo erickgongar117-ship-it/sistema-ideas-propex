@@ -237,12 +237,8 @@ export function approvalTypeForRole(role: Role): ApprovalType | null {
 }
 
 export function roleHomePath(role: Role): string {
-  if (role === "SUPERVISOR") return "/supervisor";
-  if (role === "CALIDAD") return "/validaciones/calidad";
-  if (role === "SEGURIDAD") return "/validaciones/seguridad";
-  if (role === "MANTENIMIENTO") return "/validaciones/mantenimiento";
   if (role === "MEJORA_CONTINUA" || role === "ADMIN") return "/dashboard";
-  return "/";
+  return "/seguimientos";
 }
 
 export function isTerminalStatus(status: IdeaStatus): boolean {

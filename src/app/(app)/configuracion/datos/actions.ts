@@ -68,6 +68,7 @@ function revalidateOperationalPaths(modules: Iterable<OperationalModule>) {
 function resultParams(result: HardDeleteResult) {
   return {
     ideas: result.ideas,
+    participants: result.orphanParticipants,
     kaizen: result.kaizenProjects,
     genba: result.genbaWalks,
     activities: result.kaizenActivities + result.genbaActivities,
