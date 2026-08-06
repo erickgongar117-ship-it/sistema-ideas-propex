@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, Search, X } from "lucide-react";
 
 export type SearchablePickerOption = {
@@ -34,6 +34,7 @@ export function SearchablePicker({
   required = false
 }: SearchablePickerProps) {
   const listId = useId();
+  const rootRef = useRef<HTMLLabelElement>(null);
   const [selectedValue, setSelectedValue] = useState(defaultValue);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -44,8 +45,27 @@ export function SearchablePicker({
     return options.filter((option) => normalize(`${option.label} ${option.description ?? ""} ${option.searchText ?? ""}`).includes(term)).slice(0, 60);
   }, [options, search]);
 
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent | FocusEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !rootRef.current?.contains(target)) setOpen(false);
+    };
+    const closeWithEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("focusin", closeOutside);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("focusin", closeOutside);
+      document.removeEventListener("keydown", closeWithEscape);
+    };
+  }, []);
+
   return (
-    <label className="relative block">
+    <label className="relative block" ref={rootRef}>
       <span className="label">{label}</span>
       <input name={name} required={required} type="hidden" value={selectedValue} />
       {selected ? (

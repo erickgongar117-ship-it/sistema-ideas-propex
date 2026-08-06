@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { DisclosureManager } from "@/components/disclosure-manager";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
@@ -21,7 +22,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <DisclosureManager />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
