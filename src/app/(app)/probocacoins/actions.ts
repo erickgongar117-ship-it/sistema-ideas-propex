@@ -16,6 +16,9 @@ const financeRoles = ["ADMIN", "MEJORA_CONTINUA"] as const;
 
 class InsufficientBalanceError extends Error {}
 class DuplicateSourceAwardError extends Error {}
+class AlreadyReversedError extends Error {}
+class DuplicateNeedsReconciliationError extends Error {}
+class DuplicateOrphanSourceError extends Error {}
 
 async function serializableTransaction<T>(operation: (transaction: Prisma.TransactionClient) => Promise<T>) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -78,6 +81,7 @@ export async function createCoinTransactionAction(formData: FormData) {
   const amount = Math.trunc(Number(textValue(formData, "amount")));
   const occurredAt = parseDate(formData);
   const linkedEntity = textValue(formData, "linkedEntity");
+  const requestId = textValue(formData, "requestId");
 
   if (
     !participantId ||
@@ -133,7 +137,7 @@ export async function createCoinTransactionAction(formData: FormData) {
       await upsertCoinTransaction({
         reference: linkedSource
           ? `linked:${linkedSource.sourceType}:${linkedSource.sourceId}:${participantId}`
-          : `ledger:${randomUUID()}`,
+          : `ledger:${/^[a-f0-9-]{36}$/i.test(requestId) ? requestId : randomUUID()}`,
         participantId,
         type: requestedType,
         sourceType,
@@ -158,4 +162,81 @@ export async function createCoinTransactionAction(formData: FormData) {
   revalidatePath("/entrenamientos");
   revalidatePath("/dashboard");
   redirect(financePath({ success: "movimiento", participant: participantId }));
+}
+
+export async function reverseDuplicateCoinTransactionAction(formData: FormData) {
+  const user = await requireUser(["ADMIN"]);
+  const transactionId = textValue(formData, "transactionId");
+  const reason = textValue(formData, "reason");
+  const confirmation = textValue(formData, "confirmation").toUpperCase();
+  if (!transactionId || reason.length < 5 || confirmation !== "DUPLICADO") {
+    redirect(financePath({ error: "duplicado_datos" }));
+  }
+
+  let participantId = "";
+  try {
+    await serializableTransaction(async (transaction) => {
+      const original = await transaction.coinTransaction.findUnique({
+        where: { id: transactionId },
+        include: { reversal: { select: { id: true } }, participant: { select: { id: true, name: true } } }
+      });
+      if (!original || original.reversalOfId || original.reversal || !original.amount || original.reference.includes(":reconcile:")) throw new AlreadyReversedError();
+      participantId = original.participantId;
+      const currentBalance = await getParticipantBalance(original.participantId, transaction);
+      if (currentBalance - original.amount < 0) throw new InsufficientBalanceError();
+      if (original.sourceType === CoinSourceType.IDEA) {
+        if (!original.sourceId) throw new DuplicateOrphanSourceError();
+        const [idea, sourceNet] = await Promise.all([
+          transaction.idea.findUnique({ where: { id: original.sourceId }, select: { pointsAssigned: true } }),
+          transaction.coinTransaction.aggregate({ where: { participantId: original.participantId, sourceType: CoinSourceType.IDEA, sourceId: original.sourceId }, _sum: { amount: true } })
+        ]);
+        if (!idea) throw new DuplicateOrphanSourceError();
+        if ((sourceNet._sum.amount ?? 0) - original.amount !== idea.pointsAssigned) throw new DuplicateNeedsReconciliationError();
+      }
+      if (original.sourceType === CoinSourceType.TRAINING) {
+        if (!original.sourceId) throw new DuplicateOrphanSourceError();
+        const [enrollment, sourceNet] = await Promise.all([
+          transaction.trainingEnrollment.findUnique({
+            where: { sessionId_participantId: { sessionId: original.sourceId, participantId: original.participantId } },
+            select: { coinsAwarded: true }
+          }),
+          transaction.coinTransaction.aggregate({ where: { participantId: original.participantId, sourceType: CoinSourceType.TRAINING, sourceId: original.sourceId }, _sum: { amount: true } })
+        ]);
+        if (!enrollment) throw new DuplicateOrphanSourceError();
+        if ((sourceNet._sum.amount ?? 0) - original.amount !== enrollment.coinsAwarded) throw new DuplicateNeedsReconciliationError();
+      }
+      await transaction.coinTransaction.create({
+        data: {
+          reference: `reversal:${original.id}`,
+          participantId: original.participantId,
+          type: CoinTransactionType.ADJUSTMENT,
+          sourceType: original.sourceType,
+          sourceId: original.sourceId,
+          amount: -original.amount,
+          description: `Correccion de duplicado: ${original.description}`,
+          correctionReason: reason,
+          reversalOfId: original.id,
+          createdById: user.id,
+          occurredAt: new Date()
+        }
+      });
+      await transaction.auditLog.create({
+        data: { entity: "CoinTransaction", entityId: transactionId, action: "DUPLICATE_REVERSED", userId: user.id, details: JSON.stringify({ reason, amount: original.amount }) }
+      });
+    });
+  } catch (error) {
+    if (error instanceof AlreadyReversedError || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) {
+      redirect(financePath({ error: "duplicado_revertido" }));
+    }
+    if (error instanceof InsufficientBalanceError) redirect(financePath({ error: "duplicado_saldo", participant: participantId }));
+    if (error instanceof DuplicateNeedsReconciliationError) redirect(financePath({ error: "duplicado_conciliacion", participant: participantId }));
+    if (error instanceof DuplicateOrphanSourceError) redirect(financePath({ error: "duplicado_origen", participant: participantId }));
+    throw error;
+  }
+  revalidatePath("/probocacoins");
+  revalidatePath("/dashboard");
+  revalidatePath("/ideas/repositorio");
+  revalidatePath("/kaizen/repositorio");
+  revalidatePath("/genba/repositorio");
+  redirect(financePath({ success: "duplicado", ...(participantId ? { participant: participantId } : {}) }));
 }

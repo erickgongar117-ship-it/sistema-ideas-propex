@@ -1,55 +1,111 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CalendarDays, CheckCircle2, FileText, FolderOpen, GitMerge, MessageSquare, Paperclip, Plus, Save, Target, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, Archive, ArrowLeft, CalendarDays, CheckCircle2, Coins, FileText, FolderOpen, GitMerge, MessageSquare, Paperclip, Plus, Save, Target, Trash2, Upload, UserPlus, UsersRound, XCircle } from "lucide-react";
 import {
   addKaizenActivityAction,
+  addKaizenTeamMemberAction,
   addKaizenUpdateAction,
   closeKaizenActivityAction,
+  closeKaizenProjectAction,
   mergeKaizenActivitiesAction,
+  removeKaizenTeamMemberAction,
   updateKaizenActivityAction,
   updateKaizenProjectAction,
+  updateKaizenRewardsAction,
   uploadKaizenCharterAction
 } from "@/app/actions";
 import { KaizenStatusPill } from "@/components/module-status";
 import { PageHeader } from "@/components/page-header";
+import { ProbocaCoin } from "@/components/proboca-coin";
+import { ProbocaCoinsCelebration } from "@/components/proboca-coins-celebration";
 import { ProgressMeter } from "@/components/progress-meter";
 import { SectionHeading } from "@/components/section-heading";
 import { WorkItemDisclosure } from "@/components/work-item-disclosure";
-import { isWorkItemOverdue, kaizenStatusLabels, workItemStatusLabels, workProgress } from "@/lib/domain";
+import { isWorkItemOverdue, workItemStatusLabels, workProgress } from "@/lib/domain";
+import { kaizenClosureReadiness } from "@/lib/kaizen-closure";
 import { requireKaizenAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
-type KaizenDetailProps = { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> };
+type KaizenDetailProps = { params: Promise<{ id: string }>; searchParams: Promise<{ coins?: string; error?: string; success?: string }> };
+
+const kaizenStatusLabels = {
+  PENDIENTE_CHARTER: "Pendiente de Project Charter",
+  PLANIFICACION: "En planificacion",
+  EN_CURSO: "En curso",
+  EN_PAUSA: "En pausa"
+} as const;
 
 export default async function KaizenDetailPage({ params, searchParams }: KaizenDetailProps) {
-  const { user, canManage } = await requireKaizenAccess();
+  const { user, canManage: hasManagePermission } = await requireKaizenAccess();
   const { id } = await params;
   const query = await searchParams;
-  const [project, users] = await Promise.all([
+  const [project, users, coinTransactions] = await Promise.all([
     prisma.kaizenProject.findUnique({
       where: { id },
       include: {
         leader: true,
+        closedBy: true,
         createdBy: true,
         sourceIdea: true,
+        teamMembers: { include: { user: true }, orderBy: { createdAt: "asc" } },
         activities: { include: { owner: true, mergedInto: true, attachments: true }, orderBy: { number: "asc" } },
         attachments: { orderBy: { createdAt: "desc" } },
         updates: { include: { user: true, activity: true }, orderBy: { createdAt: "desc" }, take: 60 }
       }
     }),
-    prisma.user.findMany({ where: { active: true }, orderBy: { name: "asc" } })
+    prisma.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+    prisma.coinTransaction.findMany({
+      where: { sourceType: "KAIZEN", sourceId: id },
+      include: { participant: { select: { userId: true, name: true, employeeNumber: true } } },
+      orderBy: { occurredAt: "asc" }
+    })
   ]);
   if (!project) notFound();
+  if (!hasManagePermission && project.leaderId !== user.id && !project.teamMembers.some((member) => member.userId === user.id) && !project.activities.some((activity) => activity.ownerId === user.id)) notFound();
   const progress = workProgress(project.activities);
   const charterFiles = project.attachments.filter((attachment) => attachment.type === "CHARTER");
   const activeActivities = project.activities.filter((activity) => !["COMPLETADA", "CANCELADA", "COMBINADA"].includes(activity.status));
   const overdue = project.activities.filter(isWorkItemOverdue).length;
-  const errorMessage = query.error === "evidencia" ? "Para completar una actividad debes adjuntar evidencia." : query.error === "justificacion" ? "Escribe el motivo por el que la actividad no se realizará." : query.error === "charter" ? "Selecciona el archivo de Project Charter." : query.error ? "Revisa los campos obligatorios." : null;
+  const projectClosed = project.status === "COMPLETADO" || project.status === "CANCELADO";
+  const canManage = hasManagePermission && !projectClosed;
+  const relevantActivities = project.activities.filter((activity) => activity.status !== "COMBINADA");
+  const closureReadiness = kaizenClosureReadiness({
+    activities: relevantActivities.map((activity) => ({ status: activity.status, evidenceCount: activity.attachments.length })),
+    hasCharter: charterFiles.length > 0,
+    teamCount: project.teamMembers.length
+  });
+  const { allActivitiesResolved, completedActivitiesHaveEvidence, hasCompletedResult, ready: readyToClose } = closureReadiness;
+  const teamCoins = new Map<string, number>();
+  for (const transaction of coinTransactions) {
+    if (!transaction.participant.userId) continue;
+    teamCoins.set(transaction.participant.userId, (teamCoins.get(transaction.participant.userId) ?? 0) + transaction.amount);
+  }
+  const totalCoins = coinTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+  const celebrationAmount = Math.max(0, Number.parseInt(query.coins ?? "", 10) || 0);
+  const detailedErrorMessage = query.error === "evidencia" ? "Para completar una actividad debes adjuntar evidencia."
+    : query.error === "justificacion" ? "Escribe el motivo por el que la actividad no se realizara."
+    : query.error === "charter" || query.error === "cierre_charter" ? "Carga el Project Charter antes de completar el Kaizen."
+    : query.error === "cierre_actividades" ? "Resuelve todas las actividades antes de completar el proyecto."
+    : query.error === "cierre_resultado" ? "Debe existir al menos una actividad completada; un conjunto cancelado no representa un resultado Kaizen."
+    : query.error === "cierre_evidencia" ? "Cada actividad completada debe conservar al menos una evidencia."
+    : query.error === "cierre_equipo" ? "Define al menos al lider en el equipo antes de cerrar."
+    : query.error === "cierre_datos" ? "Escribe el resultado final o la causa de cancelacion."
+    : query.error === "lider_equipo" ? "El lider no puede retirarse del equipo; cambia primero al lider del proyecto."
+    : query.error === "responsable_equipo" ? "No puedes retirar a una persona que sigue asignada a una actividad."
+    : query.error === "cerrado" ? "Este expediente ya esta cerrado y se conserva en modo consulta."
+    : query.error === "coins" ? "Las ProbocaCoins deben ser numeros enteros iguales o mayores a cero."
+    : query.error ? "Revisa los campos obligatorios." : null;
+  const successMessage = query.success === "equipo" ? "El equipo responsable se actualizo."
+    : query.success === "cerrado" ? "El Kaizen se cerro y quedo disponible en el repositorio."
+    : query.success === "coins" ? "Las ProbocaCoins del equipo se conciliaron correctamente."
+    : null;
 
   return (
     <>
-      <PageHeader eyebrow={`Proyectos Kaizen · Kaizen #${String(project.number).padStart(3, "0")}`} title={project.title} description={`${project.area}${project.plant ? ` · ${project.plant}` : ""}`} actions={<><Link className="btn btn-secondary" href="/kaizen"><ArrowLeft className="h-4 w-4" aria-hidden />Panel</Link><Link className="btn btn-secondary" href="/kaizen/gantt"><CalendarDays className="h-4 w-4" aria-hidden />Gantt</Link></>} />
-      {errorMessage ? <div className="alert alert-danger mb-5"><AlertTriangle className="h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
+      {celebrationAmount ? <ProbocaCoinsCelebration amount={celebrationAmount} /> : null}
+      <PageHeader eyebrow={`Proyectos Kaizen · Kaizen #${String(project.number).padStart(3, "0")}`} title={project.title} description={`${project.area}${project.plant ? ` · ${project.plant}` : ""}`} actions={<><Link className="btn btn-secondary" href="/kaizen"><ArrowLeft className="h-4 w-4" aria-hidden />Panel</Link><Link className="btn btn-secondary" href="/kaizen/repositorio"><Archive className="h-4 w-4" aria-hidden />Repositorio</Link><Link className="btn btn-secondary" href="/kaizen/gantt"><CalendarDays className="h-4 w-4" aria-hidden />Gantt</Link></>} />
+      {detailedErrorMessage ? <div className="alert alert-danger mb-5"><AlertTriangle className="h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{detailedErrorMessage}</span></div> : null}
+      {successMessage ? <div className="alert alert-success mb-5"><CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{successMessage}</span></div> : null}
 
       <section className="surface mb-5 rounded-lg p-5">
         <div className="grid gap-5 lg:grid-cols-[1fr_280px] lg:items-center">
@@ -70,12 +126,39 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
             </dl>
           </article>
 
+          <article className="surface rounded-lg p-5">
+            <SectionHeading count={project.teamMembers.length} description="Personas responsables del resultado y reconocimiento del Kaizen." title="Equipo del proyecto" />
+            {!project.teamMembers.length ? <div className="alert alert-warning"><UsersRound className="h-4 w-4 shrink-0" aria-hidden />Agrega al lider y a quienes participaron antes de cerrar.</div> : (
+              <div className="divide-y divide-line border-y border-line">
+                {project.teamMembers.map((member) => (
+                  <div className="grid gap-2 px-2 py-3 sm:grid-cols-[minmax(0,1fr)_180px_130px_auto] sm:items-center" key={member.id}>
+                    <div className="min-w-0"><p className="truncate text-sm font-extrabold text-ink">{member.user.name}</p><p className="truncate text-xs text-slate-500">{member.user.employeeNumber ?? member.user.email}</p></div>
+                    <p className="text-xs font-bold text-slate-600">{member.role}<span className="mt-0.5 block text-[10px] font-normal text-slate-500">{member.rewardAmount === null ? "Decision pendiente" : member.rewardAmount > 0 ? "Reconocimiento otorgado" : "Sin reconocimiento (decidido)"}</span></p>
+                    <p className="inline-flex items-center gap-1.5 text-xs font-extrabold tabular-nums text-ink"><ProbocaCoin size="sm" />{(teamCoins.get(member.userId) ?? 0).toLocaleString("es-MX")}</p>
+                    {canManage && !projectClosed && member.userId !== project.leaderId ? <form action={removeKaizenTeamMemberAction}><input name="projectId" type="hidden" value={project.id} /><input name="memberId" type="hidden" value={member.id} /><button aria-label={`Retirar a ${member.user.name} del equipo`} className="icon-button h-9 w-9" title="Retirar del equipo" type="submit"><Trash2 className="h-4 w-4" aria-hidden /></button></form> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+            {canManage && !projectClosed ? (
+              <details className="details-panel mt-4">
+                <summary><span className="flex items-center gap-2"><UserPlus className="h-4 w-4 text-amber-700" aria-hidden />Agregar o actualizar integrante</span></summary>
+                <form action={addKaizenTeamMemberAction} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_220px_auto] sm:items-end">
+                  <input name="projectId" type="hidden" value={project.id} />
+                  <label><span className="label">Persona</span><select className="field" defaultValue="" name="userId" required><option value="">Seleccionar</option>{users.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.employeeNumber ?? person.email}</option>)}</select></label>
+                  <label><span className="label">Funcion en el equipo</span><select className="field" defaultValue="Miembro" name="role"><option value="Patrocinador">Patrocinador</option><option value="Facilitador">Facilitador</option><option value="Miembro">Miembro</option><option value="Apoyo">Apoyo</option><option value="Responsable de actividad">Responsable de actividad</option></select></label>
+                  <button className="btn btn-secondary" type="submit"><UserPlus className="h-4 w-4" aria-hidden />Guardar</button>
+                </form>
+              </details>
+            ) : null}
+          </article>
+
           <section>
             <SectionHeading count={project.activities.filter((activity) => activity.status !== "COMBINADA").length} description="El avance del proyecto se calcula automáticamente con estas actividades." title="Plan de actividades" tone="dark" />
             {!project.activities.length ? <div className="surface rounded-lg border-dashed p-8 text-center text-sm text-slate-500">Todavía no hay actividades en este Kaizen.</div> : null}
             <div className="overflow-hidden rounded-lg">
               {project.activities.map((activity) => {
-                const canClose = canManage || project.leaderId === user.id || activity.ownerId === user.id;
+                const canClose = !projectClosed && (canManage || project.leaderId === user.id || activity.ownerId === user.id);
                 const terminal = ["COMPLETADA", "CANCELADA", "COMBINADA"].includes(activity.status);
                 return (
                   <WorkItemDisclosure description={activity.problem ? `Problema: ${activity.problem}` : null} dueDate={activity.dueDate} id={`actividad-${activity.id}`} key={activity.id} number={activity.number} overdue={isWorkItemOverdue(activity)} owner={activity.owner?.name} status={activity.status} title={activity.action} tone="amber">
@@ -105,6 +188,56 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
         </div>
 
         <aside className="min-w-0 space-y-4 xl:sticky xl:top-6 xl:self-start">
+          <article className="surface rounded-lg p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-lg ${projectClosed ? "bg-emerald-50 text-emerald-800" : readyToClose ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}><CheckCircle2 className="h-5 w-5" aria-hidden /></span><div><h2 className="text-base font-extrabold text-ink">{projectClosed ? "Expediente cerrado" : readyToClose ? "Listo para cerrar" : "Preparacion de cierre"}</h2><p className="text-xs text-slate-500">Revision final y ProbocaCoins</p></div></div>
+              <span className="inline-flex items-center gap-1 text-sm font-extrabold tabular-nums text-ink"><ProbocaCoin size="sm" />{totalCoins.toLocaleString("es-MX")}</span>
+            </div>
+
+            {projectClosed ? (
+              <>
+                <dl className="mt-4 divide-y divide-line text-xs">
+                  <div className="flex justify-between gap-3 py-2.5"><dt className="font-bold text-slate-500">Resultado</dt><dd className="font-extrabold text-ink">{project.status === "COMPLETADO" ? "Completado" : "Cancelado"}</dd></div>
+                  <div className="flex justify-between gap-3 py-2.5"><dt className="font-bold text-slate-500">Fecha</dt><dd className="font-extrabold text-ink">{project.closedAt?.toLocaleDateString("es-MX") ?? "Sin fecha"}</dd></div>
+                  <div className="flex justify-between gap-3 py-2.5"><dt className="font-bold text-slate-500">Cerro</dt><dd className="text-right font-extrabold text-ink">{project.closedBy?.name ?? "Sistema"}</dd></div>
+                </dl>
+                <p className="mt-3 border-l-4 border-slate-300 pl-3 text-sm leading-5 text-slate-700">{project.closureNote ?? "Sin nota de cierre."}</p>
+                {hasManagePermission && project.teamMembers.length ? (
+                  <details className="details-panel mt-4">
+                    <summary><span className="flex items-center gap-2"><Coins className="h-4 w-4 text-amber-700" aria-hidden />Ajustar ProbocaCoins</span></summary>
+                    <form action={updateKaizenRewardsAction} className="grid gap-3 p-4">
+                      <input name="projectId" type="hidden" value={project.id} />
+                      {project.teamMembers.map((member) => <label key={member.id}><span className="label">{member.user.name} · {member.role}</span><input className="field" defaultValue={member.rewardAmount ?? teamCoins.get(member.userId) ?? 0} min={0} name={`coins-${member.id}`} step={1} type="number" /><span className="helper-text">{member.rewardReason ?? "Sin motivo registrado."}</span></label>)}
+                      <p className="text-xs leading-5 text-slate-500">Puedes retirar o volver a otorgar monedas. El libro mayor conserva cada ajuste.</p>
+                      <button className="btn btn-secondary" type="submit"><Coins className="h-4 w-4" aria-hidden />Conciliar reconocimiento</button>
+                    </form>
+                  </details>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div className="mt-4 divide-y divide-line border-y border-line text-xs">
+                  {[
+                    [Boolean(charterFiles.length), "Project Charter cargado"],
+                    [allActivitiesResolved, "Todas las actividades resueltas"],
+                    [hasCompletedResult, "Existe resultado ejecutado"],
+                    [completedActivitiesHaveEvidence, "Resultados con evidencia"],
+                    [Boolean(project.teamMembers.length), "Equipo responsable definido"]
+                  ].map(([complete, label]) => <div className="flex items-center gap-2 py-2.5" key={String(label)}><span className={`flex h-5 w-5 items-center justify-center rounded-full ${complete ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-400"}`}>{complete ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}</span><span className={complete ? "font-bold text-slate-800" : "text-slate-500"}>{String(label)}</span></div>)}
+                </div>
+                {canManage ? (
+                  <form action={closeKaizenProjectAction} className="mt-4 grid gap-3">
+                    <input name="projectId" type="hidden" value={project.id} />
+                    <label><span className="label">Resultado final o motivo *</span><textarea className="field min-h-24" name="closureNote" placeholder="Resultado alcanzado, sostenimiento o causa de cancelacion" required /></label>
+                    {project.teamMembers.length ? <fieldset><legend className="label">ProbocaCoins por integrante</legend><div className="grid gap-2">{project.teamMembers.map((member) => <label className="grid grid-cols-[minmax(0,1fr)_100px] items-center gap-2" key={member.id}><span className="min-w-0"><span className="block truncate text-xs font-extrabold text-ink">{member.user.name}</span><span className="block truncate text-[10px] text-slate-500">{member.role}</span></span><input aria-label={`ProbocaCoins para ${member.user.name}`} className="field text-right" defaultValue={teamCoins.get(member.userId) ?? 0} min={0} name={`coins-${member.id}`} step={1} type="number" /></label>)}</div></fieldset> : null}
+                    <button className="btn btn-success" disabled={!readyToClose} name="outcome" type="submit" value="COMPLETADO"><CheckCircle2 className="h-4 w-4" aria-hidden />Completar Kaizen</button>
+                    <button className="btn btn-danger" name="outcome" type="submit" value="CANCELADO"><XCircle className="h-4 w-4" aria-hidden />Cancelar con justificacion</button>
+                  </form>
+                ) : <p className="mt-4 text-xs leading-5 text-slate-500">Mejora Continua confirmara el cierre cuando el expediente este completo.</p>}
+              </>
+            )}
+          </article>
+
           <article className="surface rounded-lg p-5">
             <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-800"><FolderOpen className="h-5 w-5" aria-hidden /></span><div><h2 className="text-base font-extrabold text-ink">Carpeta del Kaizen</h2><p className="text-xs text-slate-500">{project.folio}</p></div></div>
             <div className="mt-4 space-y-2">{charterFiles.length ? charterFiles.map((file) => <a className="flex items-center gap-3 rounded-lg border border-line bg-panel p-3 text-sm font-bold text-slate-700 hover:border-slate-400" href={file.path} key={file.id} rel="noreferrer" target="_blank"><FileText className="h-4 w-4 shrink-0 text-amber-700" aria-hidden /><span className="min-w-0 flex-1 truncate">{file.filename}</span></a>) : <p className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-4 text-xs leading-5 text-amber-900">En espera del Project Charter.</p>}</div>

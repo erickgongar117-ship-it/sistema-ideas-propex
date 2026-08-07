@@ -21,14 +21,22 @@ export async function createKaizenFromIdea(input: CreateKaizenFromIdeaInput) {
     const existing = await prisma.kaizenProject.findUnique({ where: { sourceIdeaId: input.ideaId } });
     if (existing) {
       if (!input.updateExisting) return existing;
-      return prisma.kaizenProject.update({
-        where: { id: existing.id },
-        data: {
+      return prisma.$transaction(async (tx) => {
+        const updated = await tx.kaizenProject.update({ where: { id: existing.id }, data: {
           leaderId: input.leaderId,
           startDate: input.startDate,
           endDate,
           orgUnitId: idea.area.organizationUnit?.id ?? null
+        } });
+        if (existing.leaderId !== input.leaderId) {
+          await tx.kaizenTeamMember.updateMany({ where: { projectId: existing.id, userId: existing.leaderId, role: "Lider" }, data: { role: "Miembro" } });
         }
+        await tx.kaizenTeamMember.upsert({
+          where: { projectId_userId: { projectId: existing.id, userId: input.leaderId } },
+          update: { role: "Lider" },
+          create: { projectId: existing.id, userId: input.leaderId, role: "Lider" }
+        });
+        return updated;
       });
     }
 
@@ -51,7 +59,8 @@ export async function createKaizenFromIdea(input: CreateKaizenFromIdeaInput) {
             leaderId: input.leaderId,
             createdById: input.createdById,
             sourceIdeaId: idea.id,
-            orgUnitId: idea.area.organizationUnit?.id ?? null
+            orgUnitId: idea.area.organizationUnit?.id ?? null,
+            teamMembers: { create: { userId: input.leaderId, role: "Lider" } }
           }
         });
       });

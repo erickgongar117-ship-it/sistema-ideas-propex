@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   AlertTriangle,
+  Archive,
   ArrowLeft,
   CheckCircle2,
   Footprints,
@@ -45,7 +46,7 @@ type GenbaDetailProps = {
 };
 
 export default async function GenbaDetailPage({ params, searchParams }: GenbaDetailProps) {
-  const { user, canManage } = await requireGenbaAccess();
+  const { user, canManage: hasManagePermission } = await requireGenbaAccess();
   const { id } = await params;
   const query = await searchParams;
   const [walk, users, kaizenProjects] = await Promise.all([
@@ -70,6 +71,10 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
   ]);
 
   if (!walk) notFound();
+  if (!hasManagePermission && walk.coordinatorId !== user.id && !walk.activities.some((activity) => activity.ownerId === user.id)) notFound();
+
+  const walkClosed = walk.status === "CERRADO" || walk.status === "CANCELADO";
+  const canManage = hasManagePermission && !walkClosed;
 
   const progress = workProgress(walk.activities);
   const expected = parseStringArray(walk.expectedDepartments);
@@ -89,6 +94,8 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
           ? "Escribe la problemática de la nueva actividad."
           : query.error === "cerrado"
             ? "No se pueden agregar actividades a un recorrido cerrado."
+          : query.error === "cierre_actividades"
+            ? "Resuelve todas las actividades antes de marcar el recorrido como cerrado."
             : query.error
               ? "Revisa los campos obligatorios."
               : null;
@@ -99,7 +106,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
         eyebrow={`Recorridos GENBA · GENBA #${String(walk.number).padStart(3, "0")}`}
         title={walk.areaName}
         description={walk.visitDate.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-        actions={<Link className="btn btn-secondary" href="/genba"><ArrowLeft className="h-4 w-4" aria-hidden />Panel</Link>}
+        actions={<><Link className="btn btn-secondary" href="/genba"><ArrowLeft className="h-4 w-4" aria-hidden />Panel</Link><Link className="btn btn-secondary" href="/genba/repositorio"><Archive className="h-4 w-4" aria-hidden />Repositorio</Link></>}
       />
       {errorMessage ? <div className="alert alert-danger mb-5"><AlertTriangle className="h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
 
@@ -148,7 +155,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
             {!walk.activities.length ? <div className="surface rounded-lg border-dashed p-8 text-center text-sm text-slate-500">Todavía no hay actividades en este recorrido.</div> : null}
             <div className="overflow-hidden rounded-lg">
               {walk.activities.map((activity) => {
-                const canClose = canManage || walk.coordinatorId === user.id || activity.ownerId === user.id;
+                const canClose = !walkClosed && (canManage || walk.coordinatorId === user.id || activity.ownerId === user.id);
                 const terminal = ["COMPLETADA", "CANCELADA", "COMBINADA"].includes(activity.status);
                 return (
                   <WorkItemDisclosure

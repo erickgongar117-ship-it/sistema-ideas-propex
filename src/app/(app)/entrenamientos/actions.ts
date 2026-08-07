@@ -4,6 +4,7 @@ import { Prisma, TrainingEnrollmentStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { EmployeeNumberValidationError } from "@/lib/employee-number";
 import {
   resolveParticipantFromCollaborator,
   resolveParticipantFromUser,
@@ -143,6 +144,9 @@ export async function createParticipantAction(formData: FormData) {
     refreshTraining();
     redirect(trainingPath({ success: "participante", participant: participant.id }));
   } catch (error) {
+    if (error instanceof EmployeeNumberValidationError) {
+      redirect(trainingPath({ error: "empleado_formato" }));
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       redirect(trainingPath({ error: "participante_duplicado" }));
     }

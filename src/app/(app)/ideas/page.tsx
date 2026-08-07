@@ -1,6 +1,6 @@
 import { IdeaStatus, Prisma } from "@prisma/client";
 import Link from "next/link";
-import { ArrowRight, CalendarDays, CheckCircle2, Download, Filter, RotateCcw, Search } from "lucide-react";
+import { Archive, ArrowRight, CalendarDays, CheckCircle2, Download, Filter, RotateCcw, Search } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
@@ -14,6 +14,7 @@ type IdeasPageProps = {
 };
 
 const pageSize = 50;
+const terminalStatuses: IdeaStatus[] = ["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"];
 
 function positivePage(value?: string) {
   const parsed = Number(value);
@@ -33,7 +34,8 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
       { proposal: { contains: query.q } }
     ];
   }
-  if (query.status && Object.values(IdeaStatus).includes(query.status as IdeaStatus)) where.status = query.status as IdeaStatus;
+  if (query.status && Object.values(IdeaStatus).includes(query.status as IdeaStatus) && !terminalStatuses.includes(query.status as IdeaStatus)) where.status = query.status as IdeaStatus;
+  else where.status = { notIn: terminalStatuses };
   if (query.area) where.area = { code: query.area };
 
   const [ideaCount, ideas, areas] = await Promise.all([
@@ -59,12 +61,10 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
     <>
       <PageHeader
         eyebrow="Mejora Continua · Base de seguimiento"
-        title="Todas las ideas"
+        title="Ideas activas"
         description={`${ideaCount.toLocaleString("es-MX")} ${ideaCount === 1 ? "resultado" : "resultados"}${hasFilters ? " con los filtros actuales" : " en la base maestra"}. Se muestran 50 por pagina.`}
         actions={
-          <Link className="btn btn-primary" href="/api/export">
-            <Download className="h-4 w-4" aria-hidden /> Exportar Excel
-          </Link>
+          <><Link className="btn btn-secondary" href="/ideas/repositorio"><Archive className="h-4 w-4" aria-hidden />Repositorio</Link><Link className="btn btn-primary" href="/api/export"><Download className="h-4 w-4" aria-hidden />Exportar Excel</Link></>
         }
       />
 
@@ -96,7 +96,7 @@ export default async function IdeasPage({ searchParams }: IdeasPageProps) {
             <span className="label">Estatus</span>
             <select className="field" defaultValue={query.status ?? ""} name="status">
               <option value="">Todos</option>
-              {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {Object.entries(statusLabels).filter(([value]) => !terminalStatuses.includes(value as IdeaStatus)).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
           <div className="flex items-end">

@@ -101,6 +101,7 @@ function messageFor(query: Awaited<TrainingPageProps["searchParams"]>) {
     planta_area: "La planta y el area seleccionadas no corresponden entre si.",
     participante: "La persona seleccionada ya no existe o no esta disponible.",
     participante_duplicado: "El numero de empleado ya pertenece a otra persona.",
+    empleado_formato: "Usa de 1 a 5 digitos para el numero de empleado. Si escribes 123, se guardara como 00123.",
     participante_historial: "Esta persona tiene ideas, entrenamientos o movimientos. Debe permanecer archivada para conservar la trazabilidad.",
     cuenta_vinculada: "Esta persona tiene una cuenta de acceso. Administrala desde Configuracion > Usuarios.",
     inscripcion: "Selecciona al menos una persona disponible para la sesion.",
@@ -317,7 +318,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
             <form action={createParticipantAction} className="grid gap-3 p-4">
               <SearchablePicker label="Cuenta existente" name="userId" options={unlinkedUsers.map((user) => ({ value: user.id, label: user.name, description: user.email, searchText: user.employeeNumber ?? "" }))} placeholder="Buscar cuenta por nombre o correo" helpText="Si eliges una cuenta, los datos siguientes son opcionales." />
               <label><span className="label">Nombre completo</span><input className="field" name="name" placeholder="Para colaboradores sin cuenta" /></label>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"><label><span className="label">Numero de empleado</span><input className="field" name="employeeNumber" /></label><label><span className="label">Puesto</span><input className="field" name="jobTitle" /></label></div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"><label><span className="label">Numero de empleado</span><input className="field" inputMode="numeric" maxLength={5} name="employeeNumber" pattern="[0-9]{1,5}" placeholder="Ej. 00123" /><span className="helper-text">Hasta 5 digitos; 123 se guarda como 00123.</span></label><label><span className="label">Puesto</span><input className="field" name="jobTitle" /></label></div>
               <label><span className="label">Correo</span><input className="field" name="email" type="email" /></label>
               <label><span className="label">Area</span><select className="field" name="orgUnitId"><option value="">Sin area asignada</option>{orgUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.plant.code} - {unit.name}</option>)}</select></label>
               <button className="btn btn-primary" type="submit"><UserPlus className="h-4 w-4" aria-hidden />Registrar persona</button>

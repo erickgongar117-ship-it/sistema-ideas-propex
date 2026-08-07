@@ -61,6 +61,8 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
     ? "Ese correo ya pertenece a otro usuario."
     : query.error === "empleado"
       ? "Ese numero de empleado ya pertenece a otra persona. Puedes dejarlo vacio o usar el numero correcto."
+    : query.error === "empleado_formato"
+      ? "Usa de 1 a 5 digitos para el numero de empleado. El sistema agrega ceros a la izquierda; 123 se guarda como 00123."
     : query.error === "correo_invalido"
       ? "Escribe un correo valido, por ejemplo nombre@proboca.net."
     : query.error === "contrasena"
@@ -115,7 +117,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
             <label><span className="label">Correo de acceso y notificaciones</span><input autoComplete="off" className="field" name="email" placeholder="nombre@proboca.net" required type="email" /></label>
             <label><span className="label">Departamento / rol</span><select className="field" name="role" defaultValue="MEJORA_CONTINUA">{configurableRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></label>
             <label><span className="label">Puesto</span><input className="field" name="jobTitle" placeholder="Ej. Tecnico, supervisor, gerente" /></label>
-            <label><span className="label">Numero de empleado</span><input className="field" name="employeeNumber" placeholder="Opcional" /></label>
+            <label><span className="label">Numero de empleado</span><input className="field" inputMode="numeric" maxLength={5} name="employeeNumber" pattern="[0-9]{1,5}" placeholder="Ej. 00123" /><span className="helper-text">Hasta 5 digitos; 123 se guarda como 00123.</span></label>
             <label><span className="label">Contraseña temporal</span><input autoComplete="new-password" className="field" minLength={8} name="password" placeholder="Minimo 8 caracteres" required type="password" /></label>
             <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked name="active" type="checkbox" />Acceso activo</label>
             <fieldset className="rounded-lg border border-line bg-panel p-3"><legend className="px-1 text-xs font-extrabold text-ink">Módulos adicionales</legend><div className="mt-2 flex flex-wrap gap-4 text-sm font-bold text-slate-700"><label className="flex items-center gap-2"><input name="kaizenAccess" type="checkbox" />Kaizen</label><label className="flex items-center gap-2"><input name="genbaAccess" type="checkbox" />GENBA</label></div></fieldset>
@@ -146,7 +148,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
                 <label><span className="label">Correo real</span><input className="field" name="email" defaultValue={user.email} required type="email" /></label>
                 <label><span className="label">Departamento / rol</span><select className="field" name="role" defaultValue={user.role}>{configurableRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></label>
                 <label><span className="label">Puesto</span><input className="field" name="jobTitle" defaultValue={user.jobTitle ?? ""} placeholder="Puesto en la organizacion" /></label>
-                <label><span className="label">Numero de empleado</span><input className="field" name="employeeNumber" defaultValue={user.employeeNumber ?? ""} /></label>
+                <label><span className="label">Numero de empleado</span><input className="field" inputMode="numeric" maxLength={5} name="employeeNumber" pattern="[0-9]{1,5}" defaultValue={user.employeeNumber ?? ""} /><span className="helper-text">Identificador unico de 5 digitos.</span></label>
                 <label><span className="label">Cambiar contraseña</span><input autoComplete="new-password" className="field" minLength={8} name="password" placeholder="Dejar vacio para conservar" type="password" /></label>
                 <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked={user.active} name="active" type="checkbox" />Acceso activo</label>
                 <fieldset className="rounded-lg border border-line bg-panel p-3"><legend className="px-1 text-xs font-extrabold text-ink">Módulos adicionales</legend><div className="mt-2 flex flex-wrap gap-4 text-sm font-bold text-slate-700"><label className="flex items-center gap-2"><input defaultChecked={user.kaizenAccess} name="kaizenAccess" type="checkbox" />Kaizen</label><label className="flex items-center gap-2"><input defaultChecked={user.genbaAccess} name="genbaAccess" type="checkbox" />GENBA</label></div></fieldset>

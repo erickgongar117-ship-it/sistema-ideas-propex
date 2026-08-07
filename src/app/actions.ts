@@ -8,6 +8,7 @@ import { Prisma, type ApprovalType, type Classification, type GenbaStatus, type 
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
 import { genbaDepartments, impactOptions, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
+import { EmployeeNumberValidationError, normalizeEmployeeNumber } from "@/lib/employee-number";
 import { saveUpload } from "@/lib/files";
 import { createKaizenFromIdea } from "@/lib/kaizen-from-idea";
 import { managerialFactorForRule } from "@/lib/managerial-evaluation";
@@ -16,6 +17,7 @@ import { ideaMailBody, notify } from "@/lib/notifications";
 import { reconcileCoinSourceAmount, resolveParticipantFromCollaborator, resolveParticipantFromUser } from "@/lib/coins";
 import { canDecideDepartmentApproval, canDecideInitialIdea, canViewIdea } from "@/lib/idea-access";
 import { hardDeleteIdeaByFolio } from "@/lib/hard-delete";
+import { kaizenClosureReadiness } from "@/lib/kaizen-closure";
 import { prisma } from "@/lib/prisma";
 import { managerFollowersForMembership, supportFlags, syncIdeaSupportRequests, validSupportUnits } from "@/lib/support-routing";
 import { appBaseUrl } from "@/lib/url";
@@ -34,6 +36,7 @@ const dateOrNull = (formData: FormData, key: string) => {
   return value ? new Date(`${value}T12:00:00`) : null;
 };
 const isImprovementManager = (role: Role) => role === "ADMIN" || role === "MEJORA_CONTINUA";
+class KaizenAlreadyClosedError extends Error {}
 
 async function serializableTransaction<T>(operation: (transaction: Prisma.TransactionClient) => Promise<T>) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -129,16 +132,11 @@ async function refreshKaizenProject(projectId: string) {
     where: { id: projectId },
     include: { activities: true }
   });
-  if (project.status === "CANCELADO") return;
+  if (project.status === "COMPLETADO" || project.status === "CANCELADO") return;
   const relevant = project.activities.filter((activity) => activity.status !== "COMBINADA");
-  const complete = relevant.length > 0 && relevant.every((activity) => activity.status === "COMPLETADA" || activity.status === "CANCELADA");
-  if (complete) {
-    await prisma.kaizenProject.update({ where: { id: projectId }, data: { status: "COMPLETADO", closedAt: new Date() } });
-    if (project.sourceIdeaId) {
-      await prisma.idea.update({ where: { id: project.sourceIdeaId }, data: { status: "IMPLEMENTADA", implementedAt: new Date() } });
-    }
-  } else if (project.status === "COMPLETADO") {
-    await prisma.kaizenProject.update({ where: { id: projectId }, data: { status: "EN_CURSO", closedAt: null } });
+  const started = relevant.some((activity) => activity.status !== "PENDIENTE");
+  if (project.status === "PLANIFICACION" && started) {
+    await prisma.kaizenProject.update({ where: { id: projectId }, data: { status: "EN_CURSO" } });
   }
 }
 
@@ -182,6 +180,13 @@ export async function logoutAction() {
 
 export async function submitIdeaAction(formData: FormData) {
   const areaCode = text(formData, "areaCode") || "P1";
+  let employeeNumber: string | null;
+  try {
+    employeeNumber = normalizeEmployeeNumber(text(formData, "employeeNumber"));
+  } catch (error) {
+    if (error instanceof EmployeeNumberValidationError) redirect(`/captura/${areaCode}?error=empleado`);
+    throw error;
+  }
   const parsed = ideaSchema.safeParse({
     collaboratorName: text(formData, "collaboratorName"),
     areaCode,
@@ -247,7 +252,7 @@ export async function submitIdeaAction(formData: FormData) {
 
   const participant = await resolveParticipantFromCollaborator({
     name: parsed.data.collaboratorName,
-    employeeNumber: text(formData, "employeeNumber") || null,
+    employeeNumber,
     email: text(formData, "collaboratorEmail") || null,
     jobTitle: escalationRule?.submitterLabel ?? null,
     orgUnitId: area.organizationUnit?.id
@@ -256,7 +261,7 @@ export async function submitIdeaAction(formData: FormData) {
   const idea = await createIdeaWithUniqueFolio({
       collaboratorName: parsed.data.collaboratorName,
       collaboratorEmail: text(formData, "collaboratorEmail") || null,
-      employeeNumber: text(formData, "employeeNumber") || null,
+      employeeNumber,
       areaId: area.id,
       shift: parsed.data.shift,
       problem: parsed.data.problem,
@@ -1131,7 +1136,8 @@ export async function createKaizenProjectAction(formData: FormData) {
         startDate,
         endDate,
         leaderId,
-        createdById: user.id
+        createdById: user.id,
+        teamMembers: { create: { userId: leaderId, role: "Lider" } }
       },
       include: { leader: true }
     });
@@ -1155,11 +1161,13 @@ export async function updateKaizenProjectAction(formData: FormData) {
   const startDate = dateOrNull(formData, "startDate");
   const endDate = dateOrNull(formData, "endDate");
   const status = text(formData, "status") as KaizenStatus;
-  const allowedStatuses: KaizenStatus[] = ["PENDIENTE_CHARTER", "PLANIFICACION", "EN_CURSO", "EN_PAUSA", "COMPLETADO", "CANCELADO"];
+  const allowedStatuses: KaizenStatus[] = ["PENDIENTE_CHARTER", "PLANIFICACION", "EN_CURSO", "EN_PAUSA"];
   if (!startDate || !endDate || endDate < startDate || !allowedStatuses.includes(status)) redirect(`/kaizen/${projectId}?error=fechas`);
-  const project = await prisma.kaizenProject.update({
-    where: { id: projectId },
-    data: {
+  const current = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId } });
+  if (current.status === "COMPLETADO" || current.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
+  const leaderId = text(formData, "leaderId");
+  const project = await prisma.$transaction(async (tx) => {
+    const updated = await tx.kaizenProject.update({ where: { id: projectId }, data: {
       title: text(formData, "title"),
       plant: text(formData, "plant") || null,
       area: text(formData, "area"),
@@ -1174,9 +1182,17 @@ export async function updateKaizenProjectAction(formData: FormData) {
       status,
       startDate,
       endDate,
-      leaderId: text(formData, "leaderId"),
-      closedAt: status === "COMPLETADO" || status === "CANCELADO" ? new Date() : null
+      leaderId
+    } });
+    if (current.leaderId !== leaderId) {
+      await tx.kaizenTeamMember.updateMany({ where: { projectId, userId: current.leaderId, role: "Lider" }, data: { role: "Miembro" } });
     }
+    await tx.kaizenTeamMember.upsert({
+      where: { projectId_userId: { projectId, userId: leaderId } },
+      update: { role: "Lider" },
+      create: { projectId, userId: leaderId, role: "Lider" }
+    });
+    return updated;
   });
   await auditLog({ entity: "KaizenProject", entityId: projectId, action: "KAIZEN_UPDATED", userId: user.id, details: { status } });
   revalidatePath("/kaizen");
@@ -1191,6 +1207,8 @@ export async function updateKaizenDatesAction(formData: FormData) {
   const startDate = dateOrNull(formData, "startDate");
   const endDate = dateOrNull(formData, "endDate");
   if (!startDate || !endDate || endDate < startDate) redirect("/kaizen/gantt?error=fechas");
+  const current = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId }, select: { status: true } });
+  if (current.status === "COMPLETADO" || current.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
   await prisma.kaizenProject.update({ where: { id: projectId }, data: { startDate, endDate } });
   await auditLog({ entity: "KaizenProject", entityId: projectId, action: "KAIZEN_DATES_UPDATED", userId: user.id, details: { startDate, endDate } });
   revalidatePath("/kaizen");
@@ -1202,6 +1220,7 @@ export async function uploadKaizenCharterAction(formData: FormData) {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const projectId = text(formData, "projectId");
   const project = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId } });
+  if (project.status === "COMPLETADO" || project.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
   const upload = await saveUpload(formData.get("charter") as File | null, `${project.folio}-charter`);
   if (!upload) redirect(`/kaizen/${projectId}?error=charter`);
   await prisma.$transaction([
@@ -1220,6 +1239,8 @@ export async function addKaizenActivityAction(formData: FormData) {
   const projectId = text(formData, "projectId");
   const action = text(formData, "action");
   if (!action) redirect(`/kaizen/${projectId}?error=actividad`);
+  const currentProject = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId }, select: { status: true } });
+  if (currentProject.status === "COMPLETADO" || currentProject.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
   const activity = await prisma.$transaction(async (tx) => {
     const maximum = await tx.kaizenActivity.aggregate({ where: { projectId }, _max: { number: true } });
     return tx.kaizenActivity.create({
@@ -1236,6 +1257,13 @@ export async function addKaizenActivityAction(formData: FormData) {
       include: { owner: true, project: true }
     });
   });
+  if (activity.ownerId) {
+    await prisma.kaizenTeamMember.upsert({
+      where: { projectId_userId: { projectId, userId: activity.ownerId } },
+      update: {},
+      create: { projectId, userId: activity.ownerId, role: "Responsable de actividad" }
+    });
+  }
   await prisma.kaizenUpdate.create({ data: { projectId, activityId: activity.id, userId: user.id, comment: `Actividad #${activity.number} creada.` } });
   await auditLog({ entity: "KaizenActivity", entityId: activity.id, action: "KAIZEN_ACTIVITY_CREATED", userId: user.id, details: { projectId } });
   await notifyModuleAssignment({
@@ -1257,16 +1285,25 @@ export async function updateKaizenActivityAction(formData: FormData) {
   const status = text(formData, "status") as WorkItemStatus;
   const editableStatuses: WorkItemStatus[] = ["PENDIENTE", "EN_PROCESO", "BLOQUEADA"];
   if (!editableStatuses.includes(status)) redirect("/kaizen");
-  const activity = await prisma.kaizenActivity.update({
-    where: { id: activityId },
-    data: {
+  const currentActivity = await prisma.kaizenActivity.findUniqueOrThrow({ where: { id: activityId }, include: { project: { select: { status: true } } } });
+  if (currentActivity.project.status === "COMPLETADO" || currentActivity.project.status === "CANCELADO") redirect(`/kaizen/${currentActivity.projectId}?error=cerrado`);
+  const activity = await prisma.$transaction(async (tx) => {
+    const updated = await tx.kaizenActivity.update({ where: { id: activityId }, data: {
       problem: text(formData, "problem") || null,
       action: text(formData, "action"),
       ownerId: text(formData, "ownerId") || null,
       startDate: dateOrNull(formData, "startDate"),
       dueDate: dateOrNull(formData, "dueDate"),
       status
+    } });
+    if (updated.ownerId) {
+      await tx.kaizenTeamMember.upsert({
+        where: { projectId_userId: { projectId: updated.projectId, userId: updated.ownerId } },
+        update: {},
+        create: { projectId: updated.projectId, userId: updated.ownerId, role: "Responsable de actividad" }
+      });
     }
+    return updated;
   });
   await prisma.kaizenUpdate.create({ data: { projectId: activity.projectId, activityId, userId: user.id, comment: `Actividad #${activity.number} actualizada.` } });
   await auditLog({ entity: "KaizenActivity", entityId: activityId, action: "KAIZEN_ACTIVITY_UPDATED", userId: user.id, details: { status } });
@@ -1282,6 +1319,7 @@ export async function closeKaizenActivityAction(formData: FormData) {
   const outcome = text(formData, "outcome") as WorkItemStatus;
   const note = text(formData, "note");
   const activity = await prisma.kaizenActivity.findUniqueOrThrow({ where: { id: activityId }, include: { project: true } });
+  if (activity.project.status === "COMPLETADO" || activity.project.status === "CANCELADO") redirect(`/kaizen/${activity.projectId}?error=cerrado`);
   if (!isImprovementManager(user.role) && activity.ownerId !== user.id && activity.project.leaderId !== user.id) redirect(`/kaizen/${activity.projectId}`);
   if (outcome !== "COMPLETADA" && outcome !== "CANCELADA") redirect(`/kaizen/${activity.projectId}`);
   if (outcome === "CANCELADA" && !note) redirect(`/kaizen/${activity.projectId}?error=justificacion`);
@@ -1322,6 +1360,7 @@ export async function mergeKaizenActivitiesAction(formData: FormData) {
     prisma.kaizenActivity.findUniqueOrThrow({ where: { id: targetId } })
   ]);
   if (source.projectId !== target.projectId) redirect(`/kaizen/${source.projectId}`);
+  if (source.project.status === "COMPLETADO" || source.project.status === "CANCELADO") redirect(`/kaizen/${source.projectId}?error=cerrado`);
   await prisma.$transaction([
     prisma.kaizenActivity.update({ where: { id: sourceId }, data: { status: "COMBINADA", mergedIntoId: targetId, mergeReason: reason, closedAt: new Date() } }),
     prisma.kaizenUpdate.create({ data: { projectId: source.projectId, activityId: sourceId, userId: user.id, comment: `Actividad #${source.number} combinada con #${target.number}. Justificación: ${reason}` } })
@@ -1338,10 +1377,190 @@ export async function addKaizenUpdateAction(formData: FormData) {
   const projectId = text(formData, "projectId");
   const comment = text(formData, "comment");
   if (!comment) redirect(`/kaizen/${projectId}`);
+  const project = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId }, select: { status: true } });
+  if (project.status === "COMPLETADO" || project.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
   await prisma.kaizenUpdate.create({ data: { projectId, userId: user.id, comment } });
   await auditLog({ entity: "KaizenProject", entityId: projectId, action: "KAIZEN_UPDATE_ADDED", userId: user.id, details: { comment } });
   revalidatePath(`/kaizen/${projectId}`);
   redirect(`/kaizen/${projectId}`);
+}
+
+const kaizenTeamRoles = ["Lider", "Patrocinador", "Facilitador", "Miembro", "Apoyo", "Responsable de actividad"] as const;
+
+function kaizenCoinTargets(formData: FormData, members: Array<{ id: string; userId: string }>) {
+  return members.map((member) => {
+    const entry = formData.get(`coins-${member.id}`);
+    if (entry === null) return null;
+    const raw = String(entry).trim();
+    const amount = Number(raw);
+    if (!Number.isInteger(amount) || amount < 0 || amount > 100_000) return null;
+    return { ...member, amount };
+  });
+}
+
+export async function addKaizenTeamMemberAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const projectId = text(formData, "projectId");
+  const userId = text(formData, "userId");
+  const requestedRole = text(formData, "role");
+  const role = kaizenTeamRoles.find((item) => item === requestedRole);
+  if (!projectId || !userId || !role) redirect(`/kaizen/${projectId}?error=equipo`);
+  const project = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId } });
+  if (project.status === "COMPLETADO" || project.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
+  const member = await prisma.user.findFirst({ where: { id: userId, active: true }, select: { id: true, name: true, email: true } });
+  if (!member) redirect(`/kaizen/${projectId}?error=equipo`);
+  await prisma.$transaction(async (tx) => {
+    await resolveParticipantFromUser(userId, tx);
+    await tx.kaizenTeamMember.upsert({
+      where: { projectId_userId: { projectId, userId } },
+      update: { role: userId === project.leaderId ? "Lider" : role },
+      create: { projectId, userId, role: userId === project.leaderId ? "Lider" : role }
+    });
+  });
+  await prisma.kaizenUpdate.create({ data: { projectId, userId: user.id, comment: `${member.name} se agrego al equipo como ${userId === project.leaderId ? "Lider" : role}.` } });
+  await notifyModuleAssignment({
+    to: member.email,
+    subject: `Participacion asignada en ${project.folio}`,
+    lines: [`Proyecto: ${project.title}`, `Funcion: ${userId === project.leaderId ? "Lider" : role}`, "Revisa el expediente y las actividades relacionadas."],
+    path: `/kaizen/${projectId}`
+  });
+  await auditLog({ entity: "KaizenTeamMember", entityId: `${projectId}:${userId}`, action: "KAIZEN_TEAM_MEMBER_UPSERTED", userId: user.id, details: { role } });
+  revalidatePath(`/kaizen/${projectId}`);
+  redirect(`/kaizen/${projectId}?success=equipo`);
+}
+
+export async function removeKaizenTeamMemberAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const projectId = text(formData, "projectId");
+  const memberId = text(formData, "memberId");
+  const member = await prisma.kaizenTeamMember.findFirst({
+    where: { id: memberId, projectId },
+    include: { project: true, user: true }
+  });
+  if (!member) redirect(`/kaizen/${projectId}?error=equipo`);
+  if (member.project.status === "COMPLETADO" || member.project.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
+  if (member.userId === member.project.leaderId) redirect(`/kaizen/${projectId}?error=lider_equipo`);
+  const ownsActivities = await prisma.kaizenActivity.count({ where: { projectId, ownerId: member.userId } });
+  if (ownsActivities) redirect(`/kaizen/${projectId}?error=responsable_equipo`);
+  await prisma.kaizenTeamMember.delete({ where: { id: member.id } });
+  await prisma.kaizenUpdate.create({ data: { projectId, userId: user.id, comment: `${member.user.name} se retiro del equipo.` } });
+  await auditLog({ entity: "KaizenTeamMember", entityId: member.id, action: "KAIZEN_TEAM_MEMBER_REMOVED", userId: user.id });
+  revalidatePath(`/kaizen/${projectId}`);
+  redirect(`/kaizen/${projectId}?success=equipo`);
+}
+
+export async function closeKaizenProjectAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const projectId = text(formData, "projectId");
+  const outcome = text(formData, "outcome") as KaizenStatus;
+  const closureNote = text(formData, "closureNote");
+  const project = await prisma.kaizenProject.findUniqueOrThrow({
+    where: { id: projectId },
+    include: { activities: { include: { attachments: true } }, attachments: true, teamMembers: { include: { user: true } } }
+  });
+  if (project.status === "COMPLETADO" || project.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
+  if ((outcome !== "COMPLETADO" && outcome !== "CANCELADO") || closureNote.length < 3) redirect(`/kaizen/${projectId}?error=cierre_datos`);
+  const relevantActivities = project.activities.filter((activity) => activity.status !== "COMBINADA");
+  if (outcome === "COMPLETADO") {
+    const readiness = kaizenClosureReadiness({
+      activities: relevantActivities.map((activity) => ({ status: activity.status, evidenceCount: activity.attachments.length })),
+      hasCharter: project.attachments.some((attachment) => attachment.type === "CHARTER"),
+      teamCount: project.teamMembers.length
+    });
+    if (!readiness.hasCharter) redirect(`/kaizen/${projectId}?error=cierre_charter`);
+    if (!readiness.allActivitiesResolved) redirect(`/kaizen/${projectId}?error=cierre_actividades`);
+    if (!readiness.hasCompletedResult) redirect(`/kaizen/${projectId}?error=cierre_resultado`);
+    if (!readiness.completedActivitiesHaveEvidence) redirect(`/kaizen/${projectId}?error=cierre_evidencia`);
+  }
+  if (!project.teamMembers.length) redirect(`/kaizen/${projectId}?error=cierre_equipo`);
+  const targets = kaizenCoinTargets(formData, project.teamMembers);
+  if (targets.some((target) => !target)) redirect(`/kaizen/${projectId}?error=coins`);
+  const validTargets = targets.filter((target): target is NonNullable<typeof target> => Boolean(target));
+  const totalCoins = validTargets.reduce((sum, target) => sum + target.amount, 0);
+  const closedAt = new Date();
+
+  try {
+    await serializableTransaction(async (tx) => {
+    const claimed = await tx.kaizenProject.updateMany({
+      where: { id: projectId, status: { notIn: ["COMPLETADO", "CANCELADO"] } },
+      data: { status: outcome, closedAt, closedById: user.id, closureNote }
+    });
+    if (!claimed.count) throw new KaizenAlreadyClosedError();
+    if (outcome === "CANCELADO") {
+      await tx.kaizenActivity.updateMany({
+        where: { projectId, status: { in: ["PENDIENTE", "EN_PROCESO", "BLOQUEADA"] } },
+        data: { status: "CANCELADA", cancellationReason: closureNote, closedAt }
+      });
+    }
+    for (const target of validTargets) {
+      const participant = await resolveParticipantFromUser(target.userId, tx);
+      await reconcileCoinSourceAmount({
+        participantId: participant.id,
+        sourceType: "KAIZEN",
+        sourceId: projectId,
+        targetAmount: target.amount,
+        description: `${project.folio} - cierre y reconocimiento del equipo`,
+        createdById: user.id,
+        occurredAt: closedAt
+      }, tx);
+      await tx.kaizenTeamMember.update({
+        where: { id: target.id },
+        data: { rewardAmount: target.amount, rewardReason: target.amount ? "Reconocimiento autorizado en el cierre." : closureNote, rewardDecidedAt: closedAt }
+      });
+    }
+    await tx.kaizenUpdate.create({ data: { projectId, userId: user.id, comment: `${outcome === "COMPLETADO" ? "Proyecto completado" : "Proyecto cancelado"}. ${closureNote} ProbocaCoins del equipo: ${totalCoins}.` } });
+    await tx.auditLog.create({ data: { entity: "KaizenProject", entityId: projectId, action: `KAIZEN_${outcome}`, userId: user.id, details: JSON.stringify({ closureNote, totalCoins }) } });
+    if (outcome === "COMPLETADO" && project.sourceIdeaId) {
+      await tx.idea.update({ where: { id: project.sourceIdeaId }, data: { status: "IMPLEMENTADA", implementedAt: closedAt } });
+    }
+    });
+  } catch (error) {
+    if (error instanceof KaizenAlreadyClosedError) redirect(`/kaizen/${projectId}?error=cerrado`);
+    throw error;
+  }
+  revalidatePath("/kaizen");
+  revalidatePath("/kaizen/kanban");
+  revalidatePath("/kaizen/gantt");
+  revalidatePath("/kaizen/repositorio");
+  revalidatePath("/probocacoins");
+  revalidatePath(`/kaizen/${projectId}`);
+  redirect(`/kaizen/${projectId}?success=cerrado${totalCoins ? `&coins=${totalCoins}` : ""}`);
+}
+
+export async function updateKaizenRewardsAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const projectId = text(formData, "projectId");
+  const project = await prisma.kaizenProject.findUniqueOrThrow({
+    where: { id: projectId },
+    include: { teamMembers: true }
+  });
+  if (project.status !== "COMPLETADO" && project.status !== "CANCELADO") redirect(`/kaizen/${projectId}?error=no_cerrado`);
+  const targets = kaizenCoinTargets(formData, project.teamMembers);
+  if (!project.teamMembers.length || targets.some((target) => !target)) redirect(`/kaizen/${projectId}?error=coins`);
+  const validTargets = targets.filter((target): target is NonNullable<typeof target> => Boolean(target));
+  await serializableTransaction(async (tx) => {
+    for (const target of validTargets) {
+      const participant = await resolveParticipantFromUser(target.userId, tx);
+      await reconcileCoinSourceAmount({
+        participantId: participant.id,
+        sourceType: "KAIZEN",
+        sourceId: projectId,
+        targetAmount: target.amount,
+        description: `${project.folio} - ajuste autorizado del reconocimiento del equipo`,
+        createdById: user.id
+      }, tx);
+      await tx.kaizenTeamMember.update({
+        where: { id: target.id },
+        data: { rewardAmount: target.amount, rewardReason: target.amount ? "Reconocimiento ajustado por Mejora Continua." : "Sin reconocimiento despues de la conciliacion.", rewardDecidedAt: new Date() }
+      });
+    }
+  });
+  const totalCoins = validTargets.reduce((sum, target) => sum + target.amount, 0);
+  await auditLog({ entity: "KaizenProject", entityId: projectId, action: "KAIZEN_REWARDS_RECONCILED", userId: user.id, details: { totalCoins } });
+  revalidatePath(`/kaizen/${projectId}`);
+  revalidatePath("/kaizen/repositorio");
+  revalidatePath("/probocacoins");
+  redirect(`/kaizen/${projectId}?success=coins`);
 }
 
 export async function createGenbaWalkAction(formData: FormData) {
@@ -1406,17 +1625,29 @@ export async function updateGenbaWalkAction(formData: FormData) {
   const status = text(formData, "status") as GenbaStatus;
   const allowed: GenbaStatus[] = ["ABIERTO", "CERRADO", "CANCELADO"];
   if (!allowed.includes(status) || expectedDepartments.length === 0) redirect(`/genba/${walkId}?error=campos`);
-  await prisma.genbaWalk.update({
-    where: { id: walkId },
-    data: {
+  const current = await prisma.genbaWalk.findUniqueOrThrow({ where: { id: walkId }, include: { activities: true } });
+  if (current.status === "CERRADO" || current.status === "CANCELADO") redirect(`/genba/${walkId}?error=cerrado`);
+  const notes = text(formData, "notes") || null;
+  const unresolved = current.activities.filter((activity) => !["COMPLETADA", "CANCELADA", "COMBINADA"].includes(activity.status));
+  if (status === "CERRADO" && unresolved.length) redirect(`/genba/${walkId}?error=cierre_actividades`);
+  if (status === "CANCELADO" && (!notes || notes.length < 3)) redirect(`/genba/${walkId}?error=justificacion`);
+  const closedAt = status === "CERRADO" || status === "CANCELADO" ? new Date() : null;
+  await prisma.$transaction(async (tx) => {
+    await tx.genbaWalk.update({ where: { id: walkId }, data: {
       areaName: text(formData, "areaName"),
       visitDate: dateOrNull(formData, "visitDate") ?? undefined,
       expectedDepartments: JSON.stringify(expectedDepartments),
       attendedDepartments: JSON.stringify(attendedDepartments),
-      notes: text(formData, "notes") || null,
+      notes,
       coordinatorId: text(formData, "coordinatorId"),
       status,
-      closedAt: status === "CERRADO" || status === "CANCELADO" ? new Date() : null
+      closedAt
+    } });
+    if (status === "CANCELADO") {
+      await tx.genbaActivity.updateMany({
+        where: { walkId, status: { in: ["PENDIENTE", "EN_PROCESO", "BLOQUEADA"] } },
+        data: { status: "CANCELADA", cancellationReason: notes, closedAt }
+      });
     }
   });
   await auditLog({ entity: "GenbaWalk", entityId: walkId, action: "GENBA_UPDATED", userId: user.id, details: { status } });
@@ -1491,6 +1722,7 @@ export async function closeGenbaActivityAction(formData: FormData) {
   const outcome = text(formData, "outcome") as WorkItemStatus;
   const note = text(formData, "note");
   const activity = await prisma.genbaActivity.findUniqueOrThrow({ where: { id: activityId }, include: { walk: true } });
+  if (activity.walk.status !== "ABIERTO") redirect(`/genba/${activity.walkId}?error=cerrado`);
   if (!isImprovementManager(user.role) && activity.ownerId !== user.id && activity.walk.coordinatorId !== user.id) redirect(`/genba/${activity.walkId}`);
   if (outcome !== "COMPLETADA" && outcome !== "CANCELADA") redirect(`/genba/${activity.walkId}`);
   if (outcome === "CANCELADA" && !note) redirect(`/genba/${activity.walkId}?error=justificacion`);
@@ -1583,7 +1815,8 @@ export async function promoteGenbaActivityToKaizenAction(formData: FormData) {
           startDate,
           endDate,
           leaderId,
-          createdById: user.id
+          createdById: user.id,
+          teamMembers: { create: { userId: leaderId, role: "Lider" } }
         }
       });
     });
@@ -1592,7 +1825,7 @@ export async function promoteGenbaActivityToKaizenAction(formData: FormData) {
 
   const kaizenActivity = await prisma.$transaction(async (tx) => {
     const maximum = await tx.kaizenActivity.aggregate({ where: { projectId }, _max: { number: true } });
-    return tx.kaizenActivity.create({
+    const created = await tx.kaizenActivity.create({
       data: {
         projectId,
         number: (maximum._max.number ?? 0) + 1,
@@ -1605,6 +1838,14 @@ export async function promoteGenbaActivityToKaizenAction(formData: FormData) {
       },
       include: { project: true, owner: true }
     });
+    if (created.ownerId) {
+      await tx.kaizenTeamMember.upsert({
+        where: { projectId_userId: { projectId, userId: created.ownerId } },
+        update: {},
+        create: { projectId, userId: created.ownerId, role: "Responsable de actividad" }
+      });
+    }
+    return created;
   });
   await prisma.genbaUpdate.create({ data: { walkId: activity.walkId, activityId, userId: user.id, comment: `Actividad enviada al proyecto ${kaizenActivity.project.folio}.` } });
   await prisma.kaizenUpdate.create({ data: { projectId, activityId: kaizenActivity.id, userId: user.id, comment: `Actividad importada desde ${activity.walk.folio}.` } });
@@ -1702,30 +1943,36 @@ export async function createUserAction(formData: FormData) {
   if (existing) redirect("/configuracion?error=correo#usuarios");
   const password = text(formData, "password");
   if (password.length < 8) redirect("/configuracion?error=contrasena#usuarios");
+  let employeeNumber: string | null;
+  try {
+    employeeNumber = normalizeEmployeeNumber(text(formData, "employeeNumber"));
+  } catch (error) {
+    if (error instanceof EmployeeNumberValidationError) redirect("/configuracion?error=empleado_formato#usuarios");
+    throw error;
+  }
   let user;
   try {
-    user = await prisma.user.create({
-      data: {
+    user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
         name: text(formData, "name"),
         email,
         role,
         jobTitle: text(formData, "jobTitle") || null,
-        employeeNumber: text(formData, "employeeNumber") || null,
+        employeeNumber,
         active: checked(formData, "active"),
         kaizenAccess: checked(formData, "kaizenAccess"),
         genbaAccess: checked(formData, "genbaAccess"),
         passwordHash: await bcrypt.hash(password, 10)
-      }
+        }
+      });
+      if (created.active) await resolveParticipantFromUser(created.id, tx);
+      return created;
     });
   } catch (error) {
     const duplicate = userUniqueError(error);
     if (duplicate) redirect(`/configuracion?error=${duplicate}#usuarios`);
     throw error;
-  }
-  if (user.active) {
-    await resolveParticipantFromUser(user.id);
-  } else {
-    await prisma.participant.updateMany({ where: { userId: user.id }, data: { active: false } });
   }
   await auditLog({ entity: "User", entityId: user.id, action: "USER_CREATED", userId: admin.id, details: { email, role } });
   revalidatePath("/configuracion");
@@ -1747,12 +1994,19 @@ export async function updateUserAction(formData: FormData) {
   if (existing && existing.id !== userId) redirect(`/configuracion?error=correo&user=${encodeURIComponent(userId)}#usuarios`);
   const password = text(formData, "password");
   if (password && password.length < 8) redirect(`/configuracion?error=contrasena&user=${encodeURIComponent(userId)}#usuarios`);
+  let employeeNumber: string | null;
+  try {
+    employeeNumber = normalizeEmployeeNumber(text(formData, "employeeNumber"));
+  } catch (error) {
+    if (error instanceof EmployeeNumberValidationError) redirect(`/configuracion?error=empleado_formato&user=${encodeURIComponent(userId)}#usuarios`);
+    throw error;
+  }
   const data = {
     name: text(formData, "name"),
     email,
     role,
     jobTitle: text(formData, "jobTitle") || null,
-    employeeNumber: text(formData, "employeeNumber") || null,
+    employeeNumber,
     active: checked(formData, "active"),
     kaizenAccess: checked(formData, "kaizenAccess"),
     genbaAccess: checked(formData, "genbaAccess"),
@@ -1769,17 +2023,17 @@ export async function updateUserAction(formData: FormData) {
           data: { to: updated.email }
         });
       }
+      if (updated.active) {
+        await resolveParticipantFromUser(updated.id, tx);
+      } else {
+        await tx.participant.updateMany({ where: { userId: updated.id }, data: { active: false } });
+      }
       return updated;
     });
   } catch (error) {
     const duplicate = userUniqueError(error);
     if (duplicate) redirect(`/configuracion?error=${duplicate}&user=${encodeURIComponent(userId)}#usuarios`);
     throw error;
-  }
-  if (user.active) {
-    await resolveParticipantFromUser(user.id);
-  } else {
-    await prisma.participant.updateMany({ where: { userId: user.id }, data: { active: false } });
   }
   if (admin.id === user.id) await setSession(user);
   await auditLog({

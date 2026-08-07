@@ -203,7 +203,9 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
             <div>
               <p className="font-extrabold">No pudimos enviar la idea todavia.</p>
               <p className="mt-1 leading-5">
-                {query.error === "area"
+                {query.error === "empleado"
+                  ? "El numero de empleado debe tener de 1 a 5 digitos y no puede ser 00000. Ejemplo: 123 se guardara como 00123."
+                  : query.error === "area"
                   ? "Este QR pertenece a un área inactiva. Avisa a Mejora Continua o utiliza otro código."
                   : query.error === "sin_responsable"
                     ? "Esta área todavía no tiene una ruta activa. Avisa a Mejora Continua para asignar al responsable directo."
@@ -238,7 +240,8 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
               </label>
               <label>
                 <span className="label">Número de empleado</span>
-                <input className="field" inputMode="numeric" name="employeeNumber" placeholder="Opcional" />
+                <input className="field" inputMode="numeric" maxLength={5} name="employeeNumber" pattern="[0-9]{1,5}" placeholder="Ej. 00123" />
+                <span className="helper-text">Hasta 5 digitos. Si tu numero es 123, escribe 00123.</span>
               </label>
               <label>
                 <span className="label">Correo</span>

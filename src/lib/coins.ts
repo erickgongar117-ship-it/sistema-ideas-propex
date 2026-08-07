@@ -7,6 +7,7 @@ import {
   Prisma
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizeEmployeeNumber, normalizeStoredEmployeeNumber } from "@/lib/employee-number";
 
 type CoinDatabase = Pick<
   Prisma.TransactionClient,
@@ -87,7 +88,7 @@ export async function resolveParticipantFromUser(
   const participantData = {
     name: user.name.trim(),
     email: normalizedEmail(user.email),
-    employeeNumber: optionalText(user.employeeNumber),
+    employeeNumber: normalizeStoredEmployeeNumber(user.employeeNumber),
     jobTitle: optionalText(user.jobTitle),
     orgUnitId: user.orgMemberships[0]?.orgUnitId ?? null,
     active: true
@@ -142,7 +143,7 @@ export async function resolveParticipantFromCollaborator(
   const name = input.name.trim();
   if (!name) throw new Error("Escribe el nombre de la persona.");
 
-  const employeeNumber = optionalText(input.employeeNumber);
+  const employeeNumber = normalizeEmployeeNumber(input.employeeNumber);
   const email = normalizedEmail(input.email);
   const jobTitle = optionalText(input.jobTitle);
   const orgUnitId = optionalText(input.orgUnitId);
@@ -157,10 +158,11 @@ export async function resolveParticipantFromCollaborator(
         });
 
   if (existing) {
+    const matchedByEmployeeNumber = Boolean(employeeNumber && existing.employeeNumber === employeeNumber);
     return database.participant.update({
       where: { id: existing.id },
       data: {
-        name,
+        name: matchedByEmployeeNumber ? existing.name : name,
         employeeNumber: employeeNumber ?? existing.employeeNumber,
         email: email ?? existing.email,
         jobTitle: jobTitle ?? existing.jobTitle,
@@ -197,18 +199,13 @@ export async function upsertCoinTransaction(
   }
 
   if (existing) {
-    return database.coinTransaction.update({
-      where: { id: existing.id },
-      data: {
-        type: input.type,
-        sourceType: input.sourceType,
-        sourceId: optionalText(input.sourceId),
-        amount,
-        description,
-        createdById: input.createdById === undefined ? existing.createdById : input.createdById,
-        occurredAt: input.occurredAt ?? existing.occurredAt
-      }
-    });
+    const sameMovement = existing.type === input.type
+      && existing.sourceType === input.sourceType
+      && existing.sourceId === optionalText(input.sourceId)
+      && existing.amount === amount
+      && existing.description === description;
+    if (!sameMovement) throw new Error("La referencia ya existe con un movimiento diferente.");
+    return existing;
   }
 
   return database.coinTransaction.create({

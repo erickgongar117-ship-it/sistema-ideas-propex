@@ -36,7 +36,7 @@ const barTone = {
 };
 
 export default async function KaizenGanttPage({ searchParams }: GanttProps) {
-  const { canManage } = await requireKaizenAccess();
+  const { user, canManage } = await requireKaizenAccess();
   const query = await searchParams;
   const currentYear = new Date().getFullYear();
   const parsedYear = Number(query.year || currentYear);
@@ -44,7 +44,11 @@ export default async function KaizenGanttPage({ searchParams }: GanttProps) {
   const yearStart = new Date(`${year}-01-01T00:00:00`);
   const yearEnd = new Date(`${year}-12-31T23:59:59`);
   const projects = await prisma.kaizenProject.findMany({
-    where: { startDate: { lte: yearEnd }, endDate: { gte: yearStart } },
+    where: {
+      startDate: { lte: yearEnd },
+      endDate: { gte: yearStart },
+      ...(!canManage ? { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } : {})
+    },
     include: { leader: true, activities: true },
     orderBy: [{ startDate: "asc" }, { number: "asc" }]
   });

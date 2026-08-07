@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import {
   attendancePercent,
   genbaStatusLabels,
@@ -26,10 +27,11 @@ function isOverdue(item: { dueDate: Date | null; status: string }, now: Date) {
   return Boolean(item.dueDate && item.dueDate < now && !["COMPLETADA", "CANCELADA", "COMBINADA"].includes(item.status));
 }
 
-export async function buildKaizenWorkbook() {
+export async function buildKaizenWorkbook(where: Prisma.KaizenProjectWhereInput = {}) {
   const workbook = setupWorkbook("Concentrado de Proyectos Kaizen");
   const now = new Date();
   const projects = await prisma.kaizenProject.findMany({
+    where,
     include: {
       leader: true,
       sourceIdea: true,
@@ -94,10 +96,11 @@ export async function buildKaizenWorkbook() {
   return workbook;
 }
 
-export async function buildGenbaWorkbook() {
+export async function buildGenbaWorkbook(where: Prisma.GenbaWalkWhereInput = {}) {
   const workbook = setupWorkbook("Concentrado de Recorridos GENBA");
   const now = new Date();
   const walks = await prisma.genbaWalk.findMany({
+    where,
     include: {
       coordinator: true,
       activities: { include: { owner: true, attachments: true, promotedKaizenActivity: { include: { project: true } } }, orderBy: { number: "asc" } },

@@ -185,6 +185,8 @@ model User {
   auditLogs               AuditLog[]
   ledKaizenProjects       KaizenProject[]      @relation("KaizenLeader")
   createdKaizenProjects   KaizenProject[]      @relation("KaizenCreator")
+  closedKaizenProjects    KaizenProject[]      @relation("KaizenCloser")
+  kaizenTeamMemberships   KaizenTeamMember[]   @relation("KaizenTeamMemberUser")
   ownedKaizenActivities   KaizenActivity[]     @relation("KaizenActivityOwner")
   kaizenUpdates           KaizenUpdate[]
   coordinatedGenbaWalks   GenbaWalk[]          @relation("GenbaCoordinator")
@@ -471,25 +473,30 @@ model TrainingEnrollment {
 }
 
 model CoinTransaction {
-  id            String              @id @default(cuid())
-  reference     String              @unique
-  participantId String
-  type          CoinTransactionType
-  sourceType    CoinSourceType
-  sourceId      String?
-  amount        Int
-  description   String
-  createdById   String?
-  occurredAt    DateTime            @default(now())
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  participant   Participant         @relation(fields: [participantId], references: [id], onDelete: Restrict)
-  createdBy     User?               @relation("CoinTransactionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  id               String              @id @default(cuid())
+  reference        String              @unique
+  participantId    String
+  type             CoinTransactionType
+  sourceType       CoinSourceType
+  sourceId         String?
+  amount           Int
+  description      String
+  correctionReason String?
+  reversalOfId     String?             @unique
+  createdById      String?
+  occurredAt       DateTime            @default(now())
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  participant      Participant         @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  createdBy        User?               @relation("CoinTransactionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  reversalOf       CoinTransaction?    @relation("CoinTransactionReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal         CoinTransaction?    @relation("CoinTransactionReversal")
 
   @@index([participantId, occurredAt])
   @@index([sourceType, sourceId])
   @@index([sourceType, occurredAt])
   @@index([type, occurredAt])
+  @@index([reversalOfId])
   @@index([occurredAt, createdAt])
 }
 
@@ -605,6 +612,8 @@ model KaizenProject {
   startDate        DateTime
   endDate          DateTime
   closedAt         DateTime?
+  closureNote      String?
+  closedById       String?
   leaderId         String
   createdById      String
   sourceIdeaId     String?            @unique
@@ -613,11 +622,31 @@ model KaizenProject {
   updatedAt        DateTime           @updatedAt
   leader           User               @relation("KaizenLeader", fields: [leaderId], references: [id])
   createdBy        User               @relation("KaizenCreator", fields: [createdById], references: [id])
+  closedBy         User?              @relation("KaizenCloser", fields: [closedById], references: [id], onDelete: SetNull)
   sourceIdea       Idea?              @relation(fields: [sourceIdeaId], references: [id], onDelete: SetNull)
   orgUnit          OrgUnit?           @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
   activities       KaizenActivity[]
+  teamMembers      KaizenTeamMember[]
   attachments      KaizenAttachment[]
   updates          KaizenUpdate[]
+
+  @@index([status, closedAt])
+}
+
+model KaizenTeamMember {
+  id              String        @id @default(cuid())
+  projectId       String
+  userId          String
+  role            String        @default("Miembro")
+  rewardAmount    Int?
+  rewardReason    String?
+  rewardDecidedAt DateTime?
+  createdAt       DateTime      @default(now())
+  project         KaizenProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User          @relation("KaizenTeamMemberUser", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, userId])
+  @@index([userId])
 }
 
 model KaizenActivity {

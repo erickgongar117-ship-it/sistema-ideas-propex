@@ -1,4 +1,5 @@
 import { CoinSourceType, CoinTransactionType, Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
 import Link from "next/link";
 import {
   ArrowDownRight,
@@ -6,9 +7,11 @@ import {
   CircleDollarSign,
   Filter,
   GraduationCap,
+  History,
   ReceiptText,
   Search,
   SlidersHorizontal,
+  ShieldAlert,
   WalletCards,
   X
 } from "lucide-react";
@@ -20,7 +23,7 @@ import { SectionHeading } from "@/components/section-heading";
 import { requireUser } from "@/lib/auth";
 import { getParticipantBalances } from "@/lib/coins";
 import { prisma } from "@/lib/prisma";
-import { createCoinTransactionAction } from "./actions";
+import { createCoinTransactionAction, reverseDuplicateCoinTransactionAction } from "./actions";
 
 type CoinsPageProps = {
   searchParams: Promise<{
@@ -60,7 +63,12 @@ const errorMessages: Record<string, string> = {
   origen: "El elemento vinculado ya no existe o no es valido.",
   origen_duplicado: "Esa persona ya recibio un premio vinculado al mismo registro.",
   participante: "La persona seleccionada no esta disponible.",
-  saldo: "El movimiento fue rechazado porque dejaria un saldo negativo."
+  saldo: "El movimiento fue rechazado porque dejaria un saldo negativo.",
+  duplicado_datos: "Selecciona el movimiento, explica el motivo y escribe DUPLICADO para confirmar.",
+  duplicado_revertido: "Ese movimiento ya fue corregido o no puede consolidarse.",
+  duplicado_saldo: "La correccion dejaria el saldo de la persona debajo de cero. Revisa primero sus canjes y ajustes.",
+  duplicado_conciliacion: "Ese origen ya tiene el neto autorizado. Usa una conciliacion del total para evitar descontar dos veces.",
+  duplicado_origen: "No se encontro el registro de origen necesario para comprobar esta correccion."
 };
 
 function positivePage(value?: string) {
@@ -101,7 +109,7 @@ function participantOption(participant: { id: string; name: string; employeeNumb
 }
 
 export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps) {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const currentUser = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const query = await searchParams;
   const currentPage = positivePage(query.page);
   const ledgerPage = positivePage(query.ledgerPage);
@@ -119,7 +127,7 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
     ] } : {})
   };
 
-  const [allParticipantOptions, participantCount, participants, allBalances, typeTotals, sourceTotals, ideaOptions, kaizenOptions, genbaOptions] = await Promise.all([
+  const [allParticipantOptions, participantCount, participants, allBalances, typeTotals, sourceTotals, ideaOptions, kaizenOptions, genbaOptions, duplicateCandidates] = await Promise.all([
     prisma.participant.findMany({ select: { id: true, name: true, employeeNumber: true, email: true, active: true }, orderBy: { name: "asc" } }),
     prisma.participant.count({ where: participantWhere }),
     prisma.participant.findMany({
@@ -134,7 +142,13 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
     prisma.coinTransaction.groupBy({ by: ["sourceType"], _sum: { amount: true } }),
     prisma.idea.findMany({ select: { id: true, folio: true, collaboratorName: true }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.kaizenProject.findMany({ select: { id: true, folio: true, title: true }, orderBy: { createdAt: "desc" }, take: 100 }),
-    prisma.genbaWalk.findMany({ select: { id: true, folio: true, areaName: true }, orderBy: { createdAt: "desc" }, take: 100 })
+    prisma.genbaWalk.findMany({ select: { id: true, folio: true, areaName: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+    currentUser.role === "ADMIN" ? prisma.coinTransaction.findMany({
+      where: { reversalOfId: null, reversal: { is: null }, amount: { not: 0 } },
+      include: { participant: { select: { name: true, employeeNumber: true } } },
+      orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+      take: 500
+    }) : Promise.resolve([])
   ]);
 
   const selectedParticipant = query.participant
@@ -190,7 +204,15 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
     ...kaizenOptions.map((project) => ({ value: `KAIZEN:${project.id}`, label: project.folio, description: `Kaizen - ${project.title}`, searchText: project.title })),
     ...genbaOptions.map((walk) => ({ value: `GENBA:${walk.id}`, label: walk.folio, description: `GENBA - ${walk.areaName}`, searchText: walk.areaName }))
   ];
-  const successMessage = query.success === "movimiento" ? "El movimiento se registro y el saldo se actualizo." : null;
+  const duplicateOptions: SearchablePickerOption[] = duplicateCandidates.map((transaction) => ({
+    value: transaction.id,
+    label: `${transaction.amount > 0 ? "+" : ""}${transaction.amount.toLocaleString("es-MX")} · ${transaction.participant.name}`,
+    description: `${formatDate(transaction.occurredAt)} · ${transaction.description}`,
+    searchText: `${transaction.participant.employeeNumber ?? ""} ${transaction.reference} ${transaction.sourceType}`
+  }));
+  const successMessage = query.success === "movimiento" ? "El movimiento se registro y el saldo se actualizo."
+    : query.success === "duplicado" ? "El duplicado se consolido con una contrapartida auditable; el saldo ya refleja la correccion."
+    : null;
   const errorMessage = query.error ? errorMessages[query.error] ?? "No fue posible registrar el movimiento." : null;
 
   return (
@@ -223,6 +245,7 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
         <aside className="surface p-5" aria-labelledby="new-coin-movement-title">
           <div className="mb-4 flex items-center gap-3 border-b border-line pb-4"><ProbocaCoin size="lg" /><div><p className="text-[10px] font-extrabold uppercase text-brand-700">Control administrativo</p><h2 className="text-lg font-extrabold text-ink" id="new-coin-movement-title">Nuevo movimiento</h2></div></div>
           <form action={createCoinTransactionAction} className="grid gap-3">
+            <input name="requestId" type="hidden" value={randomUUID()} />
             <SearchablePicker defaultValue={selectedParticipant?.active ? selectedParticipant.id : ""} label="Persona" name="participantId" options={activeOptions} required />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"><label><span className="label">Tipo</span><select className="field" defaultValue="AWARD" name="type"><option value="AWARD">Premio</option><option value="ADJUSTMENT">Ajuste</option><option value="REDEMPTION">Gasto / canje</option></select></label><label><span className="label">Cantidad</span><input className="field" name="amount" placeholder="100" required step={1} type="number" /></label></div>
             <SearchablePicker helpText="Aplica solo a premios; los entrenamientos se registran automaticamente." label="Vincular premio (opcional)" name="linkedEntity" options={linkedOptions} placeholder="Buscar folio de Idea, Kaizen o GENBA" />
@@ -238,6 +261,23 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
         <SectionHeading title="Composicion del saldo" description="Valor neto acumulado por cada origen." />
         <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2 xl:grid-cols-5">{Object.values(CoinSourceType).map((source) => { const amount = sourceAmounts.get(source) ?? 0; const width = Math.max(amount ? 6 : 0, Math.round((Math.abs(amount) / maxSourceAmount) * 100)); return <Link className="group" href={`/probocacoins?source=${source}${selectedParticipant ? `&participant=${selectedParticipant.id}` : ""}`} key={source}><div className="mb-2 flex items-end justify-between gap-2"><span className="text-xs font-extrabold text-ink group-hover:text-brand-700">{sourceLabels[source]}</span><span className="text-sm font-extrabold tabular-nums text-ink">{amount.toLocaleString("es-MX")}</span></div><div className="h-2 overflow-hidden bg-slate-100"><div className={`h-full ${amount < 0 ? "bg-rose-500" : "bg-brand-500"}`} style={{ width: `${width}%` }} /></div></Link>; })}</div>
       </section>
+
+      {currentUser.role === "ADMIN" ? (
+        <details className="details-panel mb-8">
+          <summary><span className="flex items-center gap-2"><History className="h-4 w-4 text-brand-700" aria-hidden />Consolidar un movimiento duplicado</span></summary>
+          <form action={reverseDuplicateCoinTransactionAction} className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
+            <div className="grid gap-3">
+              <SearchablePicker label="Movimiento que se anulara" name="transactionId" options={duplicateOptions} placeholder="Buscar por persona, numero, importe u origen" required />
+              <label><span className="label">Motivo de la correccion *</span><textarea className="field min-h-20" name="reason" placeholder="Explica por que este movimiento es un duplicado" required /></label>
+            </div>
+            <div className="border-l-4 border-amber-400 bg-amber-50 p-4">
+              <div className="flex items-start gap-2"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-800" aria-hidden /><p className="text-xs font-bold leading-5 text-amber-950">El original no se borra. Se registrara una contrapartida exacta y ambos movimientos quedaran ligados para auditoria.</p></div>
+              <label className="mt-4 block"><span className="label">Escribe DUPLICADO para confirmar</span><input autoComplete="off" className="field" name="confirmation" pattern="DUPLICADO" required /></label>
+              <button className="btn btn-danger mt-3 w-full" disabled={!duplicateOptions.length} type="submit"><History className="h-4 w-4" aria-hidden />Consolidar duplicado</button>
+            </div>
+          </form>
+        </details>
+      ) : null}
 
       <section aria-labelledby="coin-ledger-title">
         <SectionHeading count={transactionCount} title="Libro mayor" description={selectedParticipant ? `Movimientos de ${selectedParticipant.name}.` : "Historial paginado de premios, ajustes y gastos."} actions={(selectedParticipant || sourceFilter || typeFilter) ? <Link className="btn btn-secondary" href="/probocacoins"><X className="h-4 w-4" aria-hidden />Limpiar filtros</Link> : null} />

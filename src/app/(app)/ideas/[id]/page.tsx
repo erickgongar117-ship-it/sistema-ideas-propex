@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
+  Archive,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -180,6 +181,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
         actions={
           <>
             <Link className="btn btn-secondary" href={returnPath}><ArrowLeft className="h-4 w-4" aria-hidden />Volver</Link>
+            {canMC ? <Link className="btn btn-secondary" href="/ideas/repositorio"><Archive className="h-4 w-4" aria-hidden />Repositorio</Link> : null}
             {canMC ? <Link className="btn btn-secondary" href="/kanban">Ver Kanban</Link> : null}
           </>
         }

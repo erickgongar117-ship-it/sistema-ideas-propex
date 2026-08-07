@@ -118,31 +118,6 @@ async function deleteNotificationReferences(
   }
 }
 
-async function deleteCoinReferences(
-  tx: TransactionClient,
-  sourceType: "IDEA" | "KAIZEN" | "GENBA",
-  referenceTokens: string[],
-  purgeAll: boolean
-) {
-  if (purgeAll) {
-    await tx.coinTransaction.deleteMany({ where: { sourceType } });
-    return;
-  }
-
-  const tokens = unique(referenceTokens);
-  for (const group of chunks(tokens, 20)) {
-    await tx.coinTransaction.deleteMany({
-      where: {
-        sourceType,
-        OR: [
-          { sourceId: { in: group } },
-          ...group.map((token) => ({ description: { contains: token } }))
-        ]
-      }
-    });
-  }
-}
-
 async function deleteIdeasInTransaction(
   tx: TransactionClient,
   ids: string[] | undefined,
@@ -185,7 +160,7 @@ async function deleteIdeasInTransaction(
   });
 
   await deleteNotificationReferences(tx, [...ideaIds, ...folios], purgeAll ? "IDEAS" : undefined);
-  await deleteCoinReferences(tx, "IDEA", [...ideaIds, ...folios], purgeAll);
+  // Financial movements remain immutable even when an operational record is purged.
   await deleteAuditReferences(
     tx,
     [...ideaIds, ...dependencyIds],
@@ -259,7 +234,7 @@ async function deleteKaizensInTransaction(
   }
 
   await deleteNotificationReferences(tx, [...projectIds, ...activityIds, ...folios], purgeAll ? "KAIZEN" : undefined);
-  await deleteCoinReferences(tx, "KAIZEN", [...projectIds, ...activityIds, ...folios], purgeAll);
+  // Keep the ledger intact; sourceId and descriptions preserve the financial audit trail.
   await deleteAuditReferences(
     tx,
     [...projectIds, ...dependencyIds],
@@ -323,7 +298,7 @@ async function deleteGenbasInTransaction(
   }
 
   await deleteNotificationReferences(tx, [...walkIds, ...activityIds, ...folios], purgeAll ? "GENBA" : undefined);
-  await deleteCoinReferences(tx, "GENBA", [...walkIds, ...activityIds, ...folios], purgeAll);
+  // Keep the ledger intact; deleting a walk must never change employee balances.
   await deleteAuditReferences(
     tx,
     [...walkIds, ...dependencyIds],
