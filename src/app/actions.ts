@@ -37,6 +37,11 @@ const dateOrNull = (formData: FormData, key: string) => {
 };
 const isImprovementManager = (role: Role) => role === "ADMIN" || role === "MEJORA_CONTINUA";
 class KaizenAlreadyClosedError extends Error {}
+class GenbaWalkClosedError extends Error {
+  constructor(readonly walkId: string) {
+    super("El recorrido GENBA ya no esta abierto.");
+  }
+}
 
 async function serializableTransaction<T>(operation: (transaction: Prisma.TransactionClient) => Promise<T>) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -1698,15 +1703,25 @@ export async function updateGenbaActivityAction(formData: FormData) {
   const status = text(formData, "status") as WorkItemStatus;
   const editableStatuses: WorkItemStatus[] = ["PENDIENTE", "EN_PROCESO", "BLOQUEADA"];
   if (!editableStatuses.includes(status)) redirect("/genba");
-  const activity = await prisma.genbaActivity.update({
-    where: { id: activityId },
-    data: {
-      problem: text(formData, "problem"),
-      action: text(formData, "action") || null,
-      ownerId: text(formData, "ownerId") || null,
-      dueDate: dateOrNull(formData, "dueDate"),
-      status
-    }
+  const activity = await serializableTransaction(async (tx) => {
+    const current = await tx.genbaActivity.findUniqueOrThrow({
+      where: { id: activityId },
+      include: { walk: { select: { status: true } } }
+    });
+    if (current.walk.status !== "ABIERTO") throw new GenbaWalkClosedError(current.walkId);
+    return tx.genbaActivity.update({
+      where: { id: activityId },
+      data: {
+        problem: text(formData, "problem"),
+        action: text(formData, "action") || null,
+        ownerId: text(formData, "ownerId") || null,
+        dueDate: dateOrNull(formData, "dueDate"),
+        status
+      }
+    });
+  }).catch((error: unknown) => {
+    if (error instanceof GenbaWalkClosedError) redirect(`/genba/${error.walkId}?error=cerrado`);
+    throw error;
   });
   await prisma.genbaUpdate.create({ data: { walkId: activity.walkId, activityId, userId: user.id, comment: `Actividad #${activity.number} actualizada.` } });
   await auditLog({ entity: "GenbaActivity", entityId: activityId, action: "GENBA_ACTIVITY_UPDATED", userId: user.id, details: { status } });
@@ -1758,15 +1773,22 @@ export async function mergeGenbaActivitiesAction(formData: FormData) {
   const targetId = text(formData, "targetId");
   const reason = text(formData, "reason");
   if (!sourceId || !targetId || sourceId === targetId || !reason) redirect("/genba?error=combinacion");
-  const [source, target] = await Promise.all([
-    prisma.genbaActivity.findUniqueOrThrow({ where: { id: sourceId }, include: { walk: true } }),
-    prisma.genbaActivity.findUniqueOrThrow({ where: { id: targetId } })
-  ]);
-  if (source.walkId !== target.walkId) redirect(`/genba/${source.walkId}`);
-  await prisma.$transaction([
-    prisma.genbaActivity.update({ where: { id: sourceId }, data: { status: "COMBINADA", mergedIntoId: targetId, mergeReason: reason, closedAt: new Date() } }),
-    prisma.genbaUpdate.create({ data: { walkId: source.walkId, activityId: sourceId, userId: user.id, comment: `Actividad #${source.number} combinada con #${target.number}. Justificación: ${reason}` } })
-  ]);
+  const result = await serializableTransaction(async (tx) => {
+    const [source, target] = await Promise.all([
+      tx.genbaActivity.findUniqueOrThrow({ where: { id: sourceId }, include: { walk: true } }),
+      tx.genbaActivity.findUniqueOrThrow({ where: { id: targetId } })
+    ]);
+    if (source.walk.status !== "ABIERTO") throw new GenbaWalkClosedError(source.walkId);
+    if (source.walkId !== target.walkId) return { source, mismatchedWalk: true };
+    await tx.genbaActivity.update({ where: { id: sourceId }, data: { status: "COMBINADA", mergedIntoId: targetId, mergeReason: reason, closedAt: new Date() } });
+    await tx.genbaUpdate.create({ data: { walkId: source.walkId, activityId: sourceId, userId: user.id, comment: `Actividad #${source.number} combinada con #${target.number}. Justificación: ${reason}` } });
+    return { source, mismatchedWalk: false };
+  }).catch((error: unknown) => {
+    if (error instanceof GenbaWalkClosedError) redirect(`/genba/${error.walkId}?error=cerrado`);
+    throw error;
+  });
+  if (result.mismatchedWalk) redirect(`/genba/${result.source.walkId}`);
+  const source = result.source;
   await auditLog({ entity: "GenbaActivity", entityId: sourceId, action: "GENBA_ACTIVITY_MERGED", userId: user.id, details: { targetId, reason } });
   await refreshGenbaWalk(source.walkId);
   revalidatePath("/genba/kanban");

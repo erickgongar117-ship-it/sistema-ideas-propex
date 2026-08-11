@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 
 const SESSION_COOKIE = "propex_session";
 const MAX_AGE_SECONDS = 60 * 60 * 12;
+const DEVELOPMENT_AUTH_SECRET = "dev-secret-change-me";
 
 type SessionPayload = {
   userId: string;
@@ -18,7 +19,11 @@ type SessionPayload = {
 };
 
 function secret() {
-  return process.env.AUTH_SECRET || "dev-secret-change-me";
+  const configuredSecret = process.env.AUTH_SECRET?.trim();
+  if (process.env.NODE_ENV === "production" && (!configuredSecret || configuredSecret === DEVELOPMENT_AUTH_SECRET)) {
+    throw new Error("AUTH_SECRET must be configured with a unique value in production.");
+  }
+  return configuredSecret || DEVELOPMENT_AUTH_SECRET;
 }
 
 function signPayload(payload: string) {
