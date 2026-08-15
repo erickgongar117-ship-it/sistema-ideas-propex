@@ -126,6 +126,21 @@ Para Teams configura:
 TEAMS_WEBHOOK_URL
 ```
 
+## Piloto Power Automate no oficial
+
+El panel de piloto de `/reportes` se controla con `POWER_AUTOMATE_PILOT_ENABLED`. Para una prueba, habilítalo sólo en un entorno `Preview`; no lo agregues a `Production`.
+
+```env
+POWER_AUTOMATE_PILOT_ENABLED="true"
+POWER_AUTOMATE_PILOT_STATE="ACTIVE_UNTESTED"
+POWER_AUTOMATE_PILOT_NAME="PROpEx - Piloto captura por correo"
+POWER_AUTOMATE_PILOT_FLOW_ID="id-no-secreto-del-flujo"
+POWER_AUTOMATE_PILOT_FLOW_URL="https://make.powerautomate.com/..."
+POWER_AUTOMATE_PILOT_VERIFIED_AT=""
+```
+
+El panel es informativo y aislado. No cambia la base maestra ni implica que Power Automate esté autorizado para tomar decisiones de negocio. Usa `VERIFIED` únicamente después de una prueba controlada completa.
+
 ## 10. Usuarios iniciales
 
 Despues de `pnpm db:seed:production`, todos usan `admin123`:

@@ -21,7 +21,8 @@
     "qa:scale": "tsx scripts/qa-scale-1000.ts",
     "qa:repositories": "tsx scripts/qa-repositories-closure.ts",
     "reminders": "tsx scripts/reminders.ts",
-    "export-demo": "tsx scripts/export-demo.ts"
+    "export-demo": "tsx scripts/export-demo.ts",
+    "migration:export:power-platform": "tsx scripts/export-power-platform.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.13.0",

@@ -129,6 +129,21 @@ La app usa flujo `client_credentials` y endpoint `sendMail` de Microsoft Graph. 
 
 Configura `TEAMS_WEBHOOK_URL` para publicar eventos en Teams. Si no existe, la notificacion queda en el outbox local.
 
+### Piloto visual de Power Automate
+
+La aplicación puede mostrar un panel de prueba aislado en `/reportes` sin convertir el flujo en parte del proceso oficial. Está apagado de forma predeterminada y no crea Ideas, no cambia estados, no ejecuta aprobaciones y no registra ProbocaCoins.
+
+```env
+POWER_AUTOMATE_PILOT_ENABLED="true"
+POWER_AUTOMATE_PILOT_STATE="ACTIVE_UNTESTED"
+POWER_AUTOMATE_PILOT_NAME="PROpEx - Piloto captura por correo"
+POWER_AUTOMATE_PILOT_FLOW_ID=""
+POWER_AUTOMATE_PILOT_FLOW_URL=""
+POWER_AUTOMATE_PILOT_VERIFIED_AT=""
+```
+
+Los estados admitidos son `NOT_CONFIGURED`, `ACTIVE_UNTESTED`, `VERIFIED`, `DEGRADED`, `PAUSED` y `UNKNOWN`. Producción debe conservar `POWER_AUTOMATE_PILOT_ENABLED="false"` hasta que exista autorización expresa.
+
 ## QR por area
 
 Los QR se generan dinamicamente desde:
