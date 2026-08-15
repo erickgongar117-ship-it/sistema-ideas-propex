@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { AlertTriangle, Bell, Download, FileSpreadsheet, Play } from "lucide-react";
 import { runRemindersAction } from "@/app/actions";
+import { AutomationPilotPanel } from "@/components/automation-pilot-panel";
 import { PageHeader } from "@/components/page-header";
+import { automationPilotConfig } from "@/lib/automation-pilot";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function ReportsPage() {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const automationPilot = automationPilotConfig();
   const [ideaCount, notificationCount, overdueCount] = await Promise.all([
     prisma.idea.count(),
     prisma.notificationOutbox.count({ where: { status: { in: ["PENDING", "ERROR"] } } }),
@@ -22,6 +25,7 @@ export default async function ReportsPage() {
   return (
     <>
       <PageHeader eyebrow="Herramientas · Información y control" title="Reportes y automatizaciones" description="Descarga la información del programa y ejecuta tareas de seguimiento." />
+      {automationPilot ? <AutomationPilotPanel isAdmin={user.role === "ADMIN"} pilot={automationPilot} /> : null}
       <section className="grid gap-4 lg:grid-cols-3">
         {tools.map((tool) => {
           const Icon = tool.icon;

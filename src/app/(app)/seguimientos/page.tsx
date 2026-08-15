@@ -1,11 +1,10 @@
 import type { IdeaStatus, KaizenStatus, WorkItemStatus } from "@prisma/client";
 import Link from "next/link";
-import { CircleAlert, ClipboardCheck, ListChecks } from "lucide-react";
+import { CircleAlert } from "lucide-react";
 import { FollowUpTable, type FollowUpRow, type FollowUpTone } from "@/components/follow-up-table";
-import { KpiCard } from "@/components/mini-charts";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
-import { genbaStatusLabels, kaizenStatusLabels, statusLabels, statusTone, workProgress } from "@/lib/domain";
+import { genbaStatusLabels, kaizenStatusLabels, statusLabels, statusTone, workItemStatusLabels, workProgress } from "@/lib/domain";
 import {
   buildIdeaVisibilityWhere,
   getManageableActivityOrgUnitIds,
@@ -51,6 +50,14 @@ function ideaTone(value: IdeaStatus): FollowUpTone {
   if (tone === "gray") return "slate";
   if (tone === "purple") return "violet";
   return tone;
+}
+
+function workItemTone(value: WorkItemStatus): FollowUpTone {
+  if (value === "COMPLETADA") return "green";
+  if (value === "BLOQUEADA") return "red";
+  if (value === "EN_PROCESO") return "blue";
+  if (value === "PENDIENTE") return "amber";
+  return "slate";
 }
 
 function nearestDueDate(dates: Array<Date | null | undefined>) {
@@ -223,6 +230,12 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
               : globalAction
                 ? "Decisión de Mejora Continua"
                 : followerLabel ?? (directAssignment ? "Seguimiento asignado" : "Propuesta de tu equipo");
+    const owner = pendingInitialApproval?.assignedTo?.name
+      ?? pendingApproval?.assignedTo?.name
+      ?? pendingSupport?.assignedTo?.name
+      ?? idea.implementationOwner?.name
+      ?? idea.supervisor?.name
+      ?? (globalAction ? "Mejora Continua" : "Responsable por asignar");
 
     buckets[view].push({
       key: `idea-${idea.id}`,
@@ -232,6 +245,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       subtitle: `${idea.collaboratorName} · ${idea.submitterPosition ?? idea.shift}`,
       location: orgUnit ? `${orgUnit.plant.code} · ${orgUnit.name}` : idea.area.name,
       assignment,
+      owner,
       status: statusLabels[idea.status],
       statusTone: ideaTone(idea.status),
       href: `/ideas/${idea.id}`,
@@ -277,13 +291,23 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       subtitle: `Líder: ${project.leader.name}`,
       location: project.orgUnit ? `${project.orgUnit.plant.code} · ${project.orgUnit.name}` : [project.plant, project.area].filter(Boolean).join(" · "),
       assignment,
+      owner: project.leader.name,
       status: kaizenStatusLabels[project.status],
       statusTone: kaizenTone[project.status],
       href: `/kaizen/${project.id}`,
       dueDate,
       updatedAt: project.updatedAt,
       overdue: isPastDue(dueDate, project.status === "COMPLETADO" || project.status === "CANCELADO"),
-      progress: { completed: progress.closed, total: progress.total, percent: progress.percent }
+      progress: { completed: progress.closed, total: progress.total, percent: progress.percent },
+      children: project.activities.map((activity) => ({
+        id: activity.id,
+        label: activity.action,
+        status: activity.status,
+        statusLabel: workItemStatusLabels[activity.status],
+        owner: activity.owner?.name ?? "Sin responsable",
+        dueDate: activity.dueDate,
+        tone: workItemTone(activity.status)
+      }))
     });
   }
 
@@ -320,13 +344,23 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       subtitle: `Coordinación: ${walk.coordinator.name}`,
       location: walk.orgUnit ? `${walk.orgUnit.plant.code} · ${walk.orgUnit.name}` : walk.areaName,
       assignment,
+      owner: walk.coordinator.name,
       status: genbaStatusLabels[walk.status],
       statusTone: walk.status === "ABIERTO" ? "blue" : walk.status === "CERRADO" ? "green" : "slate",
       href: `/genba/${walk.id}`,
       dueDate,
       updatedAt: walk.updatedAt,
       overdue: isPastDue(dueDate, walk.status !== "ABIERTO"),
-      progress: { completed: progress.closed, total: progress.total, percent: progress.percent }
+      progress: { completed: progress.closed, total: progress.total, percent: progress.percent },
+      children: walk.activities.map((activity) => ({
+        id: activity.id,
+        label: activity.action || activity.problem,
+        status: activity.status,
+        statusLabel: workItemStatusLabels[activity.status],
+        owner: activity.owner?.name ?? "Sin responsable",
+        dueDate: activity.dueDate,
+        tone: workItemTone(activity.status)
+      }))
     });
   }
 
@@ -371,13 +405,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         </div>
       ) : null}
 
-      <section className="hidden gap-3 sm:grid sm:grid-cols-3">
-        <KpiCard detail="Requieren decisión o avance" icon={CircleAlert} label="Pendientes" tone="amber" value={buckets.pendientes.length} />
-        <KpiCard detail="Liderazgo o asignación directa" icon={ListChecks} label="En seguimiento" tone="blue" value={buckets.seguimiento.length} />
-        <KpiCard detail={globalAccess ? "Acceso global" : `${supervisableOrgUnitIds.length} unidades bajo alcance`} icon={ClipboardCheck} label="Equipo" tone="dark" value={buckets.equipo.length} />
-      </section>
-
-      <nav aria-label="Vistas de seguimiento" className="mt-6 grid grid-cols-3 overflow-hidden rounded-lg border border-line bg-white p-1 shadow-sm">
+      <nav aria-label="Vistas de seguimiento" className="work-queue-tabs">
         {([
           ["pendientes", "Pendientes", buckets.pendientes.length],
           ["seguimiento", "Seguimiento", buckets.seguimiento.length],

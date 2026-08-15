@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Archive, Download, ListTodo, Plus } from "lucide-react";
+import { Archive, Download, Plus } from "lucide-react";
 import { GenbaCommandCenter, type GenbaDashboardWalk } from "@/components/genba-command-center";
 import { PageHeader } from "@/components/page-header";
 import { parseStringArray } from "@/lib/domain";
@@ -10,7 +10,6 @@ export default async function GenbaDashboardPage() {
   const { user, canManage } = await requireGenbaAccess();
   const walks = await prisma.genbaWalk.findMany({
     where: {
-      status: "ABIERTO",
       ...(!canManage ? { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } : {})
     },
     include: {
@@ -53,13 +52,12 @@ export default async function GenbaDashboardPage() {
     <>
       <PageHeader
         eyebrow="Recorridos GENBA · Gestión visual"
-        title="Centro de mando GENBA"
-        description="Recurrencia, asistencia, vencimientos y velocidad de cierre para dirigir el seguimiento en piso."
+        title="Recorridos GENBA"
+        description="Recorridos y acciones agrupadas para dar seguimiento sin perder el contexto."
         actions={
           <>
             <Link className="btn btn-secondary" href="/api/export/genba"><Download className="h-4 w-4" aria-hidden />Excel</Link>
             <Link className="btn btn-secondary" href="/genba/repositorio"><Archive className="h-4 w-4" aria-hidden />Repositorio</Link>
-            <Link className="btn btn-secondary" href="/genba/kanban"><ListTodo className="h-4 w-4" aria-hidden />Kanban</Link>
             {canManage ? <Link className="btn btn-primary" href="/genba/nuevo"><Plus className="h-4 w-4" aria-hidden />Nuevo recorrido</Link> : null}
           </>
         }

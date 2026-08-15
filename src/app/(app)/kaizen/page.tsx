@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Archive, CalendarRange, Download, ListTodo, Plus } from "lucide-react";
+import { Archive, CalendarRange, Download, Plus } from "lucide-react";
 import { KaizenCommandCenter, type KaizenDashboardProject } from "@/components/kaizen-command-center";
 import { PageHeader } from "@/components/page-header";
 import { requireKaizenAccess } from "@/lib/module-access";
@@ -9,7 +9,6 @@ export default async function KaizenDashboardPage() {
   const { user, canManage } = await requireKaizenAccess();
   const projects = await prisma.kaizenProject.findMany({
     where: {
-      status: { notIn: ["COMPLETADO", "CANCELADO"] },
       ...(!canManage ? { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } : {})
     },
     include: {
@@ -56,13 +55,12 @@ export default async function KaizenDashboardPage() {
     <>
       <PageHeader
         eyebrow="Proyectos Kaizen · Dirección y seguimiento"
-        title="Centro de mando Kaizen"
-        description="Salud del portafolio, avance planeado contra real, beneficios y compromisos en una vista ejecutiva."
+        title="Proyectos Kaizen"
+        description="Proyectos, actividades, responsables y resultados en vistas conectadas."
         actions={
           <>
             <Link className="btn btn-secondary" href="/api/export/kaizen"><Download className="h-4 w-4" aria-hidden />Excel</Link>
             <Link className="btn btn-secondary" href="/kaizen/repositorio"><Archive className="h-4 w-4" aria-hidden />Repositorio</Link>
-            <Link className="btn btn-secondary" href="/kaizen/kanban"><ListTodo className="h-4 w-4" aria-hidden />Kanban</Link>
             <Link className="btn btn-secondary" href="/kaizen/gantt"><CalendarRange className="h-4 w-4" aria-hidden />Gantt</Link>
             {canManage ? <Link className="btn btn-primary" href="/kaizen/nuevo"><Plus className="h-4 w-4" aria-hidden />Nuevo Kaizen</Link> : null}
           </>

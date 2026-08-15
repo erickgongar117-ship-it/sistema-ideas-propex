@@ -18,6 +18,7 @@ import {
   Database,
   Download,
   Footprints,
+  FileSpreadsheet,
   FolderKanban,
   Gauge,
   GraduationCap,
@@ -57,6 +58,7 @@ type NavItem = {
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   roles: Role[];
   requiresReviewAccess?: boolean;
+  requiresModule?: "kaizen" | "genba";
   group: "work" | "control" | "system";
 };
 
@@ -86,6 +88,7 @@ const ideaNav: NavItem[] = [
   { href: "/auditoria", label: "Auditoría", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
   { href: "/configuracion/estructura", label: "Estructura organizacional", shortLabel: "Estructura", icon: Network, roles: ["ADMIN"], group: "system" },
   { href: "/configuracion/datos", label: "Control de datos", shortLabel: "Datos", icon: Database, roles: ["ADMIN"], group: "system" },
+  { href: "/configuracion/migracion-2026", label: "Migracion Excel 2026", shortLabel: "Migracion", icon: FileSpreadsheet, roles: ["ADMIN"], group: "system" },
   { href: "/configuracion", label: "Configuración", shortLabel: "Ajustes", icon: Settings, roles: ["ADMIN"], group: "system" }
 ];
 
@@ -104,6 +107,41 @@ const genbaNav: NavItem[] = [
   { href: "/genba/kanban", label: "Kanban por recorrido", shortLabel: "Kanban", icon: FolderKanban, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" }
 ];
 
+const unifiedNav: NavItem[] = [
+  { href: "/dashboard", label: "Ideas de mejora", shortLabel: "Ideas", icon: ClipboardList, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/seguimientos", label: "Mi trabajo", shortLabel: "Mi trabajo", icon: ListChecks, roles: allRoles, group: "work" },
+  { href: "/kaizen", label: "Proyectos Kaizen", shortLabel: "Kaizen", icon: FolderKanban, roles: allRoles, requiresModule: "kaizen", group: "work" },
+  { href: "/genba", label: "Recorridos GENBA", shortLabel: "GENBA", icon: Footprints, roles: allRoles, requiresModule: "genba", group: "work" },
+  { href: "/entrenamientos", label: "Entrenamientos", shortLabel: "Cursos", icon: GraduationCap, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/probocacoins", label: "ProbocaCoins", shortLabel: "Coins", icon: Coins, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/panorama", label: "Panel ejecutivo", shortLabel: "Panel", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/notificaciones", label: "Notificaciones", shortLabel: "Avisos", icon: Bell, roles: allRoles, group: "work" },
+
+  { href: "/supervisor", label: "Aprobaciones", shortLabel: "Aprobar", icon: UserCheck, roles: allRoles, requiresReviewAccess: true, group: "control" },
+  { href: "/validaciones/calidad", label: "Validaciones de calidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "control" },
+  { href: "/validaciones/seguridad", label: "Validaciones de seguridad", shortLabel: "Seguridad", icon: ClipboardCheck, roles: ["ADMIN", "SEGURIDAD"], group: "control" },
+  { href: "/validaciones/mantenimiento", label: "Validaciones tecnicas", icon: Wrench, roles: ["ADMIN", "MANTENIMIENTO"], group: "control" },
+  { href: "/mejora", label: "Clasificar y cerrar ideas", shortLabel: "Mejora", icon: Gauge, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
+  { href: "/implementacion", label: "Implementacion de ideas", shortLabel: "Avances", icon: ListChecks, roles: ["ADMIN", "MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR"], group: "control" },
+  { href: "/ideas", label: "Portafolio de ideas", icon: ClipboardList, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
+  { href: "/ideas/repositorio", label: "Repositorio de ideas", icon: Archive, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
+  { href: "/kanban", label: "Kanban de ideas", icon: KanbanSquare, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
+  { href: "/vencidas", label: "Compromisos vencidos", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
+  { href: "/kaizen/repositorio", label: "Repositorio Kaizen", icon: Archive, roles: allRoles, requiresModule: "kaizen", group: "control" },
+  { href: "/kaizen/gantt", label: "Gantt Kaizen", icon: CalendarRange, roles: allRoles, requiresModule: "kaizen", group: "control" },
+  { href: "/kaizen/kanban", label: "Kanban Kaizen", icon: FolderKanban, roles: allRoles, requiresModule: "kaizen", group: "control" },
+  { href: "/genba/repositorio", label: "Repositorio GENBA", icon: Archive, roles: allRoles, requiresModule: "genba", group: "control" },
+  { href: "/genba/kanban", label: "Kanban GENBA", icon: FolderKanban, roles: allRoles, requiresModule: "genba", group: "control" },
+
+  { href: "/qr", label: "Codigos QR", shortLabel: "QR", icon: QrCode, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
+  { href: "/reportes", label: "Reportes y Excel", icon: Download, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
+  { href: "/auditoria", label: "Auditoria", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
+  { href: "/configuracion/estructura", label: "Organizacion y personas", shortLabel: "Estructura", icon: Network, roles: ["ADMIN"], group: "system" },
+  { href: "/configuracion/datos", label: "Control de datos", shortLabel: "Datos", icon: Database, roles: ["ADMIN"], group: "system" },
+  { href: "/configuracion/migracion-2026", label: "Migracion Excel 2026", shortLabel: "Migracion", icon: FileSpreadsheet, roles: ["ADMIN"], group: "system" },
+  { href: "/configuracion", label: "Configuracion", shortLabel: "Ajustes", icon: Settings, roles: ["ADMIN"], group: "system" }
+];
+
 const roleTheme: Record<Role, { accent: string; soft: string; home: string; context: string }> = {
   ADMIN: { accent: "#171717", soft: "#f0f0f0", home: "/dashboard", context: "Control del sistema" },
   MEJORA_CONTINUA: { accent: "#171717", soft: "#f0f0f0", home: "/dashboard", context: "Seguimiento global" },
@@ -115,13 +153,16 @@ const roleTheme: Record<Role, { accent: string; soft: string; home: string; cont
 };
 
 const groupLabels = {
-  work: "Trabajo pendiente",
-  control: "Seguimiento",
-  system: "Herramientas"
+  work: "Espacio de trabajo",
+  control: "Procesos y vistas",
+  system: "Administracion y datos"
 };
 
 function isCurrentPath(pathname: string, href: string) {
-  if (["/dashboard", "/ideas", "/kaizen", "/genba"].includes(href)) return pathname === href;
+  if (href === "/dashboard") return pathname === href;
+  if (["/ideas", "/kaizen", "/genba"].includes(href)) {
+    return pathname === href || new RegExp(`^${href}/[^/]+$`).test(pathname);
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -188,6 +229,36 @@ function ModuleSwitcher({ home, access, compact = false, onNavigate }: { home: s
   );
 }
 
+function CreateMenu({ canManage, moduleAccess }: { canManage: boolean; moduleAccess: { kaizen: boolean; genba: boolean } }) {
+  const options = [
+    { href: "/#areas", label: "Idea de mejora", detail: "Captura por area", icon: ClipboardList, visible: true },
+    { href: "/kaizen/nuevo", label: "Proyecto Kaizen", detail: "Crear proyecto", icon: FolderKanban, visible: canManage && moduleAccess.kaizen },
+    { href: "/genba/nuevo", label: "Recorrido GENBA", detail: "Programar recorrido", icon: Footprints, visible: canManage && moduleAccess.genba },
+    { href: "/entrenamientos", label: "Entrenamiento", detail: "Programa o sesion", icon: GraduationCap, visible: canManage }
+  ].filter((option) => option.visible);
+
+  return (
+    <details className="workspace-create">
+      <summary className="btn btn-primary">
+        <Plus className="h-4 w-4" aria-hidden />
+        <span>Crear</span>
+        <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+      </summary>
+      <div className="workspace-create-menu">
+        {options.map((option) => {
+          const Icon = option.icon;
+          return (
+            <Link href={option.href} key={option.href}>
+              <span><Icon className="h-[18px] w-[18px]" aria-hidden /></span>
+              <span><strong>{option.label}</strong><small>{option.detail}</small></span>
+            </Link>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
 export function AppShell({ user, children, pendingNotifications, moduleAccess, canReviewIdeas }: { user: ShellUser; children: ReactNode; pendingNotifications: number; moduleAccess: { kaizen: boolean; genba: boolean }; canReviewIdeas: boolean }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -205,35 +276,25 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
       ? { ...roleBaseTheme, accent: "#ea0029", soft: "#fff1f4", context: "Recorridos GENBA", home: "/genba" }
       : roleBaseTheme;
   const visibleNav = useMemo(() => {
-    const source = currentModule === "kaizen" ? kaizenNav : currentModule === "genba" ? genbaNav : ideaNav;
-    return source.filter((item) => item.roles.includes(user.role) && (!item.requiresReviewAccess || canReviewIdeas));
-  }, [canReviewIdeas, currentModule, user.role]);
+    return unifiedNav.filter((item) => {
+      if (!item.roles.includes(user.role) || (item.requiresReviewAccess && !canReviewIdeas)) return false;
+      if (item.requiresModule === "kaizen" && !moduleAccess.kaizen) return false;
+      if (item.requiresModule === "genba" && !moduleAccess.genba) return false;
+      return true;
+    });
+  }, [canReviewIdeas, moduleAccess.genba, moduleAccess.kaizen, user.role]);
   const mobileItems = useMemo(() => {
-    const preferred = currentModule === "ideas"
-      ? [theme.home, user.role === "ADMIN" || user.role === "MEJORA_CONTINUA" ? "/panorama" : "/seguimientos", "/notificaciones"]
-      : currentModule === "kaizen"
-        ? ["/kaizen", "/kaizen/gantt", "/kaizen/kanban"]
-        : ["/genba", "/genba/kanban"];
+    const preferred = [roleBaseTheme.home, "/seguimientos", "/kaizen", "/genba", "/notificaciones"];
     return preferred.map((href) => visibleNav.find((item) => item.href === href)).filter((item): item is NavItem => Boolean(item)).filter((item, index, items) => items.findIndex((candidate) => candidate.href === item.href) === index).slice(0, 3);
-  }, [currentModule, theme.home, user.role, visibleNav]);
+  }, [roleBaseTheme.home, visibleNav]);
   const activeItem = visibleNav.find((item) => isCurrentPath(pathname, item.href));
   const showPeriodControl = pathname === "/dashboard" || pathname === "/kaizen" || pathname === "/genba";
-  const searchItems = useMemo(() => {
-    const moduleSources = [
-      { label: "Ideas", visible: true, items: ideaNav },
-      { label: "Kaizen", visible: moduleAccess.kaizen, items: kaizenNav },
-      { label: "GENBA", visible: moduleAccess.genba, items: genbaNav }
-    ];
-    const seen = new Set<string>();
-    return moduleSources.flatMap((module) => module.visible
-      ? module.items
-        .filter((item) => item.roles.includes(user.role) && (!item.requiresReviewAccess || canReviewIdeas) && !seen.has(item.href))
-        .map((item) => {
-          seen.add(item.href);
-          return { href: item.href, label: item.label, group: `${module.label} · ${groupLabels[item.group]}` };
-        })
-      : []);
-  }, [canReviewIdeas, moduleAccess.genba, moduleAccess.kaizen, user.role]);
+  const searchItems = useMemo(() => visibleNav.map((item) => ({
+    href: item.href,
+    label: item.label,
+    group: groupLabels[item.group]
+  })), [visibleNav]);
+  const canManagePrograms = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
 
   useEffect(() => {
     setSidebarCollapsed(window.localStorage.getItem("propex-sidebar-collapsed") === "true");
@@ -297,7 +358,6 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
               >
                 <span>{groupLabels[group]}</span>
                 <span className="nav-group-meta">
-                  <span>{items.length}</span>
                   <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden />
                 </span>
               </button>
@@ -329,7 +389,12 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
               {sidebarCollapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden /> : <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden />}
             </button>
           </div>
-          <div className="mt-4"><ModuleSwitcher access={moduleAccess} home={roleBaseTheme.home} /></div>
+          <div className="mt-4">
+            <Link className="sidebar-quick-create" href="/#areas">
+              <Plus className="h-[18px] w-[18px]" aria-hidden />
+              <span>Nueva idea</span>
+            </Link>
+          </div>
         </div>
         <div className="app-sidebar-scroll">{navigation(undefined, sidebarCollapsed)}</div>
         <div className="app-sidebar-footer">
@@ -364,6 +429,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
           <div className="workspace-topbar-actions">
             <WorkspaceSearch items={searchItems} />
             {showPeriodControl ? <WorkspacePeriodControl /> : null}
+            <CreateMenu canManage={canManagePrograms} moduleAccess={moduleAccess} />
             <ThemeSelector />
             <Link aria-label={`${pendingNotifications} notificaciones pendientes`} className="icon-button relative" href="/notificaciones" title="Notificaciones">
               <Bell className="h-[18px] w-[18px]" aria-hidden />
@@ -392,6 +458,9 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
         <header className="mobile-topbar">
           <BrandBlock compact />
           <div className="flex items-center gap-2">
+            <Link aria-label="Nueva idea" className="icon-button" href="/#areas">
+              <Plus className="h-5 w-5" aria-hidden />
+            </Link>
             <Link aria-label={`${pendingNotifications} notificaciones pendientes`} className="icon-button relative" href="/notificaciones">
               <Bell className="h-5 w-5" aria-hidden />
               {pendingNotifications ? <span className="notification-dot" /> : null}
@@ -401,8 +470,6 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
             </button>
           </div>
         </header>
-
-        <div className="mobile-module-strip"><ModuleSwitcher access={moduleAccess} compact home={roleBaseTheme.home} /></div>
 
         <main className="app-main">{children}</main>
       </div>
@@ -440,7 +507,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
             <div className="border-b border-slate-200 p-4">
               <p className="text-sm font-extrabold text-slate-950">{user.name}</p>
               <p className="mt-0.5 text-xs text-slate-500">{roleLabels[user.role]} · {theme.context}</p>
-              <div className="mt-3"><ModuleSwitcher access={moduleAccess} compact home={roleBaseTheme.home} onNavigate={() => setMenuOpen(false)} /></div>
+              <Link className="btn btn-primary mt-3 w-full" href="/#areas" onClick={() => setMenuOpen(false)}><Plus className="h-4 w-4" aria-hidden />Nueva idea</Link>
               <div className="mobile-workspace-preferences">
                 <WorkspaceSearch fullWidth items={searchItems} />
                 {showPeriodControl ? <WorkspacePeriodControl fullWidth /> : null}

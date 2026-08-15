@@ -1,9 +1,17 @@
-import Link from "next/link";
-import { ArrowRight, CalendarClock, CircleAlert, ClipboardCheck, Footprints, Lightbulb } from "lucide-react";
-import { EmptyState } from "@/components/empty-state";
+import { OperationsWorkboard, type WorkboardItem, type WorkboardMetric } from "@/components/operations-workboard";
 
 export type FollowUpModule = "IDEA" | "KAIZEN" | "GENBA";
 export type FollowUpTone = "amber" | "blue" | "green" | "red" | "slate" | "violet";
+
+export type FollowUpChild = {
+  id: string;
+  label: string;
+  status: string;
+  statusLabel: string;
+  owner: string;
+  dueDate: Date | null;
+  tone: FollowUpTone;
+};
 
 export type FollowUpRow = {
   key: string;
@@ -13,6 +21,7 @@ export type FollowUpRow = {
   subtitle: string;
   location: string;
   assignment: string;
+  owner: string;
   status: string;
   statusTone: FollowUpTone;
   href: string;
@@ -24,78 +33,37 @@ export type FollowUpRow = {
     total: number;
     percent: number;
   };
+  children?: FollowUpChild[];
 };
 
-const moduleMeta = {
-  IDEA: {
-    label: "Idea",
-    icon: Lightbulb,
-    className: "border-rose-200 bg-rose-50 text-rose-800"
-  },
-  KAIZEN: {
-    label: "Kaizen",
-    icon: ClipboardCheck,
-    className: "border-slate-300 bg-slate-950 text-white"
-  },
-  GENBA: {
-    label: "GENBA",
-    icon: Footprints,
-    className: "border-blue-200 bg-blue-50 text-blue-800"
-  }
-} as const;
-
-const statusClasses: Record<FollowUpTone, string> = {
-  amber: "border-amber-200 bg-amber-50 text-amber-900 before:bg-amber-500",
-  blue: "border-blue-200 bg-blue-50 text-blue-800 before:bg-blue-600",
-  green: "border-emerald-200 bg-emerald-50 text-emerald-800 before:bg-emerald-600",
-  red: "border-rose-200 bg-rose-50 text-rose-800 before:bg-rose-600",
-  slate: "border-slate-200 bg-slate-100 text-slate-700 before:bg-slate-500",
-  violet: "border-violet-200 bg-violet-50 text-violet-800 before:bg-violet-600"
+const moduleLabels: Record<FollowUpModule, string> = {
+  IDEA: "Idea",
+  KAIZEN: "Kaizen",
+  GENBA: "GENBA"
 };
 
-function ModuleBadge({ module }: { module: FollowUpModule }) {
-  const meta = moduleMeta[module];
-  const Icon = meta.icon;
-  return (
-    <span className={`inline-flex min-h-8 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-extrabold ${meta.className}`}>
-      <Icon className="h-3.5 w-3.5" aria-hidden />
-      {meta.label}
-    </span>
-  );
-}
+const toneColors: Record<FollowUpTone, string> = {
+  amber: "#fdab3d",
+  blue: "#579bfc",
+  green: "#00a86b",
+  red: "#e2445c",
+  slate: "#7f8c8d",
+  violet: "#a25ddc"
+};
 
-function FollowUpStatus({ label, tone }: { label: string; tone: FollowUpTone }) {
-  return (
-    <span className={`inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-extrabold leading-4 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:content-[''] ${statusClasses[tone]}`}>
-      <span className="truncate">{label}</span>
-    </span>
-  );
-}
+const urgencyOrder = ["overdue", "today", "soon", "planned", "no-date"];
 
-function ProgressCell({ progress }: { progress: NonNullable<FollowUpRow["progress"]> }) {
-  return (
-    <div className="min-w-28">
-      <div className="flex items-center justify-between gap-2 text-[11px] font-extrabold text-slate-600">
-        <span>{progress.completed} de {progress.total}</span>
-        <span>{progress.percent}%</span>
-      </div>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label={`${progress.percent}% completado`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}>
-        <div className="h-full rounded-full bg-emerald-600" style={{ width: `${progress.percent}%` }} />
-      </div>
-    </div>
-  );
-}
+function urgency(row: FollowUpRow, now: Date) {
+  if (row.overdue) return { key: "overdue", label: "Vencidos", color: "#e2445c" };
+  if (!row.dueDate) return { key: "no-date", label: "Sin fecha compromiso", color: "#a5adba" };
 
-function DateCell({ row }: { row: FollowUpRow }) {
-  if (!row.dueDate) {
-    return <span className="text-xs text-slate-500">Sin compromiso</span>;
-  }
-  return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-bold ${row.overdue ? "text-rose-700" : "text-slate-700"}`}>
-      {row.overdue ? <CircleAlert className="h-3.5 w-3.5" aria-hidden /> : <CalendarClock className="h-3.5 w-3.5" aria-hidden />}
-      {row.dueDate.toLocaleDateString("es-MX")}
-    </span>
-  );
+  const endToday = new Date(now);
+  endToday.setHours(23, 59, 59, 999);
+  const endSoon = new Date(endToday);
+  endSoon.setDate(endSoon.getDate() + 7);
+  if (row.dueDate.getTime() <= endToday.getTime()) return { key: "today", label: "Para hoy", color: "#fdab3d" };
+  if (row.dueDate.getTime() <= endSoon.getTime()) return { key: "soon", label: "Proximos 7 dias", color: "#579bfc" };
+  return { key: "planned", label: "Programados", color: "#00a86b" };
 }
 
 export function FollowUpTable({
@@ -107,77 +75,67 @@ export function FollowUpTable({
   emptyTitle: string;
   emptyDescription: string;
 }) {
-  if (!rows.length) return <EmptyState title={emptyTitle} description={emptyDescription} />;
+  const now = new Date();
+  const items: WorkboardItem[] = rows.map((row) => {
+    const group = urgency(row, now);
+    const moduleLabel = moduleLabels[row.module];
+    return {
+      id: row.key,
+      href: row.href,
+      code: row.reference,
+      title: row.title,
+      subtitle: `${moduleLabel} · ${row.assignment} · ${row.subtitle}`,
+      group: group.key,
+      groupLabel: group.label,
+      groupColor: group.color,
+      statusLabel: row.status,
+      statusColor: toneColors[row.statusTone],
+      owner: row.owner,
+      location: row.location,
+      dueDate: row.dueDate?.toISOString() ?? null,
+      progress: row.progress?.percent ?? 0,
+      progressLabel: row.progress
+        ? `${row.progress.completed} de ${row.progress.total} actividades completadas`
+        : "Seguimiento por etapa",
+      risk: row.overdue,
+      riskLabel: row.overdue ? "Fecha compromiso vencida" : undefined,
+      tags: [moduleLabel, row.status, row.assignment],
+      children: row.children?.map((child) => ({
+        id: child.id,
+        label: child.label,
+        status: child.status,
+        statusLabel: child.statusLabel,
+        owner: child.owner,
+        dueDate: child.dueDate?.toISOString() ?? null,
+        tone: toneColors[child.tone]
+      }))
+    };
+  }).sort((left, right) => urgencyOrder.indexOf(left.group) - urgencyOrder.indexOf(right.group));
+
+  const activeWithProgress = rows.filter((row) => row.progress);
+  const averageProgress = activeWithProgress.length
+    ? Math.round(activeWithProgress.reduce((sum, row) => sum + (row.progress?.percent ?? 0), 0) / activeWithProgress.length)
+    : 0;
+  const dueSoon = rows.filter((row) => {
+    if (!row.dueDate || row.overdue) return false;
+    const limit = new Date(now);
+    limit.setDate(limit.getDate() + 7);
+    return row.dueDate.getTime() <= limit.getTime();
+  }).length;
+  const metrics: WorkboardMetric[] = [
+    { label: "En esta vista", value: rows.length, detail: "Registros dentro de tu alcance", color: "#171717" },
+    { label: "Vencidos", value: rows.filter((row) => row.overdue).length, detail: "Requieren una decision o nueva fecha", color: "#e2445c" },
+    { label: "Proximos 7 dias", value: dueSoon, detail: "Compromisos cercanos", color: "#fdab3d" },
+    { label: "Avance medio", value: `${averageProgress}%`, detail: "Kaizen y GENBA con actividades", color: "#00a86b" }
+  ];
 
   return (
-    <>
-      <div className="mobile-card-list">
-        {rows.map((row) => (
-          <Link className="surface surface-interactive block rounded-lg p-4" href={row.href} key={row.key}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <ModuleBadge module={row.module} />
-                  <span className="text-sm font-extrabold text-brand-700">{row.reference}</span>
-                </div>
-                <p className="mt-3 line-clamp-2 text-sm font-extrabold leading-5 text-ink">{row.title}</p>
-                <p className="mt-1 truncate text-xs text-slate-500">{row.subtitle}</p>
-              </div>
-              <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-            </div>
-            <div className="mt-4 grid gap-3 border-t border-line pt-3 text-xs">
-              <div className="flex items-center justify-between gap-3"><span className="font-bold text-slate-500">Ubicación</span><span className="truncate text-right font-extrabold text-slate-700">{row.location}</span></div>
-              <div className="flex items-center justify-between gap-3"><span className="font-bold text-slate-500">Asignación</span><span className="text-right font-extrabold text-slate-700">{row.assignment}</span></div>
-              <div className="flex flex-wrap items-center justify-between gap-3"><FollowUpStatus label={row.status} tone={row.statusTone} /><DateCell row={row} /></div>
-              {row.progress ? <ProgressCell progress={row.progress} /> : null}
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      <div className="table-wrap desktop-table-only min-w-0 max-w-full">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Seguimiento</th>
-              <th>Responsabilidad</th>
-              <th>Estado</th>
-              <th>Avance</th>
-              <th>Fechas</th>
-              <th><span className="sr-only">Abrir</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.key}>
-                <td className="min-w-64 max-w-md">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <ModuleBadge module={row.module} />
-                    <Link className="font-extrabold text-brand-700 hover:underline" href={row.href}>{row.reference}</Link>
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-sm font-bold leading-5 text-ink">{row.title}</p>
-                  <p className="mt-1 truncate text-xs text-slate-500">{row.subtitle}</p>
-                </td>
-                <td className="min-w-48 max-w-64 text-xs">
-                  <p className="font-extrabold text-slate-700">{row.location}</p>
-                  <p className="mt-1.5 font-bold leading-5 text-slate-500">{row.assignment}</p>
-                </td>
-                <td><FollowUpStatus label={row.status} tone={row.statusTone} /></td>
-                <td>{row.progress ? <ProgressCell progress={row.progress} /> : <span className="text-xs text-slate-400">No aplica</span>}</td>
-                <td className="min-w-32">
-                  <DateCell row={row} />
-                  <p className="mt-1.5 whitespace-nowrap text-[11px] text-slate-500">Actualizado {row.updatedAt.toLocaleDateString("es-MX")}</p>
-                </td>
-                <td>
-                  <Link aria-label={`Abrir ${row.reference}`} className="icon-button h-9 w-9 min-w-9" href={row.href} title="Abrir seguimiento">
-                    <ArrowRight className="h-4 w-4" aria-hidden />
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
+    <OperationsWorkboard
+      emptyLabel={`${emptyTitle}. ${emptyDescription}`}
+      items={items}
+      locationLabel="Planta y area"
+      metrics={metrics}
+      primaryLabel="Trabajo"
+    />
   );
 }
