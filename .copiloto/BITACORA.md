@@ -4,6 +4,14 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Revise y commitee los 19 archivos que Codex tenia sin guardar: piloto de Power Automate por un lado, entrenamientos/ProbocaCoins y los command centers por otro. Verificado con tsc --noEmit y pnpm build.
+
+Por que: Con trabajo ajeno suelto en el arbol, cualquier cambio nuevo se mezclaba con el suyo y despues no habia forma limpia de separarlos.
+
+Siguiente paso dejado: El arbol esta limpio y se puede trabajar de cero. Si vas a experimentar, abre una rama con 'git switch -c claude/<tema>'. Pendiente sin urgencia: propex-interno-sites (Documentos\propex-interno-sites) no tiene remoto y existe solo en esta maquina.
+
+---
+
 ## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Reorganice el montaje a carpeta unica por turnos tras desaparecer el worktree de Claude; verifique que nada se perdio y actualice protocolo, CLAUDE.md, AGENTS.md y los scripts.
 
 Por que: El worktree se esfumo en una reorganizacion del Escritorio; esa fragilidad no compensaba y el usuario piensa el proyecto como una sola carpeta.
