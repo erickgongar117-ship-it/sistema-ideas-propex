@@ -53,14 +53,28 @@ historia del proyecto. Lo que si debe perdurar va en `BITACORA.md`, que si esta 
 
 ---
 
+## D-006 — Una sola carpeta, los dos agentes por turnos
+**Fecha:** 2026-08-15 · **Quien:** usuario · **Estado:** vigente · **Reemplaza a:** D-002
+
+Todo el trabajo ocurre en `Documentos\proboca ideas de mejora`. No hay carpeta por agente.
+
+Por que: el worktree de Claude desaparecio durante una reorganizacion del Escritorio, y esa
+fragilidad no compensaba. El usuario piensa el proyecto como **una carpeta**, y forzar dos
+solo reintroducia la dispersion que acabamos de limpiar. El trabajo en paralelo no era una
+necesidad real: los turnos alcanzan.
+
+Consecuencia: los agentes no pueden trabajar a la vez. El lock deja de ser una formalidad y
+pasa a ser lo que evita que dos editen el mismo archivo. La rama `claude/al-dia` sigue viva
+en GitHub por si algun dia se retoma el paralelismo.
+
+---
+
 ## D-002 — Un worktree y una rama por agente
-**Fecha:** julio 2026 · **Quien:** usuario · **Estado:** vigente (ya existia)
+**Fecha:** julio 2026 · **Quien:** usuario · **Estado:** SUPERADA por D-006
 
-Codex trabaja en `Documentos\proboca ideas de mejora` sobre `codex/<tema>`; Claude en
-`Escritorio\propex-claude` sobre `claude/<tema>`. Carpetas separadas, un solo historial.
-
-Consecuencia: cada worktree es una instalacion aparte y necesita su propio `pnpm install`,
-`.env` y `prisma/dev.db`.
+Codex trabajaba en `Documentos\proboca ideas de mejora` y Claude en
+`Escritorio\propex-claude`, carpetas separadas con un solo historial. Se abandono el
+2026-08-15.
 
 ---
 

@@ -8,10 +8,12 @@ Lee este archivo completo antes de modificar el sistema. Es la memoria de trabaj
 powershell -File .copiloto/bin/inicio.ps1
 ```
 
-Este repo lo trabajan **dos agentes, cada uno en su propio worktree y su propia rama**:
-Claude en `Escritorio\propex-claude` y Codex en `Documentos\proboca ideas de mejora`. El
-comando de arriba te dice en que rama estas, que esta haciendo el otro agente, si tu rama
-esta atrasada, que areas estan tomadas y que trabajo quedo a medias.
+Este repo lo trabajan **dos agentes por turnos en esta misma carpeta**: Claude y Codex.
+No hay carpeta por agente. Como comparten el arbol de trabajo, **no pueden trabajar a la
+vez**: el lock es lo que evita que dos editen el mismo archivo.
+
+El comando de arriba te dice en que rama estas, con que estado cerro el otro agente, que
+areas estan tomadas y que trabajo quedo a medias.
 
 Eres `claude`: firma tus commits con prefijo `[claude]` y cierra siempre tu turno con
 `.copiloto/bin/cerrar.ps1`. **Nunca uses `git add -A`** — aqui conviven varios frentes de

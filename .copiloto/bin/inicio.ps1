@@ -1,5 +1,5 @@
-# Arranque de turno. Muestra todo lo necesario para retomar sin contexto previo,
-# incluido lo que esta haciendo el OTRO agente en su propio worktree.
+﻿# Arranque de turno. Muestra todo lo necesario para retomar sin contexto previo,
+# incluido con que estado cerro el otro agente su ultimo turno.
 # Uso:  powershell -File .copiloto/bin/inicio.ps1
 
 $ErrorActionPreference = 'Continue'
@@ -17,10 +17,8 @@ function Titulo($t) {
 
 Write-Host ""
 Write-Host "  ARRANQUE DE TURNO -- PROpEx" -ForegroundColor White
-Write-Host ("  Worktree: " + $raiz) -ForegroundColor DarkGray
-Write-Host ("  Rama:     " + (git rev-parse --abbrev-ref HEAD)) -ForegroundColor DarkGray
-
-Titulo "WORKTREES Y RAMAS  (quien esta donde)"
+Write-Host ("  Carpeta: " + $raiz) -ForegroundColor DarkGray
+Write-Host ("  Rama:    " + (git rev-parse --abbrev-ref HEAD)) -ForegroundColor DarkGray
 $lineas = git worktree list --porcelain
 $wt = @(); $actual = $null
 foreach ($l in $lineas) {
@@ -28,6 +26,10 @@ foreach ($l in $lineas) {
   elseif ($l -like 'branch *') { $actual.rama = $l.Substring(7) -replace '^refs/heads/', '' }
 }
 if ($actual) { $wt += $actual }
+# Este bloque solo aporta cuando hay mas de una carpeta de trabajo. Con una sola
+# (el montaje normal, ver D-006) la rama ya salio arriba y repetirla seria ruido.
+if ($wt.Count -gt 1) {
+Titulo "CARPETAS DE TRABAJO  (quien esta donde)"
 foreach ($w in $wt) {
   $esteEs = if ($w.ruta.Replace('/', '\') -eq $raiz.Replace('/', '\')) { ' <- estas aqui' } else { '' }
   Write-Host ("  " + $w.rama + $esteEs) -ForegroundColor $(if ($esteEs) { 'Green' } else { 'Gray' })
@@ -54,8 +56,9 @@ foreach ($w in $wt) {
     }
   }
 }
+}
 
-Titulo "ESTADO DE CADA AGENTE  (compartido entre worktrees)"
+Titulo "ESTADO CON QUE CERRO CADA AGENTE"
 $estados = @(Get-ChildItem $runtime -Filter 'ESTADO-*.md' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
 if ($estados.Count -eq 0) {
   Write-Host "  (todavia nadie ha cerrado un turno)" -ForegroundColor DarkGray
@@ -86,7 +89,7 @@ if ($locks.Count -eq 0) {
   }
 }
 
-Titulo "CAMBIOS SIN COMMITEAR EN ESTE WORKTREE"
+Titulo "CAMBIOS SIN COMMITEAR"
 $st = @(git status --short)
 if ($st.Count -eq 0) {
   Write-Host "  arbol limpio" -ForegroundColor Green
@@ -101,7 +104,7 @@ if ($st.Count -eq 0) {
   Write-Host "  Para entenderlo:  git diff        Para guardarlo sin perderlo:  git stash" -ForegroundColor DarkGray
 }
 
-Titulo "ULTIMOS 12 EVENTOS  (de todos los agentes)"
+Titulo "ULTIMOS 12 EVENTOS  (de los dos agentes)"
 $log = Join-Path $runtime 'eventos.jsonl'
 if (Test-Path $log) {
   Get-Content $log -Tail 12 -Encoding UTF8 | ForEach-Object {

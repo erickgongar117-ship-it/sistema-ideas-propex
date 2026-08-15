@@ -1,7 +1,8 @@
 # PROpEx — instrucciones para Codex
 
-Este repo lo trabajan **dos agentes, cada uno en su propio worktree y su propia rama**:
-Codex (tu) y Claude. Claude recibe estas mismas reglas via `CLAUDE.md`.
+Este repo lo trabajan **dos agentes por turnos en esta misma carpeta**: Codex (tu) y Claude.
+Claude recibe estas mismas reglas via `CLAUDE.md`. Como comparten el arbol de trabajo, **no
+pueden trabajar a la vez**: el lock es lo que evita que dos editen el mismo archivo.
 
 ## Antes de tocar cualquier archivo
 
@@ -9,8 +10,8 @@ Codex (tu) y Claude. Claude recibe estas mismas reglas via `CLAUDE.md`.
 powershell -File .copiloto/bin/inicio.ps1
 ```
 
-Te muestra en que rama estas, que esta haciendo Claude en su worktree, si tu rama esta
-atrasada, los locks vigentes y el trabajo a medias. No es opcional.
+Te muestra en que rama estas, con que estado cerro Claude su ultimo turno, los locks
+vigentes y el trabajo a medias. No es opcional.
 
 ## Lee tambien CLAUDE.md
 

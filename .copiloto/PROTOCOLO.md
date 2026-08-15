@@ -8,36 +8,37 @@ Como se coordinan los agentes. **Las reglas de producto, permisos y despliegue e
 
 ## 0. Como esta armado esto
 
-Cada agente trabaja en **su propio worktree, sobre su propia rama**. Son carpetas distintas
-en disco que comparten un solo historial de git:
+**Una sola carpeta, los dos agentes por turnos:**
+`C:\Users\erick\OneDrive\Documentos\proboca ideas de mejora`
 
-| Worktree | Rama | Quien |
-|---|---|---|
-| `Documentos\proboca ideas de mejora` | `codex/<tema>` | Codex |
-| `Escritorio\propex-claude` | `claude/<tema>` | Claude |
+No hay carpetas separadas por agente. Quien tiene el turno trabaja aqui, sobre la rama del
+tema en curso (`codex/<tema>` o `claude/<tema>`, segun quien la abrio). El turno se toma y se
+cierra de forma explicita, y de eso se encargan los scripts de esta carpeta.
 
-Eso ya evita que se pisen los archivos. Lo que faltaba —y agrega esta capa— es que cada uno
-sepa **que esta haciendo el otro y en que paso quedo**. Cinco niveles:
+Como comparten el arbol de trabajo, **no pueden trabajar a la vez**: el lock no es una
+formalidad, es lo que evita que dos agentes editen el mismo archivo al mismo tiempo.
+
+Cinco niveles de memoria:
 
 | Nivel | Donde | Que guarda |
 |---|---|---|
 | Hechos | `.git/` | Que cambio, quien y cuando. Reversible |
-| Reflejo | `.git/copiloto/eventos.jsonl` | Ledger automatico de cada commit, de todos los worktrees |
+| Reflejo | `.git/copiloto/eventos.jsonl` | Ledger automatico de cada commit |
 | Turno | `.git/copiloto/ESTADO-<agente>.md` | La foto del ahora de cada agente |
 | Memoria | `.copiloto/BITACORA.md` | El *por que*. Versionado, viaja a GitHub |
 | Reglas | este archivo + `CLAUDE.md` | Como jugamos |
 
-**Por que el estado vivo esta en `.git/copiloto/` y no en el proyecto:** los archivos
-ignorados por git **no se comparten entre worktrees** — cada carpeta tiene los suyos. Un
-ledger dentro de `src/` seria invisible para el otro agente. En cambio `.git/` es comun a
-todos los worktrees, asi que lo que vive ahi lo ven los dos, sin importar su rama.
+**Por que el estado vivo esta en `.git/copiloto/` y no en el proyecto:** ahi no lo arrastra
+un cambio de rama ni lo pisa un `git checkout`, y no ensucia `git status`. Ademas sigue
+funcionando tal cual si algun dia se vuelve a montar un worktree aparte, porque `.git/` es
+comun a todos.
 
 ---
 
 ## 1. Regla de oro
 
-Cada quien en su worktree y su rama. Antes de tocar archivos, **lee el estado del otro**.
-Si van a tocar los mismos archivos, se avisa; no se asume.
+**Un solo agente escribe a la vez.** Antes de tocar archivos, lee el estado del otro. Si
+alguien tiene un lock sobre lo que ibas a tocar, avisa; no asumas.
 
 ---
 
@@ -47,15 +48,14 @@ Si van a tocar los mismos archivos, se avisa; no se asume.
 powershell -File .copiloto/bin/inicio.ps1
 ```
 
-Muestra: todos los worktrees con su rama y cuantos commits le faltan a cada uno, el estado
-de los dos agentes, locks vigentes, cambios sin commitear aqui, ultimos 12 eventos y ultimos
-commits.
+Muestra: rama actual, el estado con que cerro cada agente, locks vigentes, cambios sin
+commitear, ultimos 12 eventos y ultimos commits.
 
 Reglas de lectura:
-- **Lock vigente de otro agente sobre tus areas** -> avisale al usuario antes de seguir.
-- **Tu rama muy atrasada** (el script te lo dice) -> actualiza antes de trabajar, o vas a
-  construir sobre codigo viejo y despues toca resolverlo a mano.
+- **Lock vigente de otro agente** -> avisale al usuario antes de seguir.
 - **Cambios sin commitear que no son tuyos** -> no los pises ni los borres. Pregunta.
+- **Estas en la rama que no toca** -> confirma con el usuario antes de cambiarte. Cambiar de
+  rama con trabajo a medias en el arbol es la forma mas facil de enredar todo.
 
 ---
 
@@ -131,18 +131,26 @@ Y ademas:
 
 ---
 
-## 7. Cada worktree es una instalacion aparte
+## 7. Cuidado al cambiar de rama
 
-Son carpetas independientes: cada una necesita su `pnpm install`, su `.env` y su
-`prisma/dev.db`. No se comparten y no deben commitearse.
+`.env` y `prisma/dev.db` estan fuera de git, asi que **no cambian al hacer `git switch`**.
+Si dos ramas necesitan variables o un esquema distinto, te quedas con los de la rama
+anterior y la app falla de formas que no parecen tener sentido. Ante un error raro justo
+despues de cambiar de rama, sospecha de esto antes que del codigo.
 
-Al crear un worktree nuevo:
+Si algun dia hace falta trabajo en paralelo de verdad, la salida no es copiar la carpeta —
+eso fue lo que genero cinco copias del proyecto en agosto de 2026. Es un worktree:
+
 ```powershell
-git worktree add ../propex-<agente> -b <agente>/<tema>
-cd ../propex-<agente>
-pnpm install
-# copia el .env desde otro worktree y regenera la base con pnpm run db:push
+git worktree add ../propex-<tema> -b <agente>/<tema>
+cd ../propex-<tema>
+pnpm install          # cada worktree es una instalacion aparte
+# copia el .env y regenera la base con pnpm run db:push
 ```
+
+Toda esta capa sigue funcionando igual en ese caso, porque el estado vivo esta en el `.git`
+comun. Solo recuerda que un worktree se borra con `git worktree remove`, no arrastrando la
+carpeta a la papelera; si desaparece por fuera, se limpia con `git worktree prune`.
 
 ---
 
