@@ -4,6 +4,14 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Verifique compatibilidad entre agentes sin tocar codigo: worktree y carpeta principal en el mismo commit 276df55, tsc --noEmit y pnpm build en verde con las rutas nuevas de Codex (/entrenamientos, /probocacoins). AGENTS.md y CLAUDE.md alineados.
+
+Siguiente paso dejado: Codex: arranca con .copiloto/bin/inicio.ps1 y toma tu lock antes de editar. El repo esta limpio en 276df55; no hay trabajo a medias. Si vas a publicar, falta correr pnpm run build:vercel (regenera despues el cliente local con pnpm exec prisma generate).
+
+Bloqueo: Ninguno. Ojo: el servidor next dev quedo apagado a proposito; con el encendido prisma generate falla con EPERM y no se puede compilar.
+
+---
+
 ## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Revise y commitee los 19 archivos que Codex tenia sin guardar: piloto de Power Automate por un lado, entrenamientos/ProbocaCoins y los command centers por otro. Verificado con tsc --noEmit y pnpm build.
 
 Por que: Con trabajo ajeno suelto en el arbol, cualquier cambio nuevo se mezclaba con el suyo y despues no habia forma limpia de separarlos.
