@@ -1,0 +1,297 @@
+# PROBOCA - Analisis estadistico de produccion diaria por linea
+# Fuente: Planeacion Cumplimiento programa 2025 y 2026
+# IMPORTANTE: Abra primero PROBOCA_Minitab_IMR_Wide.csv en Minitab y deje esa hoja activa.
+# Se excluyen dias sin produccion registrada para el I-MR; cada columna contiene solo dias operados.
+
+NOTE "===== P1 MUSLO ====="
+DESCRIBE C2;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K1 = PERCENTILE(C2,0.90)
+LET K2 = PERCENTILE(C2,0.95)
+NOTE "P90 y P95 (kg/dia) para P1 MUSLO:"
+WRITE K1 K2
+NORMTEST C2;
+ TITLE "P1 MUSLO - Normalidad (Produccion diaria)".
+IMRCHART C2;
+ STAMP C1;
+ TITLE "P1 MUSLO - I-MR Produccion diaria (kg)".
+
+NOTE "===== P1 PYM LINEA 1 ====="
+DESCRIBE C4;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K3 = PERCENTILE(C4,0.90)
+LET K4 = PERCENTILE(C4,0.95)
+NOTE "P90 y P95 (kg/dia) para P1 PYM LINEA 1:"
+WRITE K3 K4
+NORMTEST C4;
+ TITLE "P1 PYM LINEA 1 - Normalidad (Produccion diaria)".
+IMRCHART C4;
+ STAMP C3;
+ TITLE "P1 PYM LINEA 1 - I-MR Produccion diaria (kg)".
+
+NOTE "===== P1 PYM LINEA 2 ====="
+DESCRIBE C6;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K5 = PERCENTILE(C6,0.90)
+LET K6 = PERCENTILE(C6,0.95)
+NOTE "P90 y P95 (kg/dia) para P1 PYM LINEA 2:"
+WRITE K5 K6
+NORMTEST C6;
+ TITLE "P1 PYM LINEA 2 - Normalidad (Produccion diaria)".
+IMRCHART C6;
+ STAMP C5;
+ TITLE "P1 PYM LINEA 2 - I-MR Produccion diaria (kg)".
+
+NOTE "===== P1 PYM MANUAL ====="
+DESCRIBE C8;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K7 = PERCENTILE(C8,0.90)
+LET K8 = PERCENTILE(C8,0.95)
+NOTE "P90 y P95 (kg/dia) para P1 PYM MANUAL:"
+WRITE K7 K8
+NORMTEST C8;
+ TITLE "P1 PYM MANUAL - Normalidad (Produccion diaria)".
+IMRCHART C8;
+ STAMP C7;
+ TITLE "P1 PYM MANUAL - I-MR Produccion diaria (kg)".
+
+NOTE "===== P1 PYM MEYN ====="
+DESCRIBE C10;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K9 = PERCENTILE(C10,0.90)
+LET K10 = PERCENTILE(C10,0.95)
+NOTE "P90 y P95 (kg/dia) para P1 PYM MEYN:"
+WRITE K9 K10
+NORMTEST C10;
+ TITLE "P1 PYM MEYN - Normalidad (Produccion diaria)".
+IMRCHART C10;
+ STAMP C9;
+ TITLE "P1 PYM MEYN - I-MR Produccion diaria (kg)".
+
+NOTE "===== P2 EXPO MUSLO ====="
+DESCRIBE C12;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K11 = PERCENTILE(C12,0.90)
+LET K12 = PERCENTILE(C12,0.95)
+NOTE "P90 y P95 (kg/dia) para P2 EXPO MUSLO:"
+WRITE K11 K12
+NORMTEST C12;
+ TITLE "P2 EXPO MUSLO - Normalidad (Produccion diaria)".
+IMRCHART C12;
+ STAMP C11;
+ TITLE "P2 EXPO MUSLO - I-MR Produccion diaria (kg)".
+
+NOTE "===== P2 EXPO PECHUGA ====="
+DESCRIBE C14;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K13 = PERCENTILE(C14,0.90)
+LET K14 = PERCENTILE(C14,0.95)
+NOTE "P90 y P95 (kg/dia) para P2 EXPO PECHUGA:"
+WRITE K13 K14
+NORMTEST C14;
+ TITLE "P2 EXPO PECHUGA - Normalidad (Produccion diaria)".
+IMRCHART C14;
+ STAMP C13;
+ TITLE "P2 EXPO PECHUGA - I-MR Produccion diaria (kg)".
+
+NOTE "===== P2 MULTIPROCESO ====="
+DESCRIBE C16;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K15 = PERCENTILE(C16,0.90)
+LET K16 = PERCENTILE(C16,0.95)
+NOTE "P90 y P95 (kg/dia) para P2 MULTIPROCESO:"
+WRITE K15 K16
+NORMTEST C16;
+ TITLE "P2 MULTIPROCESO - Normalidad (Produccion diaria)".
+IMRCHART C16;
+ STAMP C15;
+ TITLE "P2 MULTIPROCESO - I-MR Produccion diaria (kg)".
+
+NOTE "===== P3 VALOR AGREGADO ====="
+DESCRIBE C18;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K17 = PERCENTILE(C18,0.90)
+LET K18 = PERCENTILE(C18,0.95)
+NOTE "P90 y P95 (kg/dia) para P3 VALOR AGREGADO:"
+WRITE K17 K18
+NORMTEST C18;
+ TITLE "P3 VALOR AGREGADO - Normalidad (Produccion diaria)".
+IMRCHART C18;
+ STAMP C17;
+ TITLE "P3 VALOR AGREGADO - I-MR Produccion diaria (kg)".
+
+NOTE "===== P4 MOLIDAS ====="
+DESCRIBE C20;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K19 = PERCENTILE(C20,0.90)
+LET K20 = PERCENTILE(C20,0.95)
+NOTE "P90 y P95 (kg/dia) para P4 MOLIDAS:"
+WRITE K19 K20
+NORMTEST C20;
+ TITLE "P4 MOLIDAS - Normalidad (Produccion diaria)".
+IMRCHART C20;
+ STAMP C19;
+ TITLE "P4 MOLIDAS - I-MR Produccion diaria (kg)".
+
+NOTE "===== P5 REBANADOS ====="
+DESCRIBE C22;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K21 = PERCENTILE(C22,0.90)
+LET K22 = PERCENTILE(C22,0.95)
+NOTE "P90 y P95 (kg/dia) para P5 REBANADOS:"
+WRITE K21 K22
+NORMTEST C22;
+ TITLE "P5 REBANADOS - Normalidad (Produccion diaria)".
+IMRCHART C22;
+ STAMP C21;
+ TITLE "P5 REBANADOS - I-MR Produccion diaria (kg)".
+
+NOTE "===== P6 DESCONGELADO ====="
+DESCRIBE C24;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K23 = PERCENTILE(C24,0.90)
+LET K24 = PERCENTILE(C24,0.95)
+NOTE "P90 y P95 (kg/dia) para P6 DESCONGELADO:"
+WRITE K23 K24
+NORMTEST C24;
+ TITLE "P6 DESCONGELADO - Normalidad (Produccion diaria)".
+IMRCHART C24;
+ STAMP C23;
+ TITLE "P6 DESCONGELADO - I-MR Produccion diaria (kg)".
+
+NOTE "===== P8 CERDO DESH ====="
+DESCRIBE C26;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K25 = PERCENTILE(C26,0.90)
+LET K26 = PERCENTILE(C26,0.95)
+NOTE "P90 y P95 (kg/dia) para P8 CERDO DESH:"
+WRITE K25 K26
+NORMTEST C26;
+ TITLE "P8 CERDO DESH - Normalidad (Produccion diaria)".
+IMRCHART C26;
+ STAMP C25;
+ TITLE "P8 CERDO DESH - I-MR Produccion diaria (kg)".
+
+NOTE "===== P8 CERDO INY ====="
+DESCRIBE C28;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K27 = PERCENTILE(C28,0.90)
+LET K28 = PERCENTILE(C28,0.95)
+NOTE "P90 y P95 (kg/dia) para P8 CERDO INY:"
+WRITE K27 K28
+NORMTEST C28;
+ TITLE "P8 CERDO INY - Normalidad (Produccion diaria)".
+IMRCHART C28;
+ STAMP C27;
+ TITLE "P8 CERDO INY - I-MR Produccion diaria (kg)".
+
+NOTE "===== P8 PASTA SIGMA ====="
+DESCRIBE C30;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K29 = PERCENTILE(C30,0.90)
+LET K30 = PERCENTILE(C30,0.95)
+NOTE "P90 y P95 (kg/dia) para P8 PASTA SIGMA:"
+WRITE K29 K30
+NORMTEST C30;
+ TITLE "P8 PASTA SIGMA - Normalidad (Produccion diaria)".
+IMRCHART C30;
+ STAMP C29;
+ TITLE "P8 PASTA SIGMA - I-MR Produccion diaria (kg)".
+
+NOTE "===== P9 MOLIDAS RES ====="
+DESCRIBE C32;
+ MEAN;
+ STDEV;
+ CVARIATION;
+ MEDIAN;
+ MIN;
+ MAX.
+LET K31 = PERCENTILE(C32,0.90)
+LET K32 = PERCENTILE(C32,0.95)
+NOTE "P90 y P95 (kg/dia) para P9 MOLIDAS RES:"
+WRITE K31 K32
+NORMTEST C32;
+ TITLE "P9 MOLIDAS RES - Normalidad (Produccion diaria)".
+IMRCHART C32;
+ STAMP C31;
+ TITLE "P9 MOLIDAS RES - I-MR Produccion diaria (kg)".
+
+NOTE "===== GUARDANDO PROYECTO MINITAB ====="
+SAVE "PROBOCA_Capacidad_Estadistica_2025_2026.MPX";
+ PROJECT.
+NOTE "Proyecto guardado como PROBOCA_Capacidad_Estadistica_2025_2026.MPX en la carpeta predeterminada de Minitab."
