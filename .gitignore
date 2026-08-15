@@ -36,5 +36,11 @@ PROPEX_SOURCE_SNAPSHOT.zip
 # Volcados de inspeccion de documentos
 *.inspect.ndjson
 
+# Documentos GENERADOS: se reconstruyen con build_manual_propex.py, que si esta versionado.
+# Fuera del repo porque git guarda una copia completa de cada version de un binario:
+# reeditar el manual veinte veces serian ~13 MB permanentes en el historial.
+Manual_de_Usuario_e_Instructivo_PROpEx.docx
+Capacitacion_PROpEx_Flujo_y_Roles.pptx
+
 # No versionada a proposito (ver CLAUDE.md, "Flujo seguro de trabajo compartido")
 src/app/calculadora-pollos/
