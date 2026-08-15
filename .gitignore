@@ -6,8 +6,35 @@ node_modules
 public/uploads/*
 !public/uploads/.gitkeep
 exports
+power-platform-migration/export/
 *.log
 *.tsbuildinfo
 
 .vercel
 .env*
+
+# --- agregado 2026-08-15: artefactos que ensuciaban `git status` ---
+# Sin esto, `git status` mostraba 48 pendientes y escondia el codigo que si faltaba
+# guardar. Un `git add -A` habria intentado subir ~900 MB al repo.
+
+# Variantes de build de Next
+.next-*/
+
+# Trabajo temporal y salidas de herramientas
+tmp/
+outputs/
+.propex_excel_work/
+.qa_manual/
+
+# Repositorio git independiente: es otro proyecto (Cloudflare/wrangler, 737 MB, 30 node_modules).
+# No debe vivir anidado aqui; conviene moverlo fuera del repo cuando se pueda.
+propex-interno-sites/
+
+# Instantanea del codigo fuente: redundante, para eso esta git
+PROPEX_SOURCE_SNAPSHOT.zip
+
+# Volcados de inspeccion de documentos
+*.inspect.ndjson
+
+# No versionada a proposito (ver CLAUDE.md, "Flujo seguro de trabajo compartido")
+src/app/calculadora-pollos/
