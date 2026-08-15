@@ -32,6 +32,18 @@ foreach ($w in $wt) {
   $esteEs = if ($w.ruta.Replace('/', '\') -eq $raiz.Replace('/', '\')) { ' <- estas aqui' } else { '' }
   Write-Host ("  " + $w.rama + $esteEs) -ForegroundColor $(if ($esteEs) { 'Green' } else { 'Gray' })
   Write-Host ("     " + $w.ruta) -ForegroundColor DarkGray
+  # Trabajo a medias en CADA worktree, no solo en el tuyo: es lo que necesitas ver
+  # cuando el otro agente quedo parado y hay que retomarlo.
+  if (-not $esteEs) {
+    $suSt = @(git -C $w.ruta status --short 2>$null)
+    if ($suSt.Count -gt 0) {
+      $suMod = @($suSt | Where-Object { $_ -notlike '`?`?*' }).Count
+      Write-Host ("     trabajo a medias ahi: $suMod modificados, " + ($suSt.Count - $suMod) + " sin rastrear") -ForegroundColor Yellow
+      Write-Host ("     para verlo:  git -C `"" + $w.ruta + "`" status --short") -ForegroundColor DarkGray
+    } else {
+      Write-Host "     arbol limpio ahi" -ForegroundColor DarkGray
+    }
+  }
   # Que tan atrasada esta esta rama respecto a las demas ramas activas
   foreach ($otra in $wt) {
     if ($otra.rama -eq $w.rama) { continue }
