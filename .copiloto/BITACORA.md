@@ -4,6 +4,14 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- claude (claude/al-dia) -- Instale la capa de coordinacion .copiloto en el repo real, adaptada a worktrees; rehice la rama de Claude desde la rama viva de Codex; archive las tres copias huerfanas.
+
+Por que: El repo ya tenia worktree y rama por agente desde julio; lo que faltaba era estado compartido para saber que hace el otro y como retomarlo.
+
+Siguiente paso dejado: Revisar con el usuario los 3 puntos de higiene de .copiloto/PENDIENTES.md, en orden: (1) que es la carpeta sistema-ideas-propex/ sin rastrear dentro del repo de Codex, (2) ampliar el .gitignore para que los manuales .docx/.pptx, el PROPEX_SOURCE_SNAPSHOT.zip y las carpetas .next-*/tmp/outputs dejen de aparecer como pendientes, (3) commitear el codigo real que quedo suelto: src/lib/automation-pilot.ts, src/components/operations-workboard.tsx, src/components/automation-pilot-panel.tsx y src/app/(app)/configuracion/migracion-2026/. NO usar git add -A.
+
+---
+
 ## 2026-08-13 — claude — Se instalo la capa de coordinacion entre agentes
 
 El repo ya tenia lo mas dificil desde julio: historial en GitHub, rama por agente y un
