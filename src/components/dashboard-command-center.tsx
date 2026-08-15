@@ -7,6 +7,7 @@ import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod 
 import { statusLabels } from "@/lib/domain";
 
 const DAY = 86_400_000;
+const terminalStatuses = new Set<IdeaStatus>(["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"]);
 
 export type DashboardIdea = {
   id: string;
@@ -64,7 +65,11 @@ export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }
   }, []);
 
   const now = useMemo(() => new Date(generatedAt), [generatedAt]);
-  const visible = useMemo(() => period === "all" ? ideas : ideas.filter((idea) => new Date(idea.createdAt).getTime() >= now.getTime() - Number(period) * DAY), [ideas, now, period]);
+  const visible = useMemo(() => {
+    if (period === "all") return ideas;
+    const start = now.getTime() - Number(period) * DAY;
+    return ideas.filter((idea) => !terminalStatuses.has(idea.status) || new Date(idea.createdAt).getTime() >= start || Boolean(idea.closedAt && new Date(idea.closedAt).getTime() >= start));
+  }, [ideas, now, period]);
   const items: WorkboardItem[] = visible.map((idea) => {
     const group = groupFor(idea.status);
     const overdue = idea.status === "VENCIDA" || Boolean(idea.dueDate && new Date(idea.dueDate) < now && !["CERRADA", "CANCELADA"].includes(idea.status));

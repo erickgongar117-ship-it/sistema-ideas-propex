@@ -84,7 +84,7 @@ export function KaizenCommandCenter({ projects, generatedAt }: { projects: Kaize
   const visible = useMemo(() => {
     if (period === "all") return projects;
     const start = now.getTime() - Number(period) * DAY;
-    return projects.filter((project) => new Date(project.endDate).getTime() >= start);
+    return projects.filter((project) => ["PENDIENTE_CHARTER", "PLANIFICACION", "EN_CURSO", "EN_PAUSA"].includes(project.status) || new Date(project.updatedAt).getTime() >= start);
   }, [now, period, projects]);
 
   const items: WorkboardItem[] = visible.map((project) => {

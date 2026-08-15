@@ -2,7 +2,7 @@
 
 import type { Role } from "@prisma/client";
 import type { ComponentType, CSSProperties, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -115,7 +115,6 @@ const unifiedNav: NavItem[] = [
   { href: "/entrenamientos", label: "Entrenamientos", shortLabel: "Cursos", icon: GraduationCap, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
   { href: "/probocacoins", label: "ProbocaCoins", shortLabel: "Coins", icon: Coins, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
   { href: "/panorama", label: "Panel ejecutivo", shortLabel: "Panel", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
-  { href: "/notificaciones", label: "Notificaciones", shortLabel: "Avisos", icon: Bell, roles: allRoles, group: "work" },
 
   { href: "/supervisor", label: "Aprobaciones", shortLabel: "Aprobar", icon: UserCheck, roles: allRoles, requiresReviewAccess: true, group: "control" },
   { href: "/validaciones/calidad", label: "Validaciones de calidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "control" },
@@ -123,18 +122,10 @@ const unifiedNav: NavItem[] = [
   { href: "/validaciones/mantenimiento", label: "Validaciones tecnicas", icon: Wrench, roles: ["ADMIN", "MANTENIMIENTO"], group: "control" },
   { href: "/mejora", label: "Clasificar y cerrar ideas", shortLabel: "Mejora", icon: Gauge, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
   { href: "/implementacion", label: "Implementacion de ideas", shortLabel: "Avances", icon: ListChecks, roles: ["ADMIN", "MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR"], group: "control" },
-  { href: "/ideas", label: "Portafolio de ideas", icon: ClipboardList, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
-  { href: "/ideas/repositorio", label: "Repositorio de ideas", icon: Archive, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
-  { href: "/kanban", label: "Kanban de ideas", icon: KanbanSquare, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
   { href: "/vencidas", label: "Compromisos vencidos", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
-  { href: "/kaizen/repositorio", label: "Repositorio Kaizen", icon: Archive, roles: allRoles, requiresModule: "kaizen", group: "control" },
-  { href: "/kaizen/gantt", label: "Gantt Kaizen", icon: CalendarRange, roles: allRoles, requiresModule: "kaizen", group: "control" },
-  { href: "/kaizen/kanban", label: "Kanban Kaizen", icon: FolderKanban, roles: allRoles, requiresModule: "kaizen", group: "control" },
-  { href: "/genba/repositorio", label: "Repositorio GENBA", icon: Archive, roles: allRoles, requiresModule: "genba", group: "control" },
-  { href: "/genba/kanban", label: "Kanban GENBA", icon: FolderKanban, roles: allRoles, requiresModule: "genba", group: "control" },
+  { href: "/reportes", label: "Reportes y Excel", icon: Download, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
 
   { href: "/qr", label: "Codigos QR", shortLabel: "QR", icon: QrCode, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
-  { href: "/reportes", label: "Reportes y Excel", icon: Download, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
   { href: "/auditoria", label: "Auditoria", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
   { href: "/configuracion/estructura", label: "Organizacion y personas", shortLabel: "Estructura", icon: Network, roles: ["ADMIN"], group: "system" },
   { href: "/configuracion/datos", label: "Control de datos", shortLabel: "Datos", icon: Database, roles: ["ADMIN"], group: "system" },
@@ -153,15 +144,18 @@ const roleTheme: Record<Role, { accent: string; soft: string; home: string; cont
 };
 
 const groupLabels = {
-  work: "Espacio de trabajo",
-  control: "Procesos y vistas",
-  system: "Administracion y datos"
+  work: "Trabajo",
+  control: "Bandejas y control",
+  system: "Administracion"
 };
 
 function isCurrentPath(pathname: string, href: string) {
-  if (href === "/dashboard") return pathname === href;
+  if (pathname === href) return true;
+  if (href === "/dashboard") return false;
   if (["/ideas", "/kaizen", "/genba"].includes(href)) {
-    return pathname === href || new RegExp(`^${href}/[^/]+$`).test(pathname);
+    const suffix = pathname.startsWith(`${href}/`) ? pathname.slice(href.length + 1) : "";
+    const reservedViews = new Set(["repositorio", "nuevo", "gantt", "kanban"]);
+    return Boolean(suffix && !suffix.includes("/") && !reservedViews.has(suffix));
   }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -268,6 +262,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
     control: false,
     system: false
   });
+  const mobileDrawerRef = useRef<HTMLElement | null>(null);
   const roleBaseTheme = roleTheme[user.role];
   const currentModule = pathname.startsWith("/kaizen") ? "kaizen" : pathname.startsWith("/genba") ? "genba" : "ideas";
   const theme = currentModule === "kaizen"
@@ -283,17 +278,22 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
       return true;
     });
   }, [canReviewIdeas, moduleAccess.genba, moduleAccess.kaizen, user.role]);
+  const searchableNav = useMemo(() => {
+    const catalog = [...visibleNav, ...ideaNav, ...kaizenNav, ...genbaNav].filter((item) => {
+      if (!item.roles.includes(user.role) || (item.requiresReviewAccess && !canReviewIdeas)) return false;
+      if (item.href.startsWith("/kaizen") && !moduleAccess.kaizen) return false;
+      if (item.href.startsWith("/genba") && !moduleAccess.genba) return false;
+      return true;
+    });
+    return catalog.filter((item, index) => catalog.findIndex((candidate) => candidate.href === item.href) === index);
+  }, [canReviewIdeas, moduleAccess.genba, moduleAccess.kaizen, user.role, visibleNav]);
   const mobileItems = useMemo(() => {
     const preferred = [roleBaseTheme.home, "/seguimientos", "/kaizen", "/genba", "/notificaciones"];
     return preferred.map((href) => visibleNav.find((item) => item.href === href)).filter((item): item is NavItem => Boolean(item)).filter((item, index, items) => items.findIndex((candidate) => candidate.href === item.href) === index).slice(0, 3);
   }, [roleBaseTheme.home, visibleNav]);
-  const activeItem = visibleNav.find((item) => isCurrentPath(pathname, item.href));
+  const activeItem = [...searchableNav].sort((a, b) => b.href.length - a.href.length).find((item) => isCurrentPath(pathname, item.href));
   const showPeriodControl = pathname === "/dashboard" || pathname === "/kaizen" || pathname === "/genba";
-  const searchItems = useMemo(() => visibleNav.map((item) => ({
-    href: item.href,
-    label: item.label,
-    group: groupLabels[item.group]
-  })), [visibleNav]);
+  const searchItems = useMemo(() => searchableNav.map((item) => ({ href: item.href, label: item.label, group: groupLabels[item.group] })), [searchableNav]);
   const canManagePrograms = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
 
   useEffect(() => {
@@ -314,9 +314,42 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
   }, [pathname, visibleNav]);
 
   useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
+    if (!menuOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    const inertTargets = [".app-sidebar", ".app-content", ".mobile-bottom-nav"]
+      .map((selector) => document.querySelector<HTMLElement>(selector))
+      .filter((target): target is HTMLElement => Boolean(target));
+    document.body.style.overflow = "hidden";
+    inertTargets.forEach((target) => target.setAttribute("inert", ""));
+    const drawer = mobileDrawerRef.current;
+    const focusTimer = window.setTimeout(() => drawer?.querySelector<HTMLElement>("button, a[href], input, select")?.focus(), 20);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMenuOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !drawer) return;
+      const focusable = [...drawer.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = "";
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      inertTargets.forEach((target) => target.removeAttribute("inert"));
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocus?.focus();
     };
   }, [menuOpen]);
 
@@ -389,12 +422,6 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
               {sidebarCollapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden /> : <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden />}
             </button>
           </div>
-          <div className="mt-4">
-            <Link className="sidebar-quick-create" href="/#areas">
-              <Plus className="h-[18px] w-[18px]" aria-hidden />
-              <span>Nueva idea</span>
-            </Link>
-          </div>
         </div>
         <div className="app-sidebar-scroll">{navigation(undefined, sidebarCollapsed)}</div>
         <div className="app-sidebar-footer">
@@ -465,7 +492,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
               <Bell className="h-5 w-5" aria-hidden />
               {pendingNotifications ? <span className="notification-dot" /> : null}
             </Link>
-            <button aria-expanded={menuOpen} aria-label="Abrir menu" className="icon-button" onClick={() => setMenuOpen(true)} type="button">
+            <button aria-controls="mobile-navigation-dialog" aria-expanded={menuOpen} aria-label="Abrir menu" className="icon-button" onClick={() => setMenuOpen(true)} type="button">
               <Menu className="h-5 w-5" aria-hidden />
             </button>
           </div>
@@ -488,7 +515,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
             </Link>
           );
         })}
-        <button className={`mobile-bottom-link ${menuOpen ? "is-active" : ""}`} onClick={() => setMenuOpen(true)} type="button">
+        <button aria-controls="mobile-navigation-dialog" aria-expanded={menuOpen} className={`mobile-bottom-link ${menuOpen ? "is-active" : ""}`} onClick={() => setMenuOpen(true)} type="button">
           <Menu className="h-5 w-5" aria-hidden />
           <span>Menu</span>
         </button>
@@ -497,7 +524,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
       {menuOpen ? (
         <div className="mobile-drawer-layer" role="presentation">
           <button aria-label="Cerrar menu" className="mobile-drawer-backdrop" onClick={() => setMenuOpen(false)} type="button" />
-          <aside aria-label="Menu movil" className="mobile-drawer">
+          <aside aria-label="Menu movil" aria-modal="true" className="mobile-drawer" id="mobile-navigation-dialog" ref={mobileDrawerRef} role="dialog">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
               <BrandBlock compact />
               <button aria-label="Cerrar menu" className="icon-button" onClick={() => setMenuOpen(false)} type="button">

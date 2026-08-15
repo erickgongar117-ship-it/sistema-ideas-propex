@@ -16,9 +16,9 @@ export type WorkspaceSearchItem = {
 };
 
 const periodOptions: Array<{ value: WorkspacePeriod; label: string }> = [
-  { value: "30", label: "30 días" },
-  { value: "90", label: "90 días" },
-  { value: "365", label: "1 año" },
+  { value: "30", label: "30 días + activos" },
+  { value: "90", label: "90 días + activos" },
+  { value: "365", label: "1 año + activos" },
   { value: "all", label: "Histórico" }
 ];
 

@@ -58,7 +58,11 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
   }, []);
 
   const now = useMemo(() => new Date(generatedAt), [generatedAt]);
-  const visible = useMemo(() => period === "all" ? walks : walks.filter((walk) => new Date(walk.visitDate).getTime() >= now.getTime() - Number(period) * DAY), [now, period, walks]);
+  const visible = useMemo(() => {
+    if (period === "all") return walks;
+    const start = now.getTime() - Number(period) * DAY;
+    return walks.filter((walk) => walk.status === "ABIERTO" || new Date(walk.visitDate).getTime() >= start || Boolean(walk.closedAt && new Date(walk.closedAt).getTime() >= start));
+  }, [now, period, walks]);
   const items: WorkboardItem[] = visible.map((walk) => {
     const progress = activityProgress(walk.activities);
     const overdue = walk.activities.filter((activity) => activity.dueDate && new Date(activity.dueDate) < now && !["COMPLETADA", "CANCELADA", "COMBINADA"].includes(activity.status)).length;
@@ -83,7 +87,7 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
       progressLabel: `${progress.closed} de ${progress.total} actividades cerradas`,
       risk: alerts.length > 0 && walk.status === "ABIERTO",
       riskLabel: alerts.join(" · "),
-      tags: [`Asistencia ${walk.expectedDepartments ? Math.round((walk.attendedDepartments / walk.expectedDepartments) * 100) : 0}%`, walk.activities.some((activity) => activity.promotedToKaizen) ? "Con conversion Kaizen" : ""].filter(Boolean),
+      tags: [`Asistencia ${walk.expectedDepartments ? Math.min(100, Math.round((walk.attendedDepartments / walk.expectedDepartments) * 100)) : 0}%`, walk.activities.some((activity) => activity.promotedToKaizen) ? "Con conversion Kaizen" : ""].filter(Boolean),
       children: walk.activities.filter((activity) => activity.status !== "COMBINADA").map((activity) => ({
         id: activity.id,
         label: activity.action ?? activity.problem,
@@ -99,7 +103,7 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
   const completed = activities.filter((activity) => ["COMPLETADA", "CANCELADA"].includes(activity.status)).length;
   const overdue = activities.filter((activity) => activity.dueDate && new Date(activity.dueDate) < now && !["COMPLETADA", "CANCELADA"].includes(activity.status)).length;
   const attendanceRows = visible.filter((walk) => walk.expectedDepartments);
-  const attendance = attendanceRows.length ? Math.round(attendanceRows.reduce((sum, walk) => sum + (walk.attendedDepartments / walk.expectedDepartments) * 100, 0) / attendanceRows.length) : 0;
+  const attendance = attendanceRows.length ? Math.min(100, Math.round(attendanceRows.reduce((sum, walk) => sum + Math.min(1, walk.attendedDepartments / walk.expectedDepartments) * 100, 0) / attendanceRows.length)) : 0;
 
   return <OperationsWorkboard
     items={items}

@@ -7,15 +7,18 @@ import {
   BarChart3,
   CalendarDays,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CircleUserRound,
   Columns3,
+  Copy,
   LayoutList,
+  Rows3,
   Search,
   SlidersHorizontal,
   X
 } from "lucide-react";
+import { WorkboardInsights } from "@/components/workboard-insights";
 
 export type WorkboardChild = {
   id: string;
@@ -57,11 +60,19 @@ export type WorkboardMetric = {
 };
 
 type View = "table" | "kanban" | "panel";
+type Sort = "priority" | "due" | "progress" | "title";
+type Density = "compact" | "comfortable";
 
 const DATE_FORMAT = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Monterrey" });
 
 function dueLabel(value: string | null) {
-  return value ? DATE_FORMAT.format(new Date(value)) : "Sin fecha";
+  if (!value) return "Sin fecha";
+  const civilDate = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z)?$/);
+  if (civilDate) {
+    const [, year, month, day] = civilDate;
+    return DATE_FORMAT.format(new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12)));
+  }
+  return DATE_FORMAT.format(new Date(value));
 }
 
 function initials(name: string) {
@@ -71,7 +82,14 @@ function initials(name: string) {
 }
 
 function WorkStatus({ color, label }: { color: string; label: string }) {
-  const darkText = ["#fdab3d", "#c4c4c4"].includes(color.toLowerCase());
+  const match = color.trim().match(/^#([0-9a-f]{6})$/i);
+  const darkText = match ? (() => {
+    const value = Number.parseInt(match[1], 16);
+    const red = (value >> 16) & 255;
+    const green = (value >> 8) & 255;
+    const blue = value & 255;
+    return (red * 299 + green * 587 + blue * 114) / 255000 > 0.58;
+  })() : false;
   return <span className="workboard-status" style={{ backgroundColor: color, color: darkText ? "#171717" : "#ffffff" }}><span>{label}</span></span>;
 }
 
@@ -101,6 +119,9 @@ export function OperationsWorkboard({
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [location, setLocation] = useState("all");
+  const [owner, setOwner] = useState("all");
+  const [sort, setSort] = useState<Sort>("priority");
+  const [density, setDensity] = useState<Density>("comfortable");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -108,19 +129,42 @@ export function OperationsWorkboard({
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [copied, setCopied] = useState(false);
   const drawerRef = useRef<HTMLElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const statuses = useMemo(() => [...new Set(items.map((item) => item.group))], [items]);
   const locations = useMemo(() => [...new Set(items.map((item) => item.location))].sort(), [items]);
+  const owners = useMemo(() => [...new Set(items.map((item) => item.owner))].sort((a, b) => a.localeCompare(b, "es-MX")), [items]);
   const normalizedQuery = query.trim().toLocaleLowerCase("es-MX");
-  const filtered = useMemo(() => items.filter((item) => {
-    const matchesQuery = !normalizedQuery || `${item.code} ${item.title} ${item.subtitle} ${item.owner} ${item.location}`.toLocaleLowerCase("es-MX").includes(normalizedQuery);
-    return matchesQuery && (status === "all" || item.group === status) && (location === "all" || item.location === location);
-  }), [items, location, normalizedQuery, status]);
+  const searchMatched = useMemo(() => items.filter((item) => {
+    const searchable = [
+      item.code,
+      item.title,
+      item.subtitle,
+      item.owner,
+      item.location,
+      item.statusLabel,
+      ...(item.tags ?? []),
+      ...(item.children ?? []).flatMap((child) => [child.label, child.owner, child.statusLabel])
+    ].join(" ");
+    const matchesQuery = !normalizedQuery || searchable.toLocaleLowerCase("es-MX").includes(normalizedQuery);
+    return matchesQuery && (location === "all" || item.location === location);
+  }), [items, location, normalizedQuery]);
+  const filtered = useMemo(() => {
+    const rows = searchMatched.filter((item) => (status === "all" || item.group === status) && (owner === "all" || item.owner === owner));
+    return [...rows].sort((a, b) => {
+      if (sort === "title") return a.title.localeCompare(b.title, "es-MX");
+      if (sort === "progress") return a.progress - b.progress || a.title.localeCompare(b.title, "es-MX");
+      const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+      const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+      if (sort === "due") return aDate - bDate || a.title.localeCompare(b.title, "es-MX");
+      return Number(Boolean(b.risk)) - Number(Boolean(a.risk)) || aDate - bDate || a.title.localeCompare(b.title, "es-MX");
+    });
+  }, [owner, searchMatched, sort, status]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageItems = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page]);
+  const pageItems = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page, pageSize]);
 
   const groups = useMemo(() => statuses.map((key) => {
     const rows = pageItems.filter((item) => item.group === key);
@@ -130,19 +174,29 @@ export function OperationsWorkboard({
     return { key, rows, total: allRows.length, average, label: source?.groupLabel ?? key, color: source?.groupColor ?? "#64748b" };
   }).filter((group) => group.rows.length), [filtered, items, pageItems, statuses]);
 
-  const ownerLoad = useMemo(() => {
-    const counts = new Map<string, number>();
-    filtered.forEach((item) => counts.set(item.owner, (counts.get(item.owner) ?? 0) + 1));
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7);
-  }, [filtered]);
-  const maxOwnerLoad = Math.max(1, ...ownerLoad.map(([, count]) => count));
-  const riskItems = filtered.filter((item) => item.risk).slice(0, 8);
   const focusedItem = items.find((item) => item.id === focusedId) ?? null;
-  const activeFilters = Number(status !== "all") + Number(location !== "all");
+  const activeFilters = Number(status !== "all") + Number(location !== "all") + Number(owner !== "all");
 
   useEffect(() => {
     setPage(1);
-  }, [location, normalizedQuery, pageSize, status, view]);
+  }, [location, normalizedQuery, owner, pageSize, sort, status, view]);
+
+  useEffect(() => {
+    const preferenceKey = `propex-workboard-${primaryLabel.toLocaleLowerCase("es-MX")}`;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(preferenceKey) ?? "{}") as { view?: View; density?: Density; sort?: Sort };
+      if (["table", "kanban", "panel"].includes(saved.view ?? "")) setView(saved.view as View);
+      if (["compact", "comfortable"].includes(saved.density ?? "")) setDensity(saved.density as Density);
+      if (["priority", "due", "progress", "title"].includes(saved.sort ?? "")) setSort(saved.sort as Sort);
+    } catch {
+      window.localStorage.removeItem(preferenceKey);
+    }
+  }, [primaryLabel]);
+
+  useEffect(() => {
+    const preferenceKey = `propex-workboard-${primaryLabel.toLocaleLowerCase("es-MX")}`;
+    window.localStorage.setItem(preferenceKey, JSON.stringify({ view, density, sort }));
+  }, [density, primaryLabel, sort, view]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 639px)");
@@ -202,16 +256,24 @@ export function OperationsWorkboard({
     return next;
   });
 
+  const copySelectedCodes = async () => {
+    const codes = items.filter((item) => selected.has(item.id)).map((item) => item.code);
+    if (!codes.length) return;
+    await navigator.clipboard.writeText(codes.join("\n"));
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
   return (
-    <section className="workboard" aria-label={`${primaryLabel} - tablero de trabajo`}>
+    <section className={`workboard is-${density}`} aria-label={`${primaryLabel} - tablero de trabajo`}>
       <div className="workboard-viewbar no-print">
-        <div className="workboard-tabs" role="tablist" aria-label="Vista del tablero">
+        <div className="workboard-tabs" aria-label="Vista del tablero">
           {([
             ["table", "Tabla", LayoutList],
             ["kanban", "Kanban", Columns3],
             ["panel", "Panel", BarChart3]
           ] as const).map(([value, label, Icon]) => (
-            <button aria-selected={view === value} className={view === value ? "is-active" : ""} key={value} onClick={() => setView(value)} role="tab" type="button">
+            <button aria-pressed={view === value} className={view === value ? "is-active" : ""} key={value} onClick={() => setView(value)} type="button">
               <Icon className="h-4 w-4" aria-hidden />{label}
             </button>
           ))}
@@ -232,6 +294,7 @@ export function OperationsWorkboard({
           <div className="workboard-selection">
             <span><Check className="h-4 w-4" aria-hidden />{selected.size} seleccionados</span>
             <Link href={items.find((item) => selected.has(item.id))?.href ?? "#"}>Abrir primero<ArrowRight className="h-4 w-4" aria-hidden /></Link>
+            <button onClick={copySelectedCodes} type="button">{copied ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}{copied ? "Copiados" : "Copiar folios"}</button>
             <button aria-label="Limpiar seleccion" onClick={() => setSelected(new Set())} type="button"><X className="h-4 w-4" aria-hidden /></button>
           </div>
         ) : null}
@@ -240,13 +303,19 @@ export function OperationsWorkboard({
       {filtersOpen ? (
         <div className="workboard-filters no-print">
           <label><span>Estado</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Todos los estados</option>{statuses.map((value) => <option key={value} value={value}>{items.find((item) => item.group === value)?.groupLabel ?? value}</option>)}</select></label>
+          <label><span>Responsable</span><select value={owner} onChange={(event) => setOwner(event.target.value)}><option value="all">Todas las personas</option>{owners.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label><span>{locationLabel}</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="all">Todas</option>{locations.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          {activeFilters ? <button onClick={() => { setStatus("all"); setLocation("all"); }} type="button">Limpiar filtros</button> : null}
+          <label><span>Orden</span><select value={sort} onChange={(event) => setSort(event.target.value as Sort)}><option value="priority">Atencion primero</option><option value="due">Fecha mas cercana</option><option value="progress">Menor avance</option><option value="title">Nombre</option></select></label>
+          <div className="workboard-density" role="group" aria-label="Densidad de filas">
+            <span>Densidad</span>
+            <div><button aria-pressed={density === "comfortable"} className={density === "comfortable" ? "is-active" : ""} onClick={() => setDensity("comfortable")} title="Vista comoda" type="button"><Rows3 className="h-4 w-4" aria-hidden /><span>Comoda</span></button><button aria-pressed={density === "compact"} className={density === "compact" ? "is-active" : ""} onClick={() => setDensity("compact")} title="Vista compacta" type="button"><LayoutList className="h-4 w-4" aria-hidden /><span>Compacta</span></button></div>
+          </div>
+          {activeFilters ? <button onClick={() => { setStatus("all"); setOwner("all"); setLocation("all"); }} type="button">Limpiar filtros</button> : null}
         </div>
       ) : null}
 
       {view === "table" ? (
-        <div className="workboard-table-view" role="tabpanel">
+        <div className="workboard-table-view">
           {!groups.length ? <div className="workboard-empty">{emptyLabel}</div> : groups.map((group) => {
             const isCollapsed = collapsed.has(group.key);
             const allSelected = group.rows.every((item) => selected.has(item.id));
@@ -261,15 +330,15 @@ export function OperationsWorkboard({
                 </header>
                 {!isCollapsed ? (
                   <div className="workboard-grid">
-                    <div className="workboard-grid-head" role="row">
-                      <label><input aria-label={`Seleccionar grupo ${group.label}`} checked={allSelected} onChange={(event) => selectGroup(group.rows.map((item) => item.id), event.target.checked)} type="checkbox" /></label>
+                    <div className="workboard-grid-head">
+                      <label><input aria-label={`Seleccionar filas visibles de ${group.label}`} checked={allSelected} onChange={(event) => selectGroup(group.rows.map((item) => item.id), event.target.checked)} type="checkbox" /></label>
                       <span>{primaryLabel}</span><span>Estado</span><span>Responsable</span><span>{locationLabel}</span><span>Fecha</span><span>Avance</span><span />
                     </div>
                     {group.rows.map((item) => {
                       const isExpanded = expanded.has(item.id);
                       return (
                         <div className={`workboard-item ${item.risk ? "is-risk" : ""}`} key={item.id}>
-                          <div className="workboard-grid-row" role="row">
+                          <div className="workboard-grid-row">
                             <label className="workboard-check"><input aria-label={`Seleccionar ${item.code}`} checked={selected.has(item.id)} onChange={() => toggleSet(setSelected, item.id)} type="checkbox" /></label>
                             <div className="workboard-primary-cell">
                               <button aria-label={isExpanded ? `Contraer ${item.code}` : `Mostrar subelementos de ${item.code}`} className="workboard-expand-button" disabled={!item.children?.length} onClick={() => toggleSet(setExpanded, item.id)} type="button">
@@ -281,7 +350,7 @@ export function OperationsWorkboard({
                             <div data-label="Responsable"><Owner name={item.owner} /></div>
                             <div data-label={locationLabel}><span className="workboard-text-cell">{item.location}</span></div>
                             <div data-label="Fecha"><span className={`workboard-date ${item.risk ? "is-risk" : ""}`}><CalendarDays className="h-3.5 w-3.5" aria-hidden />{dueLabel(item.dueDate)}</span></div>
-                            <div data-label="Avance" className="workboard-progress-cell"><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></div>
+                            <div data-label="Avance" className="workboard-progress-cell"><span><i style={{ width: `${item.progress}%`, backgroundColor: item.statusColor }} /></span><strong>{item.progress}%</strong></div>
                             <Link aria-label={`Abrir ${item.code}`} className="workboard-open" href={item.href}><ArrowRight className="h-4 w-4" aria-hidden /></Link>
                           </div>
                           {isExpanded ? (
@@ -312,24 +381,22 @@ export function OperationsWorkboard({
       ) : null}
 
       {view === "kanban" ? (
-        <div className="workboard-kanban" role="tabpanel">
+        <div className="workboard-kanban">
           {groups.map((group) => <section className="workboard-kanban-column" key={group.key} style={{ "--group-color": group.color } as React.CSSProperties}>
             <header><span>{group.label}</span><strong>{group.rows.length}</strong></header>
-            <div>{group.rows.map((item) => <Link className="workboard-kanban-card" href={item.href} key={item.id}><span className="workboard-kanban-code">{item.code}</span><h3>{item.title}</h3><p>{item.subtitle}</p><div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></div><footer><Owner name={item.owner} /><span>{dueLabel(item.dueDate)}</span></footer></Link>)}</div>
+            <div>{group.rows.map((item) => <Link className="workboard-kanban-card" href={item.href} key={item.id}><span className="workboard-kanban-code">{item.code}</span><h3>{item.title}</h3><p>{item.subtitle}</p><div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%`, backgroundColor: item.statusColor }} /></span><strong>{item.progress}%</strong></div><footer><Owner name={item.owner} /><span>{dueLabel(item.dueDate)}</span></footer></Link>)}</div>
           </section>)}
         </div>
       ) : null}
 
       {view === "panel" ? (
-        <div className="workboard-panel" role="tabpanel">
-          <section className="workboard-metrics" aria-label="Indicadores del tablero">
-            {metrics.map((metric) => <article key={metric.label} style={{ "--metric-color": metric.color } as React.CSSProperties}><span>{metric.label}</span><strong>{metric.value}</strong><p>{metric.detail}</p></article>)}
-          </section>
-          <div className="workboard-panel-grid">
-            <section className="workboard-widget"><header><div><span>Distribucion</span><h2>Trabajo por estado</h2></div><BarChart3 className="h-5 w-5" aria-hidden /></header><div className="workboard-bars">{groups.map((group) => <div key={group.key}><div><span>{group.label}</span><strong>{group.rows.length}</strong></div><span><i style={{ width: `${filtered.length ? (group.rows.length / filtered.length) * 100 : 0}%`, backgroundColor: group.color }} /></span></div>)}</div></section>
-            <section className="workboard-widget"><header><div><span>Capacidad</span><h2>Carga por responsable</h2></div><CircleUserRound className="h-5 w-5" aria-hidden /></header><div className="workboard-bars">{ownerLoad.map(([owner, count]) => <div key={owner}><div><span>{owner}</span><strong>{count}</strong></div><span><i style={{ width: `${(count / maxOwnerLoad) * 100}%`, backgroundColor: "#171717" }} /></span></div>)}</div></section>
-            <section className="workboard-widget workboard-attention-widget"><header><div><span>Prioridad</span><h2>Requieren atencion</h2></div><CalendarDays className="h-5 w-5" aria-hidden /></header>{riskItems.length ? <div>{riskItems.map((item) => <Link href={item.href} key={item.id}><span><strong>{item.code}</strong><small>{item.title}</small></span><span>{item.riskLabel ?? "Revisar"}</span><ArrowRight className="h-4 w-4" aria-hidden /></Link>)}</div> : <p className="workboard-empty-small">Sin alertas en la seleccion</p>}</section>
-          </div>
+        <div className="workboard-panel">
+          <WorkboardInsights
+            items={filtered}
+            metrics={metrics}
+            onDrillGroup={(group) => { setStatus(group); setView("table"); }}
+            onDrillOwner={(selectedOwner) => { setOwner(selectedOwner); setView("table"); }}
+          />
         </div>
       ) : null}
 
