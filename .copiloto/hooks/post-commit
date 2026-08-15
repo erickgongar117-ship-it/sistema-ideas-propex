@@ -1,0 +1,28 @@
+#!/bin/sh
+# Reflejo automatico: cada commit, en cualquier worktree, queda registrado en el ledger
+# compartido, sin depender de que el agente se acuerde de hacerlo.
+# El agente se deduce del prefijo del mensaje: [claude] / [codex] / [antigravity] / [humano].
+# Se instala una sola vez con: powershell -File .copiloto/bin/instalar-hooks.ps1
+# (los hooks viven en el .git comun, asi que cubren todos los worktrees a la vez).
+
+comun=$(git rev-parse --path-format=absolute --git-common-dir) || exit 0
+dir="$comun/copiloto"
+mkdir -p "$dir" 2>/dev/null
+log="$dir/eventos.jsonl"
+
+esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+rama=$(git rev-parse --abbrev-ref HEAD)
+wt=$(basename "$(git rev-parse --show-toplevel)")
+hash=$(git log -1 --format=%h)
+msg=$(git log -1 --format=%s)
+archivos=$(git show --pretty=format: --name-only -1 | sed '/^$/d' | tr '\n' ' ')
+
+agente=$(printf '%s' "$msg" | sed -n 's/^\[\([A-Za-z]*\)\].*/\1/p')
+[ -z "$agente" ] && agente="desconocido"
+
+printf '{"ts":"%s","agente":"%s","tipo":"commit","rama":"%s","worktree":"%s","commit":"%s","que":"%s","archivos":"%s"}\n' \
+  "$ts" "$(esc "$agente")" "$(esc "$rama")" "$(esc "$wt")" "$hash" "$(esc "$msg")" "$(esc "$archivos")" >> "$log"
+
+exit 0
