@@ -106,7 +106,7 @@ Write-Host "  TURNO CERRADO -- $Agente  [$rama]" -ForegroundColor Cyan
 Write-Host ("  Siguiente para quien retome: " + $Siguiente) -ForegroundColor White
 if ($sinCommitear -gt 0) {
   Write-Host ""
-  Write-Host "  OJO: quedan $sinCommitear archivos sin commitear en este worktree." -ForegroundColor Yellow
+  Write-Host "  OJO: quedan $sinCommitear archivos sin commitear." -ForegroundColor Yellow
   Write-Host "  Si son tuyos y ya funcionan, commitealos con rutas explicitas:" -ForegroundColor Yellow
   Write-Host ('     git add -- <ruta1> <ruta2>   &&   git commit -m "[' + $Agente + '] ..."') -ForegroundColor DarkGray
 }
