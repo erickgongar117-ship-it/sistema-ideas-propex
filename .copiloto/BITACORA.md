@@ -4,6 +4,14 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Limpie el repo: archive el clon anidado, amplie el .gitignore, rescate el codigo y la documentacion sueltos, y saque propex-interno-sites del proyecto. git status paso de 48 pendientes a solo los 19 de Codex.
+
+Por que: Los 48 pendientes escondian el codigo que si faltaba guardar, y un git add -A habria intentado subir ~900 MB.
+
+Siguiente paso dejado: Dos cosas, ninguna urgente: (1) los 19 archivos modificados en el worktree de Codex son trabajo en curso suyo, hay que commitearlos o descartarlos para dejar el arbol limpio; (2) propex-interno-sites, ahora en Documentos\propex-interno-sites, no tiene remoto y su ultimo commit es del 17 de julio: existe solo en esta maquina y conviene subirlo a un repo privado.
+
+---
+
 ## 2026-08-13 — claude — Se instalo la capa de coordinacion entre agentes
 
 El repo ya tenia lo mas dificil desde julio: historial en GitHub, rama por agente y un
