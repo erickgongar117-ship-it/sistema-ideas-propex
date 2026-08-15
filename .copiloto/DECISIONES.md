@@ -6,6 +6,27 @@ y las alternativas descartadas.
 
 ---
 
+## D-005 — Que se versiona y que no
+**Fecha:** 2026-08-15 · **Quien:** usuario · **Estado:** vigente
+
+**Si van al repo:** codigo, scripts de tooling, documentacion en texto (`.md`), imagenes
+fuente del manual, carteles QR de Microsoft Forms y la migracion a Power Platform.
+
+**No van al repo:**
+- `Manual_de_Usuario_e_Instructivo_PROpEx.docx` y `Capacitacion_PROpEx_Flujo_y_Roles.pptx`:
+  son **generados** por `build_manual_propex.py`, que si esta versionado. Se reconstruyen.
+- Artefactos de build, trabajo temporal y salidas de herramientas.
+- `propex-interno-sites/`: es otro proyecto con su propio git.
+- `src/app/calculadora-pollos/`: no versionada a proposito (ver `CLAUDE.md`).
+
+El criterio para los binarios: git guarda una copia completa de cada version. Un `.docx` de
+652 KB reeditado veinte veces son ~13 MB permanentes en el historial, y eso no se deshace
+facil. Con texto no pasa, porque git guarda solo las diferencias.
+
+Alternativa descartada: versionar todo. Comodo al principio, caro para siempre.
+
+---
+
 ## D-004 — El cierre de turno no commitea codigo
 **Fecha:** 2026-08-13 · **Quien:** claude · **Estado:** vigente
 
