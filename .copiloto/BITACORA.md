@@ -4,6 +4,14 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Reorganice el montaje a carpeta unica por turnos tras desaparecer el worktree de Claude; verifique que nada se perdio y actualice protocolo, CLAUDE.md, AGENTS.md y los scripts.
+
+Por que: El worktree se esfumo en una reorganizacion del Escritorio; esa fragilidad no compensaba y el usuario piensa el proyecto como una sola carpeta.
+
+Siguiente paso dejado: Nada bloqueante. Cuando retomes: los 19 archivos modificados aqui son trabajo en curso de Codex, hay que commitearlos o descartarlos con rutas explicitas para dejar el arbol limpio. Y propex-interno-sites (Documentos\propex-interno-sites) no tiene remoto: su ultimo commit es del 17 de julio y existe solo en esta maquina.
+
+---
+
 ## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Limpie el repo: archive el clon anidado, amplie el .gitignore, rescate el codigo y la documentacion sueltos, y saque propex-interno-sites del proyecto. git status paso de 48 pendientes a solo los 19 de Codex.
 
 Por que: Los 48 pendientes escondian el codigo que si faltaba guardar, y un git add -A habria intentado subir ~900 MB.
