@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- codex (codex/hierarchy-training-coins) -- Rediseñé la navegación global, los tableros de Ideas/Kaizen/GENBA y el panorama ejecutivo con BI interactivo, filtros persistentes, lectura de riesgos, responsive y accesibilidad. Validé tsc, build:vercel y vistas 390x844/1440x900; commit b9852ef.
+
+Siguiente paso dejado: En src/app/(app)/probocacoins/page.tsx, unificar visualmente el libro mayor, añadir conciliación/eliminación controlada de duplicados y aplicar el mismo patrón de tablero; después revisar expedientes src/app/(app)/kaizen/[id] y src/app/(app)/genba/[id] con pestañas compactas.
+
+---
+
 ## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Verifique compatibilidad entre agentes sin tocar codigo: worktree y carpeta principal en el mismo commit 276df55, tsc --noEmit y pnpm build en verde con las rutas nuevas de Codex (/entrenamientos, /probocacoins). AGENTS.md y CLAUDE.md alineados.
 
 Siguiente paso dejado: Codex: arranca con .copiloto/bin/inicio.ps1 y toma tu lock antes de editar. El repo esta limpio en 276df55; no hay trabajo a medias. Si vas a publicar, falta correr pnpm run build:vercel (regenera despues el cliente local con pnpm exec prisma generate).
