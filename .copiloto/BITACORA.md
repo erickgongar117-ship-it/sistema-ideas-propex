@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Audite el flujo y diseno integral de PROpEx y documente el rediseno recomendado
+
+Siguiente paso dejado: Codex debe leer AUDITORIA_UX_CLAUDE.md, contrastar las recomendaciones con el codigo y ejecutar primero los P0 reutilizando el workboard actual
+
+---
+
 ## 2026-08-15 -- codex (codex/hierarchy-training-coins) -- Implementé P0-9 y P0-10: eliminé YIQ, convertí WorkStatus a fondo pastel con texto oscuro, y añadí icono/negrita/etiqueta accesible a vencidos en tabla, Kanban y StatusPill. Los 11 contrastes miden 14.73:1 o más; tsc y build:vercel en verde; commit bdab7a4.
 
 Siguiente paso dejado: Implementar P1-5: en src/lib/domain.ts definir las cinco categorías canónicas de estado y adaptar src/components/status-pill.tsx y src/components/operations-workboard.tsx para retirar WorkStatus sin cambiar colores ni reglas de flujo; validar primero todos los usos de StatusPill.
