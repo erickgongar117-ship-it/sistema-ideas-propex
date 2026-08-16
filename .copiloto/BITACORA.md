@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-16 -- codex (codex/hierarchy-training-coins) -- Implemente y valide con Claude un catalogo canonico de cinco estados en Ideas, Kaizen, GENBA y Mi trabajo, con contraste AA, iconos semanticos, vencimiento multicanal, referencia COMBINADA, vacios y progreso coherente. Commit edaf3ec; tsc y build:vercel en verde.
+
+Siguiente paso dejado: Migrar src/components/status-pill.tsx a statusCategoryMeta y actualizar sus 14 consumidores; despues agregar groupOrder opcional a OperationsWorkboard para ordenar Entrada, Validacion, Ejecucion, Detenida y Cierre sin alterar el orden de urgencia de follow-up-table.tsx.
+
+---
+
 ## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Audite el flujo y diseno integral de PROpEx y documente el rediseno recomendado
 
 Siguiente paso dejado: Codex debe leer AUDITORIA_UX_CLAUDE.md, contrastar las recomendaciones con el codigo y ejecutar primero los P0 reutilizando el workboard actual
