@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- codex (codex/hierarchy-training-coins) -- Implementé P0-9 y P0-10: eliminé YIQ, convertí WorkStatus a fondo pastel con texto oscuro, y añadí icono/negrita/etiqueta accesible a vencidos en tabla, Kanban y StatusPill. Los 11 contrastes miden 14.73:1 o más; tsc y build:vercel en verde; commit bdab7a4.
+
+Siguiente paso dejado: Implementar P1-5: en src/lib/domain.ts definir las cinco categorías canónicas de estado y adaptar src/components/status-pill.tsx y src/components/operations-workboard.tsx para retirar WorkStatus sin cambiar colores ni reglas de flujo; validar primero todos los usos de StatusPill.
+
+---
+
 ## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Integre el benchmark como capitulo de gestion visual con 9 fuentes verificadas y medi el contraste de los 11 colores de estado
 
 Siguiente paso dejado: Codex: ejecutar P0-9 y P0-10 en src/components/operations-workboard.tsx:84-94 y globals.css:976 (fondo claro + texto oscuro, negritas e icono en vencido); despues P1-5 unificando StatusPill como unico componente de estado con las cinco categorias en src/lib/domain.ts
