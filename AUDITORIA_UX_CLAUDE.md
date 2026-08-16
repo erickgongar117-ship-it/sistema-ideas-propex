@@ -1,6 +1,8 @@
 # Auditoría de flujo y diseño — PROpEx
 
-**Autor:** Claude · **Fecha:** 2026-08-15 · **Commit auditado:** `e433df6`
+**Autor:** Claude · **Fecha:** 2026-08-15 · **Commit auditado:** `bdab7a4`
+**Revisión 2** — reverificada contra el trabajo de Codex en P0-9 y P0-10. Los cambios respecto
+a la revisión 1 están marcados con **[RESUELTO]** o **[NUEVO]**.
 **Alcance:** solo lectura. No se modificó código, Prisma, configuración ni producción.
 **Destinatario:** Codex, para ejecutar. Cada hallazgo lleva `archivo:linea`.
 
@@ -30,6 +32,13 @@ explícitamente. No hay nada inferido presentado como observado.
 
 El **§4 es el capítulo de gestión visual**: seis reglas derivadas del benchmark, el diagnóstico
 medido de PROpEx contra ellas y la paleta de estado propuesta.
+
+**Qué cambió en la revisión 2.** Codex ejecutó P0-9 y P0-10 en `bdab7a4`. Reverifiqué esos dos
+puntos midiendo de nuevo los once colores: el contraste del texto está resuelto (§4.7a) y
+aparece un defecto nuevo que introdujo la propia solución (§4.7b). **El resto del informe se
+revisó y sigue vigente sin cambios**: los `loading.tsx`/`error.tsx` siguen en cero, los tres
+arreglos de navegación muertos siguen ahí, y las cuentas de color (105 hex en `globals.css`,
+62 en `.tsx`) no se movieron.
 
 ---
 
@@ -434,39 +443,55 @@ no pude leer su documentación de color) y la documentación de ClickUp.
 
 | Regla | Estado | Evidencia |
 |---|---|---|
-| **VM-1** color nunca solo | **Parcial** | `StatusPill` cumple (color + punto + texto). `WorkStatus` cumple por el texto. **Pero las barras de avance no**: `operations-workboard.tsx:353` y `:387` tiñen la barra con `statusColor` sin etiqueta — ahí el color es el único portador |
+| **VM-1** color nunca solo | **Parcial** | Mejoró: lo vencido ya lleva icono `TriangleAlert` + peso 950 + `aria-label` en tabla y Kanban, y `StatusPill` lo refuerza. **Pero las barras de avance siguen sin cumplir**: `operations-workboard.tsx:346` y `:380` tiñen la barra con `statusColor` sin etiqueta. Y el disparo de la señal depende de `status === "VENCIDA"` (`status-pill.tsx:15`), que solo escribe `markOverdueIdeas` — un script manual que **no corre nunca** (§2.5) |
 | **VM-2** categorías fijas | **No** | 17 estados planos (`domain.ts:64-82`). Los cinco grupos existen pero solo dentro de un componente cliente (`dashboard-command-center.tsx:45-51`) |
 | **VM-3** un color, un significado | **No** | Ver tabla de deriva abajo |
 | **VM-4** urgencia por redundancia | **No** | Lo vencido se marca solo con color y una clase `is-risk`. No hay negritas ni icono. Y rojo/verde son el par que confunde la deuteranopía |
 | **VM-5** volumen por estructura | **Parcial** | El workboard agrupa y colapsa bien. Los Kanban dedicados no tienen techo ni paginación (§8) |
 | **VM-6** 3-5 destinos móviles | **No** | `.slice(0, 3)` deja 3 y tira GENBA (`app-shell.tsx:292`) |
 
-**Dos defectos medibles y verificables:**
+**Tres defectos medibles. El primero está resuelto; el segundo lo introdujo la solución.**
 
-**a) Seis de once colores de estado fallan el contraste**, con el color de texto que el propio
-componente elige. La causa está en `operations-workboard.tsx:86-92`: usa la fórmula de brillo
-YIQ con umbral `0.58` en lugar de la luminancia relativa de WCAG, y por eso pone texto blanco
-sobre colores medios donde el blanco no alcanza.
+**a) [RESUELTO] El contraste del texto de estado.** En la revisión 1, seis de once colores
+fallaban 4.5:1 porque `operations-workboard.tsx:86-92` decidía el color del texto con la
+fórmula de brillo YIQ (umbral `0.58`) en vez de la luminancia relativa de WCAG.
 
-| Color | Significado | Texto que elige | Contraste | AA 4.5:1 |
-|---|---|---|---|---|
-| `#579bfc` | En proceso / validación | blanco | **2.80** | **falla** |
-| `#00a878` | Completado | blanco | **3.06** | **falla** |
-| `#00a86b` | Completado *(otra pantalla)* | blanco | **3.08** | **falla** |
-| `#7f8c8d` | Neutro | blanco | **3.48** | **falla** |
-| `#e2445c` | Vencido / bloqueado | blanco | **4.03** | **falla** |
-| `#a25ddc` | Validación final | blanco | **4.09** | **falla** |
-| `#a16207` | Charter pendiente | blanco | 4.92 | pasa |
-| `#676879` | Cancelado | blanco | 5.48 | pasa |
-| `#784bd1` | En pausa | blanco | 5.64 | pasa |
-| `#fdab3d` | Ámbar / atención | oscuro | 9.45 | pasa |
-| `#c4c4c4` | Pendiente | oscuro | 10.28 | pasa |
+Codex lo corrigió en `bdab7a4`: eliminó el cálculo YIQ y `.workboard-status`
+(`globals.css:976`) pasa a fondo pastel — `color-mix(in srgb, var(--status-color) 14%, #fff)` —
+con texto fijo `#171717`. **Verificado: los once colores miden entre 14.71:1 y 16.70:1.** El
+peor caso supera con holgura el 4.5:1 exigido. La corrección es correcta y se conserva.
 
-Los cuatro que más se ven — en proceso, completado, vencido y neutro — están entre los que
-fallan. La píldora usa `0.79rem` en negrita (`globals.css:977`), que **no** califica como texto
-grande, así que el umbral aplicable es 4.5:1.
+**b) [NUEVO] La solución desplazó el problema al punto y al borde.** Al aclarar todos los
+fondos al 14%, **el único portador de color pasó a ser el punto de 7px**
+(`globals.css:977`, `.workboard-status::before`). Ese punto y el borde al 34% son "objetos
+gráficos necesarios para entender el contenido", así que les aplica WCAG **1.4.11 (3:1)**:
 
-**b) El mismo significado cambia de color según la pantalla** — rompe VM-3:
+| Color | Significado | Punto vs fondo | Borde vs fondo |
+|---|---|---|---|
+| `#c4c4c4` | Pendiente | **1.62** falla | 1.11 falla |
+| `#fdab3d` | Ámbar / atención | **1.74** falla | 1.14 falla |
+| `#579bfc` | En proceso / validación | **2.46** falla | 1.22 falla |
+| `#00a878` | Completado | **2.62** falla | 1.25 falla |
+| `#00a86b` | Completado *(otra pantalla)* | **2.64** falla | 1.25 falla |
+| `#7f8c8d` | Neutro | 3.01 pasa | 1.25 falla |
+| `#e2445c` | Vencido / bloqueado | 3.35 pasa | 1.32 falla |
+| `#a25ddc` | Validación final | 3.45 pasa | 1.29 falla |
+| `#a16207` | Charter pendiente | 4.09 pasa | 1.33 falla |
+| `#676879` | Cancelado | 4.55 pasa | 1.33 falla |
+| `#784bd1` | En pausa | 4.62 pasa | 1.36 falla |
+
+**El borde falla en los once casos** (1.11 a 1.36) y **el punto falla en cinco**, incluidos
+"pendiente", "en proceso" y "completado", que son los tres estados más frecuentes.
+
+Y hay un efecto de gestión visual que no aparece en ninguna métrica: con todos los fondos al
+14% de tinte, **el tablero pasó de leerse como un mosaico de colores a leerse como una pared de
+píldoras casi blancas**. A un metro de distancia ya no se distingue una columna de otra. Se
+ganó accesibilidad del texto y se perdió legibilidad a distancia, que es justo lo que un
+tablero de piso necesita. La salida no es volver al relleno saturado: es **subir el tinte del
+fondo hasta que el propio fondo alcance 3:1 contra el blanco de la tarjeta** — así el color
+vuelve a portar significado y el texto oscuro sigue pasando de sobra. Eso es P0-11.
+
+**c) El mismo significado cambia de color según la pantalla** — rompe VM-3 y sigue abierto:
 
 | Significado | Mi trabajo | Panel de Ideas | Kaizen / GENBA |
 |---|---|---|---|
@@ -797,8 +822,9 @@ Consecuencias reales:
 | P0-6 | Confirmación en `deleteMembershipAction` y `deleteEscalationRuleAction`; validar rutas activas antes de borrar la membresía | Alto | Bajo | No se puede borrar una membresía que es ruta activa sin reasignar primero |
 | P0-7 | Paginación en servidor en `/seguimientos`, `/dashboard`, `/panorama`, `/kaizen`, `/genba` | Alto | Medio | Ninguna página trae más de 50 registros por request; verificado con 1000 ideas |
 | P0-8 | Rescatar las rutas huérfanas: enlazar `/configuracion/datos` y `/configuracion/migracion-2026`, y borrar `ideaNav`/`kaizenNav`/`genbaNav` | Medio | Bajo | Toda ruta viva tiene al menos un enlace entrante; el buscador no ofrece destinos inexistentes |
-| P0-9 | **Contraste de los estados**: sustituir el cálculo YIQ de `operations-workboard.tsx:86-92` por fondo claro + texto oscuro (§4.8) | Alto | Bajo | Los 11 colores de estado alcanzan 4.5:1; se verifica con el cálculo de §4.7 |
-| P0-10 | **Lo vencido deja de depender del color**: negritas + icono además del rojo (regla VM-4) | Alto | Bajo | Un usuario con deuteranopía distingue vencido de completado sin ver el color |
+| ~~P0-9~~ | ~~Contraste del texto de estado~~ | — | — | **[RESUELTO en `bdab7a4`]** Verificado: 14.71:1 en el peor caso |
+| ~~P0-10~~ | ~~Lo vencido deja de depender del color~~ | — | — | **[RESUELTO en `bdab7a4`]** Icono + peso 950 + `aria-label`. Queda la dependencia de `markOverdueIdeas`, que cubre P2-5 |
+| P0-11 | **[NUEVO] Contraste del punto y el borde de estado** (§4.7b): subir el tinte del fondo hasta que alcance 3:1 contra el blanco, y elevar el borde | Alto | Bajo | Punto y borde ≥3:1 en los 11 colores; el tablero vuelve a distinguirse a un metro |
 
 **P1 — Cambia la experiencia diaria**
 
@@ -844,8 +870,7 @@ Consecuencias reales:
 | P1-2 | `src/app/(app)/kaizen/[id]/page.tsx`, `src/app/(app)/genba/[id]/page.tsx` | Pestañas + cajón lateral |
 | P1-3 | Borrar `src/app/(app)/kaizen/kanban/`, `src/app/(app)/genba/kanban/`, `src/app/(app)/kanban/`; ampliar `src/components/operations-workboard.tsx:383-390` | Kanban como vista |
 | P1-4 | `src/components/operations-workboard.tsx:293-300` + nuevas acciones en `src/app/actions.ts` | Lote |
-| P0-9 | `src/components/operations-workboard.tsx:84-94` y `src/app/globals.css:976-977` | Fondo claro + texto oscuro; borrar el cálculo YIQ |
-| P0-10 | `src/components/status-pill.tsx`, `src/components/operations-workboard.tsx:352` | Negritas + icono en vencido |
+| P0-11 | `src/app/globals.css:976-977` | Subir el tinte del fondo y del borde hasta 3:1; el punto deja de ser el único portador |
 | P1-5 | `src/lib/domain.ts` (cinco categorías + colores), `src/components/status-pill.tsx`, `src/components/operations-workboard.tsx:84-94` | Un solo componente de estado |
 | P1-5b | `src/app/globals.css`, `src/components/app-shell.tsx:136-144`, `follow-up-table.tsx:45-52`, los tres `*-command-center.tsx` | Tokens |
 | P1-6 | `src/app/globals.css` (`@media`), `src/components/app-shell.tsx:290-293` | Móvil |
@@ -944,6 +969,16 @@ cae después de la bitácora por debajo de 1280px) y una precisión sobre Proboc
 mayor **ya está paginado y con trazabilidad** por `sourceType`
 (`probocacoins/page.tsx:190-213`), así que el trabajo real es la conciliación de duplicados y
 arreglar `participant.findMany` sin `take` de la línea 180.
+
+**Trabajo de Codex ya incorporado a esta revisión.** En `bdab7a4` ejecutó P0-9 y P0-10. Su
+enfoque es el correcto y se conserva: eliminó el cálculo YIQ, pasó `.workboard-status` a fondo
+pastel con `color-mix` y texto oscuro, y añadió icono, peso 950 y `aria-label` a lo vencido en
+tabla, Kanban y `StatusPill`. **Su cifra es exacta** — verifiqué los once colores y el peor
+mide 14.71:1.
+
+La revisión añade dos cosas que su cambio deja abiertas, no dos objeciones: el punto y el borde
+quedaron por debajo de 3:1 (**P0-11**, esfuerzo bajo, mismo archivo), y la señal de vencido
+depende de un estado que ningún proceso automático escribe (**P2-5**).
 
 **Su rediseño de tableros (`b9852ef`) es la base correcta y se conserva.** `OperationsWorkboard`
 debe crecer, no reemplazarse. La única corrección que esta auditoría pide sobre ese trabajo es
