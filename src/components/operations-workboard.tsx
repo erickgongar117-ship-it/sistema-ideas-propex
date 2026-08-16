@@ -16,6 +16,7 @@ import {
   Rows3,
   Search,
   SlidersHorizontal,
+  TriangleAlert,
   X
 } from "lucide-react";
 import { WorkboardInsights } from "@/components/workboard-insights";
@@ -82,15 +83,7 @@ function initials(name: string) {
 }
 
 function WorkStatus({ color, label }: { color: string; label: string }) {
-  const match = color.trim().match(/^#([0-9a-f]{6})$/i);
-  const darkText = match ? (() => {
-    const value = Number.parseInt(match[1], 16);
-    const red = (value >> 16) & 255;
-    const green = (value >> 8) & 255;
-    const blue = value & 255;
-    return (red * 299 + green * 587 + blue * 114) / 255000 > 0.58;
-  })() : false;
-  return <span className="workboard-status" style={{ backgroundColor: color, color: darkText ? "#171717" : "#ffffff" }}><span>{label}</span></span>;
+  return <span className="workboard-status" style={{ "--status-color": color } as React.CSSProperties}><span>{label}</span></span>;
 }
 
 function Owner({ name }: { name: string }) {
@@ -349,7 +342,7 @@ export function OperationsWorkboard({
                             <div data-label="Estado"><WorkStatus color={item.statusColor} label={item.statusLabel} /></div>
                             <div data-label="Responsable"><Owner name={item.owner} /></div>
                             <div data-label={locationLabel}><span className="workboard-text-cell">{item.location}</span></div>
-                            <div data-label="Fecha"><span className={`workboard-date ${item.risk ? "is-risk" : ""}`}><CalendarDays className="h-3.5 w-3.5" aria-hidden />{dueLabel(item.dueDate)}</span></div>
+                            <div data-label="Fecha"><span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>{item.risk ? <TriangleAlert className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-3.5 w-3.5" aria-hidden />}{dueLabel(item.dueDate)}</span></div>
                             <div data-label="Avance" className="workboard-progress-cell"><span><i style={{ width: `${item.progress}%`, backgroundColor: item.statusColor }} /></span><strong>{item.progress}%</strong></div>
                             <Link aria-label={`Abrir ${item.code}`} className="workboard-open" href={item.href}><ArrowRight className="h-4 w-4" aria-hidden /></Link>
                           </div>
@@ -384,7 +377,7 @@ export function OperationsWorkboard({
         <div className="workboard-kanban">
           {groups.map((group) => <section className="workboard-kanban-column" key={group.key} style={{ "--group-color": group.color } as React.CSSProperties}>
             <header><span>{group.label}</span><strong>{group.rows.length}</strong></header>
-            <div>{group.rows.map((item) => <Link className="workboard-kanban-card" href={item.href} key={item.id}><span className="workboard-kanban-code">{item.code}</span><h3>{item.title}</h3><p>{item.subtitle}</p><div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%`, backgroundColor: item.statusColor }} /></span><strong>{item.progress}%</strong></div><footer><Owner name={item.owner} /><span>{dueLabel(item.dueDate)}</span></footer></Link>)}</div>
+            <div>{group.rows.map((item) => <Link className="workboard-kanban-card" href={item.href} key={item.id}><span className="workboard-kanban-code">{item.code}</span><h3>{item.title}</h3><p>{item.subtitle}</p><div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%`, backgroundColor: item.statusColor }} /></span><strong>{item.progress}%</strong></div><footer><Owner name={item.owner} /><span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>{item.risk ? <TriangleAlert className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-3.5 w-3.5" aria-hidden />}{dueLabel(item.dueDate)}</span></footer></Link>)}</div>
           </section>)}
         </div>
       ) : null}

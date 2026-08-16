@@ -1,4 +1,5 @@
 import type { IdeaStatus } from "@prisma/client";
+import { TriangleAlert } from "lucide-react";
 import { statusLabels, statusTone } from "@/lib/domain";
 
 const toneClass = {
@@ -11,8 +12,11 @@ const toneClass = {
 };
 
 export function StatusPill({ status }: { status: IdeaStatus }) {
+  const isOverdue = status === "VENCIDA";
+
   return (
-    <span className={`inline-flex min-h-7 w-fit max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-extrabold leading-4 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:content-[''] ${toneClass[statusTone[status]]}`}>
+    <span className={`inline-flex min-h-7 w-fit max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-extrabold leading-4 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:content-[''] ${isOverdue ? "font-black before:hidden" : ""} ${toneClass[statusTone[status]]}`}>
+      {isOverdue ? <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
       <span className="truncate">{statusLabels[status]}</span>
     </span>
   );
