@@ -4,6 +4,14 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-16 -- codex (codex/hierarchy-training-coins) -- Implemente con la auditoria de Claude el cambio visual de etapas Kaizen: menu accesible y arrastre en escritorio, matriz de transiciones, permisos, requisitos, concurrencia, auditoria y estados responsive. Commit d7e3429; 10 pruebas, TypeScript y build:vercel en verde.
+
+Por que: Claude califico la base actual en 5.7/10: el mayor salto competitivo siguiente esta en operacion masiva y escala, mientras el movimiento Kaizen ya cubre la interaccion visible solicitada.
+
+Siguiente paso dejado: Implementar acciones en lote y paginacion de servidor en src/app/(app)/seguimientos/page.tsx y OperationsWorkboard; conservar aprobaciones de Ideas fuera del arrastre y despues extender el contrato a actividades Kaizen/GENBA sin permitir cierres sin evidencia.
+
+---
+
 ## 2026-08-16 -- codex (codex/hierarchy-training-coins) -- Implemente y valide con Claude un catalogo canonico de cinco estados en Ideas, Kaizen, GENBA y Mi trabajo, con contraste AA, iconos semanticos, vencimiento multicanal, referencia COMBINADA, vacios y progreso coherente. Commit edaf3ec; tsc y build:vercel en verde.
 
 Siguiente paso dejado: Migrar src/components/status-pill.tsx a statusCategoryMeta y actualizar sus 14 consumidores; despues agregar groupOrder opcional a OperationsWorkboard para ordenar Entrada, Validacion, Ejecucion, Detenida y Cierre sin alterar el orden de urgencia de follow-up-table.tsx.
