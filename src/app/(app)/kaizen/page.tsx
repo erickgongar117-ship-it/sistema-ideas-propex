@@ -66,7 +66,7 @@ export default async function KaizenDashboardPage() {
           </>
         }
       />
-      <KaizenCommandCenter generatedAt={new Date().toISOString()} projects={dashboardProjects} />
+      <KaizenCommandCenter canManage={canManage} generatedAt={new Date().toISOString()} projects={dashboardProjects} />
     </>
   );
 }

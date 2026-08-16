@@ -7,7 +7,7 @@ import { z } from "zod";
 import { Prisma, type ApprovalType, type Classification, type GenbaStatus, type IdeaCategory, type KaizenStatus, type Priority, type Role, type WorkItemStatus } from "@prisma/client";
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
-import { genbaDepartments, impactOptions, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
+import { genbaDepartments, impactOptions, kaizenStatusLabels, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
 import { EmployeeNumberValidationError, normalizeEmployeeNumber } from "@/lib/employee-number";
 import { saveUpload } from "@/lib/files";
 import { createKaizenFromIdea } from "@/lib/kaizen-from-idea";
@@ -18,6 +18,12 @@ import { reconcileCoinSourceAmount, resolveParticipantFromCollaborator, resolveP
 import { canDecideDepartmentApproval, canDecideInitialIdea, canViewIdea } from "@/lib/idea-access";
 import { hardDeleteIdeaByFolio } from "@/lib/hard-delete";
 import { kaizenClosureReadiness } from "@/lib/kaizen-closure";
+import {
+  KAIZEN_STAGE_ORDER,
+  validateKaizenStageTransition,
+  type KaizenStageTransitionResult,
+  type KaizenTransitionVia
+} from "@/lib/kaizen-transitions";
 import { prisma } from "@/lib/prisma";
 import { managerFollowersForMembership, supportFlags, syncIdeaSupportRequests, validSupportUnits } from "@/lib/support-routing";
 import { appBaseUrl } from "@/lib/url";
@@ -1204,6 +1210,90 @@ export async function updateKaizenProjectAction(formData: FormData) {
   revalidatePath("/kaizen/gantt");
   revalidatePath(`/kaizen/${projectId}`);
   redirect(`/kaizen/${projectId}`);
+}
+
+export async function changeKaizenStageAction(input: {
+  projectId: string;
+  fromStatus: KaizenStatus;
+  toStatus: KaizenStatus;
+  via: KaizenTransitionVia;
+}): Promise<KaizenStageTransitionResult> {
+  const user = await requireUser();
+  if (!isImprovementManager(user.role)) {
+    return { ok: false, code: "PERMISO", message: "Solo Administracion o Mejora Continua pueden cambiar la etapa del Kaizen." };
+  }
+  if (
+    !KAIZEN_STAGE_ORDER.includes(input.fromStatus) ||
+    !KAIZEN_STAGE_ORDER.includes(input.toStatus)
+  ) {
+    return { ok: false, code: "TRANSICION", message: "La etapa solicitada no existe en el flujo Kaizen." };
+  }
+  const via: KaizenTransitionVia = ["drag", "menu", "undo", "form"].includes(input.via)
+    ? input.via
+    : "menu";
+
+  const result = await serializableTransaction(async (tx): Promise<KaizenStageTransitionResult> => {
+    const project = await tx.kaizenProject.findUnique({
+      where: { id: input.projectId },
+      include: {
+        attachments: { where: { type: "CHARTER" }, select: { id: true } },
+        activities: { where: { status: { not: "COMBINADA" } }, select: { id: true } }
+      }
+    });
+    if (!project) return { ok: false, code: "NO_ENCONTRADO", message: "El proyecto ya no esta disponible." };
+    if (project.status !== input.fromStatus) {
+      return { ok: false, code: "CONFLICTO", message: `${project.folio} cambio de etapa en otra sesion. Actualizamos el tablero para mostrar el estado vigente.` };
+    }
+
+    const validation = validateKaizenStageTransition(project.status, input.toStatus, {
+      hasCharter: project.attachments.length > 0,
+      activityCount: project.activities.length
+    });
+    if (!validation.ok) return validation;
+    if (project.status === input.toStatus) {
+      return { ok: true, status: project.status, message: `${project.folio} ya se encuentra en esa etapa.` };
+    }
+
+    const claimed = await tx.kaizenProject.updateMany({
+      where: { id: project.id, status: input.fromStatus },
+      data: { status: input.toStatus }
+    });
+    if (claimed.count !== 1) {
+      return { ok: false, code: "CONFLICTO", message: `${project.folio} cambio de etapa mientras lo estabas moviendo. No se sobrescribio el cambio.` };
+    }
+
+    await tx.kaizenUpdate.create({
+      data: {
+        projectId: project.id,
+        userId: user.id,
+        comment: `Etapa actualizada de ${kaizenStatusLabels[input.fromStatus]} a ${kaizenStatusLabels[input.toStatus]} desde el tablero.`
+      }
+    });
+    await tx.auditLog.create({
+      data: {
+        entity: "KaizenProject",
+        entityId: project.id,
+        action: "KAIZEN_STAGE_CHANGED",
+        userId: user.id,
+        details: JSON.stringify({ from: input.fromStatus, to: input.toStatus, via })
+      }
+    });
+    return {
+      ok: true,
+      status: input.toStatus,
+      message: `${project.folio} ahora esta ${kaizenStatusLabels[input.toStatus].toLocaleLowerCase("es-MX")}.`
+    };
+  });
+
+  if (result.ok) {
+    revalidatePath("/dashboard");
+    revalidatePath("/seguimientos");
+    revalidatePath("/kaizen");
+    revalidatePath("/kaizen/kanban");
+    revalidatePath("/kaizen/gantt");
+    revalidatePath(`/kaizen/${input.projectId}`);
+  }
+  return result;
 }
 
 export async function updateKaizenDatesAction(formData: FormData) {

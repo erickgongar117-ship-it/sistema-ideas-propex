@@ -2,9 +2,18 @@
 
 import type { KaizenStatus, WorkItemStatus } from "@prisma/client";
 import { useEffect, useMemo, useState } from "react";
-import { OperationsWorkboard, type WorkboardItem } from "@/components/operations-workboard";
+import { useRouter } from "next/navigation";
+import { changeKaizenStageAction } from "@/app/actions";
+import {
+  OperationsWorkboard,
+  type WorkboardGroupDefinition,
+  type WorkboardItem,
+  type WorkboardMoveInput,
+  type WorkboardMoveResult
+} from "@/components/operations-workboard";
 import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
 import { kaizenStatusLabels, workItemStatusLabels } from "@/lib/domain";
+import { KAIZEN_STAGE_ORDER, kaizenAllowedStageTargets } from "@/lib/kaizen-transitions";
 import { kaizenStatusCategory, statusCategoryFill, workItemStatusRender } from "@/lib/status-system";
 
 const DAY = 86_400_000;
@@ -52,8 +61,28 @@ function currency(value: number) {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(value);
 }
 
-export function KaizenCommandCenter({ projects, generatedAt }: { projects: KaizenDashboardProject[]; generatedAt: string }) {
+const KAIZEN_GROUPS: WorkboardGroupDefinition[] = KAIZEN_STAGE_ORDER.map((status) => ({
+  key: status,
+  label: kaizenStatusLabels[status],
+  color: statusCategoryFill(kaizenStatusCategory(status))
+}));
+
+export function KaizenCommandCenter({
+  projects,
+  generatedAt,
+  canManage
+}: {
+  projects: KaizenDashboardProject[];
+  generatedAt: string;
+  canManage: boolean;
+}) {
+  const router = useRouter();
   const [period, setPeriod] = useState<WorkspacePeriod>("90");
+  const [liveProjects, setLiveProjects] = useState(projects);
+
+  useEffect(() => {
+    setLiveProjects(projects);
+  }, [projects]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(WORKSPACE_PERIOD_STORAGE);
@@ -65,10 +94,10 @@ export function KaizenCommandCenter({ projects, generatedAt }: { projects: Kaize
 
   const now = useMemo(() => new Date(generatedAt), [generatedAt]);
   const visible = useMemo(() => {
-    if (period === "all") return projects;
+    if (period === "all") return liveProjects;
     const start = now.getTime() - Number(period) * DAY;
-    return projects.filter((project) => ["PENDIENTE_CHARTER", "PLANIFICACION", "EN_CURSO", "EN_PAUSA"].includes(project.status) || new Date(project.updatedAt).getTime() >= start);
-  }, [now, period, projects]);
+    return liveProjects.filter((project) => ["PENDIENTE_CHARTER", "PLANIFICACION", "EN_CURSO", "EN_PAUSA"].includes(project.status) || new Date(project.updatedAt).getTime() >= start);
+  }, [liveProjects, now, period]);
 
   const items: WorkboardItem[] = visible.map((project) => {
     const projectProgress = progress(project.activities);
@@ -96,6 +125,10 @@ export function KaizenCommandCenter({ projects, generatedAt }: { projects: Kaize
       risk: alerts.length > 0 && !["COMPLETADO", "CANCELADO"].includes(project.status),
       riskLabel: alerts.join(" · "),
       tags: [project.area, project.sourceIdeaFolio ? `Origen ${project.sourceIdeaFolio}` : "", project.hasCharter ? "Charter listo" : ""].filter(Boolean),
+      allowedGroups: canManage ? kaizenAllowedStageTargets(project.status, {
+        hasCharter: project.hasCharter,
+        activityCount: project.activities.filter((activity) => activity.status !== "COMBINADA").length
+      }) : [],
       children: project.activities.filter((activity) => activity.status !== "COMBINADA").map((activity) => {
         const activityStatus = workItemStatusRender(activity.status);
         return {
@@ -117,9 +150,38 @@ export function KaizenCommandCenter({ projects, generatedAt }: { projects: Kaize
   const overdue = allActivities.filter((activity) => activity.dueDate && new Date(activity.dueDate) < now && !["COMPLETADA", "CANCELADA"].includes(activity.status)).length;
   const realSavings = visible.reduce((sum, project) => sum + project.realSavings, 0);
 
+  const moveProject = async (input: WorkboardMoveInput): Promise<WorkboardMoveResult> => {
+    const fromStatus = input.fromGroup as KaizenStatus;
+    const toStatus = input.toGroup as KaizenStatus;
+    if (!KAIZEN_STAGE_ORDER.includes(fromStatus) || !KAIZEN_STAGE_ORDER.includes(toStatus)) {
+      return { ok: false, message: "La etapa seleccionada no pertenece al flujo Kaizen." };
+    }
+
+    setLiveProjects((current) => current.map((project) => project.id === input.itemId ? { ...project, status: toStatus } : project));
+    try {
+      const result = await changeKaizenStageAction({
+        projectId: input.itemId,
+        fromStatus,
+        toStatus,
+        via: input.via
+      });
+      if (!result.ok) {
+        setLiveProjects((current) => current.map((project) => project.id === input.itemId && project.status === toStatus ? { ...project, status: fromStatus } : project));
+      }
+      router.refresh();
+      return { ok: result.ok, message: result.message };
+    } catch {
+      setLiveProjects((current) => current.map((project) => project.id === input.itemId && project.status === toStatus ? { ...project, status: fromStatus } : project));
+      router.refresh();
+      return { ok: false, message: "No fue posible guardar la etapa. Restauramos el estado anterior." };
+    }
+  };
+
   return <OperationsWorkboard
+    groupDefinitions={KAIZEN_GROUPS}
     items={items}
     locationLabel="Planta"
+    onMoveItem={canManage ? moveProject : undefined}
     primaryLabel="Proyectos"
     metrics={[
       { label: "Kaizen visibles", value: visible.length, detail: `${visible.filter((project) => ["PLANIFICACION", "EN_CURSO", "EN_PAUSA"].includes(project.status)).length} activos`, color: "#579bfc" },

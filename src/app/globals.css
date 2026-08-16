@@ -928,6 +928,13 @@ summary:focus-visible {
 .workboard-selection button { min-height: 30px; border: 0; background: transparent; padding: 0 0.25rem; color: #fff; }
 .workboard-selection button:last-child { display: grid; width: 30px; padding: 0; place-items: center; }
 
+.workboard-move-message { display: flex; min-height: 42px; align-items: center; gap: 0.55rem; border-bottom: 1px solid var(--line); padding: 0.5rem 1rem; font-size: 0.76rem; font-weight: 800; }
+.workboard-move-message.is-success { background: color-mix(in srgb, var(--st-cierre-fill) 55%, var(--surface)); color: var(--st-ink); }
+.workboard-move-message.is-error { background: color-mix(in srgb, var(--st-detenida-fill) 62%, var(--surface)); color: var(--st-risk); }
+.workboard-move-message > span { min-width: 0; flex: 1; }
+.workboard-move-message > button { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border: 0; border-radius: 4px; background: transparent; color: currentColor; }
+.workboard-move-message > button:hover { background: rgba(255,255,255,.55); }
+
 .workboard-filters { min-height: 72px; flex-wrap: wrap; background: var(--surface-subtle); padding-top: 0.6rem; padding-bottom: 0.6rem; }
 .workboard-filters label { display: grid; gap: 0.25rem; }
 .workboard-filters label > span { color: var(--muted); font-size: 0.65rem; font-weight: 850; text-transform: uppercase; }
@@ -955,7 +962,7 @@ summary:focus-visible {
   grid-template-columns: 42px minmax(290px, 2fr) 148px minmax(170px, 1fr) 132px 126px 145px 48px;
   align-items: stretch;
 }
-.workboard-grid-head { min-height: 38px; border-bottom: 1px solid var(--line); background: var(--surface-subtle); color: var(--muted); font-size: 0.72rem; font-weight: 850; }
+.workboard-grid-head { position: sticky; top: 0; z-index: 2; min-height: 38px; border-bottom: 1px solid var(--line); background: var(--surface-subtle); color: var(--muted); font-size: 0.72rem; font-weight: 850; }
 .workboard-grid-head > * { display: flex; align-items: center; border-right: 1px solid var(--line); padding: 0 0.65rem; }
 .workboard-grid-head label { justify-content: center; }
 .workboard-item { background: var(--surface); }
@@ -1018,21 +1025,44 @@ summary:focus-visible {
 
 .workboard-kanban { display: grid; min-height: 560px; grid-auto-flow: column; grid-auto-columns: minmax(285px, 330px); gap: 0.8rem; overflow-x: auto; background: var(--surface-subtle); padding: 1rem; }
 .workboard-kanban-column { align-self: start; border-top: 4px solid var(--group-color); border-radius: 5px; background: color-mix(in srgb, var(--group-color) 4%, var(--surface)); }
+.workboard-kanban-column.is-drop-disabled { opacity: .52; }
+.workboard-kanban-column.is-dragging-over { background: color-mix(in srgb, var(--group-color) 11%, var(--surface)); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--group-color) 72%, var(--foreground)); }
 .workboard-kanban-column > header { display: flex; min-height: 46px; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0 0.75rem; color: var(--foreground); font-size: 0.78rem; font-weight: 900; }
 .workboard-kanban-column > header strong { display: grid; min-width: 25px; height: 22px; place-items: center; border-radius: 11px; background: color-mix(in srgb, var(--group-color) 14%, var(--surface)); color: var(--foreground); font-size: 0.66rem; }
-.workboard-kanban-column > div { display: grid; gap: 0.55rem; padding: 0 0.55rem 0.7rem; }
-.workboard-kanban-card { display: block; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); padding: 0.75rem; box-shadow: 0 1px 3px rgba(23,23,23,.06); transition: border-color 120ms ease, transform 120ms ease; }
+.workboard-kanban-stack { display: grid; min-height: 86px; align-content: start; gap: 0.55rem; padding: 0 0.55rem 0.7rem; }
+.workboard-kanban-card { position: relative; display: block; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); padding: 0.68rem 0.75rem 0.75rem; box-shadow: 0 1px 3px rgba(23,23,23,.06); transition: border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease, transform 120ms ease; }
 .workboard-kanban-card.is-risk { border-left: 4px solid var(--st-risk); }
 .workboard-kanban-card:hover { border-color: var(--group-color); transform: translateY(-1px); }
+.workboard-kanban-card.is-moving { opacity: .62; pointer-events: none; }
+.is-dragging .workboard-kanban-card { border-color: var(--group-color); box-shadow: 0 10px 28px rgba(23,23,23,.2); transform: none; }
+.workboard-kanban-card-top { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .workboard-kanban-code { color: var(--foreground); font-size: 0.64rem; font-weight: 900; }
-.workboard-kanban-card h3 { margin-top: 0.3rem; color: var(--foreground); font-size: 0.8rem; font-weight: 850; line-height: 1.35; }
-.workboard-kanban-card > p { display: -webkit-box; overflow: hidden; margin-top: 0.3rem; color: var(--muted); font-size: 0.67rem; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.workboard-kanban-card > .workboard-status { min-height: 30px; margin-top: 0.65rem; }
+.workboard-kanban-card-actions { display: flex; align-items: center; gap: 2px; }
+.workboard-drag-handle,
+.workboard-stage-menu > summary { display: grid; width: 36px; height: 36px; cursor: pointer; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--muted); list-style: none; }
+.workboard-drag-handle:hover,
+.workboard-stage-menu > summary:hover,
+.workboard-stage-menu[open] > summary { background: var(--surface-subtle); color: var(--foreground); }
+.workboard-stage-menu { position: relative; }
+.workboard-stage-menu > summary::-webkit-details-marker { display: none; }
+.workboard-stage-menu > div { position: absolute; top: 39px; right: 0; z-index: 12; display: grid; width: 220px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface-elevated); box-shadow: 0 12px 30px rgba(23,23,23,.18); }
+.workboard-stage-menu > div > span { border-bottom: 1px solid var(--line); padding: 0.6rem 0.7rem; color: var(--muted); font-size: 0.62rem; font-weight: 900; text-transform: uppercase; }
+.workboard-stage-menu > div button { display: grid; min-height: 44px; grid-template-columns: 10px minmax(0,1fr); align-items: center; gap: 0.55rem; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 0 0.7rem; color: var(--foreground); text-align: left; }
+.workboard-stage-menu > div button:last-child { border-bottom: 0; }
+.workboard-stage-menu > div button:hover { background: var(--surface-subtle); }
+.workboard-stage-menu > div button:disabled { opacity: .45; }
+.workboard-stage-menu > div button i { width: 9px; height: 9px; border-radius: 50%; }
+.workboard-stage-menu > div button span { overflow: hidden; font-size: 0.72rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.workboard-kanban-card-body { display: block; color: inherit; }
+.workboard-kanban-card-body h3 { margin-top: 0.22rem; color: var(--foreground); font-size: 0.8rem; font-weight: 850; line-height: 1.35; }
+.workboard-kanban-card-body > p { display: -webkit-box; overflow: hidden; margin-top: 0.3rem; color: var(--muted); font-size: 0.67rem; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.workboard-kanban-card-body > .workboard-status { min-height: 30px; margin-top: 0.65rem; }
 .workboard-kanban-progress { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.75rem; }
-.workboard-kanban-card footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.7rem; border-top: 1px solid var(--line); padding-top: 0.65rem; }
-.workboard-kanban-card footer > span:last-child { color: var(--muted); font-size: 0.64rem; font-weight: 750; }
-.workboard-kanban-card footer > .workboard-date.is-risk { color: var(--st-risk); font-weight: 950; }
+.workboard-kanban-card-body footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.7rem; border-top: 1px solid var(--line); padding-top: 0.65rem; }
+.workboard-kanban-card-body footer > span:last-child { color: var(--muted); font-size: 0.64rem; font-weight: 750; }
+.workboard-kanban-card-body footer > .workboard-date.is-risk { color: var(--st-risk); font-weight: 950; }
 .workboard-kanban-card .workboard-owner > span:last-child { max-width: 105px; }
+.workboard-kanban-empty { display: flex; min-height: 76px; align-items: center; justify-content: center; gap: 0.4rem; border: 1px dashed color-mix(in srgb, var(--group-color) 35%, var(--line)); border-radius: 5px; color: var(--muted); font-size: 0.68rem; font-weight: 750; }
 
 .workboard-panel { background: var(--surface-subtle); padding: 1rem; }
 .workboard-insights { min-width: 0; }
@@ -2389,6 +2419,9 @@ html[data-theme="dark"] .alert-info { border-color: #24547c; background: #142638
   .workboard-subitem > * { border-right: 0; padding: 0.35rem 0.45rem; }
   .workboard-subitem > strong { grid-column: 1 / -1; white-space: normal; }
   .workboard-kanban { min-height: 480px; grid-auto-columns: minmax(270px, 85vw); padding: 0.75rem; }
+  .workboard-kanban-card-top { min-height: 44px; }
+  .workboard-stage-menu > summary { width: 44px; height: 44px; }
+  .workboard-stage-menu > div { top: 47px; }
   .workboard-panel { padding: 0.65rem; }
   .workboard-insight-heading { align-items: flex-start; flex-direction: column; }
   .workboard-insight-heading p { text-align: left; }

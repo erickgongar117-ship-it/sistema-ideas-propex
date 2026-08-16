@@ -3,6 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  DragDropContext,
+  Draggable,
+  Droppable,
+  type DraggableProvidedDragHandleProps,
+  type DropResult,
+  type ResponderProvided
+} from "@hello-pangea/dnd";
+import {
   ArrowRight,
   BarChart3,
   CalendarDays,
@@ -16,8 +24,10 @@ import {
   Columns3,
   Copy,
   GitMerge,
+  GripVertical,
   Inbox,
   LayoutList,
+  MoreHorizontal,
   Rows3,
   Search,
   ShieldCheck,
@@ -61,6 +71,7 @@ export type WorkboardItem = {
   riskLabel?: string;
   tags?: string[];
   children?: WorkboardChild[];
+  allowedGroups?: string[];
 };
 
 export type WorkboardMetric = {
@@ -69,6 +80,23 @@ export type WorkboardMetric = {
   detail: string;
   color: string;
 };
+
+export type WorkboardGroupDefinition = {
+  key: string;
+  label: string;
+  color: string;
+};
+
+export type WorkboardMoveInput = {
+  itemId: string;
+  fromGroup: string;
+  toGroup: string;
+  via: "drag" | "menu" | "undo";
+};
+
+export type WorkboardMoveResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
 
 type View = "table" | "kanban" | "panel";
 type Sort = "priority" | "due" | "progress" | "title";
@@ -125,18 +153,87 @@ function Owner({ name }: { name: string }) {
   );
 }
 
+function WorkboardKanbanCard({
+  item,
+  groups,
+  dragHandleProps,
+  moving,
+  onMove
+}: {
+  item: WorkboardItem;
+  groups: WorkboardGroupDefinition[];
+  dragHandleProps?: DraggableProvidedDragHandleProps | null;
+  moving: boolean;
+  onMove?: (toGroup: string) => void;
+}) {
+  const targets = groups.filter((group) => item.allowedGroups?.includes(group.key));
+  return (
+    <article className={`workboard-kanban-card ${item.risk ? "is-risk" : ""} ${moving ? "is-moving" : ""}`}>
+      <div className="workboard-kanban-card-top">
+        <span className="workboard-kanban-code">{item.code}</span>
+        <div className="workboard-kanban-card-actions">
+          {dragHandleProps ? (
+            <button
+              {...dragHandleProps}
+              aria-label={`Mover ${item.code} entre etapas`}
+              className="workboard-drag-handle"
+              title="Arrastrar a otra etapa"
+              type="button"
+            >
+              <GripVertical className="h-4 w-4" aria-hidden />
+            </button>
+          ) : null}
+          {targets.length && onMove ? (
+            <details className="workboard-stage-menu">
+              <summary aria-label={`Cambiar etapa de ${item.code}`} title="Cambiar etapa">
+                <MoreHorizontal className="h-4 w-4" aria-hidden />
+              </summary>
+              <div>
+                <span>Cambiar etapa</span>
+                {targets.map((target) => (
+                  <button disabled={moving} key={target.key} onClick={() => onMove(target.key)} type="button">
+                    <i style={{ background: target.color }} />
+                    <span>{target.label}</span>
+                  </button>
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </div>
+      </div>
+      <Link className="workboard-kanban-card-body" href={item.href}>
+        <h3>{item.title}</h3>
+        <p>{item.subtitle}</p>
+        <WorkStatus category={item.statusCategory} label={item.statusLabel} reference={item.statusReference} />
+        <div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></div>
+        <footer>
+          <Owner name={item.owner} />
+          <span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>
+            {item.risk ? <TriangleAlert className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-3.5 w-3.5" aria-hidden />}
+            {dueLabel(item.dueDate)}
+          </span>
+        </footer>
+      </Link>
+    </article>
+  );
+}
+
 export function OperationsWorkboard({
   items,
   metrics,
   primaryLabel,
   locationLabel = "Ubicacion",
-  emptyLabel = "No hay registros con estos filtros"
+  emptyLabel = "No hay registros con estos filtros",
+  groupDefinitions,
+  onMoveItem
 }: {
   items: WorkboardItem[];
   metrics: WorkboardMetric[];
   primaryLabel: string;
   locationLabel?: string;
   emptyLabel?: string;
+  groupDefinitions?: WorkboardGroupDefinition[];
+  onMoveItem?: (input: WorkboardMoveInput) => Promise<WorkboardMoveResult>;
 }) {
   const [view, setView] = useState<View>("table");
   const [query, setQuery] = useState("");
@@ -153,10 +250,18 @@ export function OperationsWorkboard({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [copied, setCopied] = useState(false);
+  const [dragEnabled, setDragEnabled] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [moveNotice, setMoveNotice] = useState<string | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  const statuses = useMemo(() => [...new Set(items.map((item) => item.group))], [items]);
+  const statuses = useMemo(
+    () => groupDefinitions?.map((group) => group.key) ?? [...new Set(items.map((item) => item.group))],
+    [groupDefinitions, items]
+  );
   const locations = useMemo(() => [...new Set(items.map((item) => item.location))].sort(), [items]);
   const owners = useMemo(() => [...new Set(items.map((item) => item.owner))].sort((a, b) => a.localeCompare(b, "es-MX")), [items]);
   const normalizedQuery = query.trim().toLocaleLowerCase("es-MX");
@@ -193,12 +298,21 @@ export function OperationsWorkboard({
     const rows = pageItems.filter((item) => item.group === key);
     const allRows = filtered.filter((item) => item.group === key);
     const source = items.find((item) => item.group === key);
+    const definition = groupDefinitions?.find((group) => group.key === key);
     const average = allRows.length ? Math.round(allRows.reduce((sum, item) => sum + item.progress, 0) / allRows.length) : 0;
-    return { key, rows, total: allRows.length, average, label: source?.groupLabel ?? key, color: source?.groupColor ?? "#64748b" };
-  }).filter((group) => group.rows.length), [filtered, items, pageItems, statuses]);
+    return {
+      key,
+      rows,
+      total: allRows.length,
+      average,
+      label: definition?.label ?? source?.groupLabel ?? key,
+      color: definition?.color ?? source?.groupColor ?? "#64748b"
+    };
+  }).filter((group) => view === "kanban" || group.rows.length), [filtered, groupDefinitions, items, pageItems, statuses, view]);
 
   const focusedItem = items.find((item) => item.id === focusedId) ?? null;
   const activeFilters = Number(status !== "all") + Number(location !== "all") + Number(owner !== "all");
+  const draggingItem = items.find((item) => item.id === draggingId) ?? null;
 
   useEffect(() => {
     setPage(1);
@@ -227,6 +341,14 @@ export function OperationsWorkboard({
     updatePageSize();
     media.addEventListener("change", updatePageSize);
     return () => media.removeEventListener("change", updatePageSize);
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 768px)");
+    const updateDragMode = () => setDragEnabled(media.matches);
+    updateDragMode();
+    media.addEventListener("change", updateDragMode);
+    return () => media.removeEventListener("change", updateDragMode);
   }, []);
 
   useEffect(() => {
@@ -287,6 +409,48 @@ export function OperationsWorkboard({
     window.setTimeout(() => setCopied(false), 1800);
   };
 
+  const moveGroups: WorkboardGroupDefinition[] = groupDefinitions ?? statuses.map((key) => {
+    const source = items.find((item) => item.group === key);
+    return { key, label: source?.groupLabel ?? key, color: source?.groupColor ?? "#64748b" };
+  });
+
+  const performMove = async (item: WorkboardItem, toGroup: string, via: WorkboardMoveInput["via"]) => {
+    if (!onMoveItem || item.group === toGroup || movingId) return;
+    if (!item.allowedGroups?.includes(toGroup)) {
+      setMoveError("Esa etapa no esta habilitada para este proyecto.");
+      return;
+    }
+    setMoveError(null);
+    setMoveNotice(null);
+    setMovingId(item.id);
+    try {
+      const result = await onMoveItem({ itemId: item.id, fromGroup: item.group, toGroup, via });
+      if (result.ok) setMoveNotice(result.message);
+      else setMoveError(result.message);
+    } catch {
+      setMoveError("No fue posible cambiar la etapa. El proyecto regreso a su posicion anterior.");
+    } finally {
+      setMovingId(null);
+    }
+  };
+
+  const onDragEnd = (result: DropResult, provided: ResponderProvided) => {
+    const item = items.find((candidate) => candidate.id === result.draggableId);
+    setDraggingId(null);
+    if (!item || !result.destination || result.destination.droppableId === item.group) {
+      provided.announce("Movimiento cancelado. El proyecto conserva su etapa.");
+      return;
+    }
+    if (!item.allowedGroups?.includes(result.destination.droppableId)) {
+      provided.announce("Esa etapa no esta permitida para el proyecto.");
+      setMoveError("Esa etapa no esta habilitada para este proyecto.");
+      return;
+    }
+    const destination = moveGroups.find((group) => group.key === result.destination?.droppableId);
+    provided.announce(`Moviendo ${item.code} a ${destination?.label ?? result.destination.droppableId}.`);
+    void performMove(item, result.destination.droppableId, "drag");
+  };
+
   return (
     <section className={`workboard is-${density}`} aria-label={`${primaryLabel} - tablero de trabajo`}>
       <div className="workboard-viewbar no-print">
@@ -323,9 +487,12 @@ export function OperationsWorkboard({
         ) : null}
       </div>
 
+      {moveError ? <div className="workboard-move-message is-error" role="alert"><TriangleAlert className="h-4 w-4" aria-hidden /><span>{moveError}</span><button aria-label="Cerrar aviso" onClick={() => setMoveError(null)} type="button"><X className="h-4 w-4" aria-hidden /></button></div> : null}
+      {moveNotice ? <div className="workboard-move-message is-success" role="status"><CheckCircle2 className="h-4 w-4" aria-hidden /><span>{moveNotice}</span><button aria-label="Cerrar aviso" onClick={() => setMoveNotice(null)} type="button"><X className="h-4 w-4" aria-hidden /></button></div> : null}
+
       {filtersOpen ? (
         <div className="workboard-filters no-print">
-          <label><span>Estado</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Todos los estados</option>{statuses.map((value) => <option key={value} value={value}>{items.find((item) => item.group === value)?.groupLabel ?? value}</option>)}</select></label>
+          <label><span>Estado</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Todos los estados</option>{statuses.map((value) => <option key={value} value={value}>{moveGroups.find((group) => group.key === value)?.label ?? value}</option>)}</select></label>
           <label><span>Responsable</span><select value={owner} onChange={(event) => setOwner(event.target.value)}><option value="all">Todas las personas</option>{owners.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label><span>{locationLabel}</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="all">Todas</option>{locations.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label><span>Orden</span><select value={sort} onChange={(event) => setSort(event.target.value as Sort)}><option value="priority">Atencion primero</option><option value="due">Fecha mas cercana</option><option value="progress">Menor avance</option><option value="title">Nombre</option></select></label>
@@ -404,12 +571,63 @@ export function OperationsWorkboard({
       ) : null}
 
       {view === "kanban" ? (
-        groups.length ? <div className="workboard-kanban">
-          {groups.map((group) => <section className="workboard-kanban-column" key={group.key} style={{ "--group-color": group.color } as React.CSSProperties}>
-            <header><span>{group.label}</span><strong>{group.rows.length}</strong></header>
-            <div>{group.rows.map((item) => <Link className={`workboard-kanban-card ${item.risk ? "is-risk" : ""}`} href={item.href} key={item.id}><span className="workboard-kanban-code">{item.code}</span><h3>{item.title}</h3><p>{item.subtitle}</p><WorkStatus category={item.statusCategory} label={item.statusLabel} reference={item.statusReference} /><div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></div><footer><Owner name={item.owner} /><span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>{item.risk ? <TriangleAlert className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-3.5 w-3.5" aria-hidden />}{dueLabel(item.dueDate)}</span></footer></Link>)}</div>
-          </section>)}
-        </div> : <div className="workboard-empty">{emptyLabel}</div>
+        groups.length ? (
+          <DragDropContext
+            dragHandleUsageInstructions="Presiona espacio o Enter para levantar el proyecto. Usa las flechas para cambiar de etapa, espacio o Enter para soltar y Escape para cancelar."
+            onDragEnd={onDragEnd}
+            onDragStart={(start, provided) => {
+              setDraggingId(start.draggableId);
+              const item = items.find((candidate) => candidate.id === start.draggableId);
+              provided.announce(`Levantaste ${item?.code ?? "el proyecto"}. Elige una etapa permitida.`);
+            }}
+          >
+            <div className="workboard-kanban">
+              {groups.map((group) => {
+                const dropDisabled = Boolean(draggingItem && group.key !== draggingItem.group && !draggingItem.allowedGroups?.includes(group.key));
+                return (
+                  <Droppable droppableId={group.key} isDropDisabled={dropDisabled} key={group.key}>
+                    {(provided, snapshot) => (
+                      <section
+                        className={`workboard-kanban-column ${dropDisabled ? "is-drop-disabled" : ""} ${snapshot.isDraggingOver ? "is-dragging-over" : ""}`}
+                        style={{ "--group-color": group.color } as React.CSSProperties}
+                      >
+                        <header><span>{group.label}</span><strong>{group.rows.length}</strong></header>
+                        <div className="workboard-kanban-stack" ref={provided.innerRef} {...provided.droppableProps}>
+                          {group.rows.map((item, index) => (
+                            <Draggable
+                              draggableId={item.id}
+                              index={index}
+                              isDragDisabled={!dragEnabled || !onMoveItem || !item.allowedGroups?.length || Boolean(movingId)}
+                              key={item.id}
+                            >
+                              {(provided, snapshot) => (
+                                <div
+                                  className={snapshot.isDragging ? "is-dragging" : ""}
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                >
+                                  <WorkboardKanbanCard
+                                    dragHandleProps={dragEnabled && onMoveItem && item.allowedGroups?.length ? provided.dragHandleProps : null}
+                                    groups={moveGroups}
+                                    item={item}
+                                    moving={movingId === item.id}
+                                    onMove={onMoveItem ? (toGroup) => void performMove(item, toGroup, "menu") : undefined}
+                                  />
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                          {!group.rows.length ? <div className="workboard-kanban-empty"><Inbox className="h-4 w-4" aria-hidden /><span>Sin proyectos</span></div> : null}
+                        </div>
+                      </section>
+                    )}
+                  </Droppable>
+                );
+              })}
+            </div>
+          </DragDropContext>
+        ) : <div className="workboard-empty">{emptyLabel}</div>
       ) : null}
 
       {view === "panel" ? (
