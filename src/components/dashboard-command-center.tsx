@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { OperationsWorkboard, type WorkboardItem } from "@/components/operations-workboard";
 import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
 import { statusLabels } from "@/lib/domain";
+import { ideaStatusCategory, statusCategoryFill, statusCategoryMeta, type StatusCategory } from "@/lib/status-system";
 
 const DAY = 86_400_000;
 const terminalStatuses = new Set<IdeaStatus>(["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"]);
@@ -42,16 +43,22 @@ type DashboardCommandCenterProps = {
   timing: { supervisor: string; validation: string; implementation: string };
 };
 
-const flowGroups: Array<{ key: string; label: string; color: string; statuses: IdeaStatus[]; progress: number }> = [
-  { key: "ENTRADA", label: "Entrada", color: "#579bfc", statuses: ["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"], progress: 15 },
-  { key: "VALIDACION", label: "Validacion", color: "#a25ddc", statuses: ["APROBADA_SUPERVISOR", "EN_VALIDACION_CALIDAD", "EN_VALIDACION_SEGURIDAD", "EN_VALIDACION_MANTENIMIENTO"], progress: 40 },
-  { key: "IMPLEMENTACION", label: "Implementacion", color: "#fdab3d", statuses: ["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA", "EN_IMPLEMENTACION", "IMPLEMENTADA", "EN_VALIDACION_FINAL", "VENCIDA"], progress: 72 },
-  { key: "CERRADA", label: "Cerradas", color: "#00a878", statuses: ["CERRADA"], progress: 100 },
-  { key: "DETENIDA", label: "Rechazadas o canceladas", color: "#676879", statuses: ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION", "CANCELADA"], progress: 100 }
-];
+const progressByCategory: Record<StatusCategory, number> = {
+  ENTRADA: 15,
+  VALIDACION: 40,
+  EJECUCION: 72,
+  CIERRE: 100,
+  DETENIDA: 100
+};
 
 function groupFor(status: IdeaStatus) {
-  return flowGroups.find((group) => group.statuses.includes(status)) ?? flowGroups[0];
+  const key = ideaStatusCategory(status);
+  return {
+    key,
+    label: statusCategoryMeta[key].label,
+    color: statusCategoryFill(key),
+    progress: status === "VENCIDA" ? 72 : progressByCategory[key]
+  };
 }
 
 export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }: DashboardCommandCenterProps) {
@@ -84,7 +91,7 @@ export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }
       groupLabel: group.label,
       groupColor: group.color,
       statusLabel: statusLabels[idea.status],
-      statusColor: idea.status === "VENCIDA" ? "#e2445c" : group.color,
+      statusCategory: ideaStatusCategory(idea.status),
       owner: idea.supervisorName ?? "Sin responsable",
       location: idea.areaCode,
       dueDate: idea.dueDate,

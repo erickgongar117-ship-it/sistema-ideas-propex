@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { OperationsWorkboard, type WorkboardItem } from "@/components/operations-workboard";
 import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
 import { kaizenStatusLabels, workItemStatusLabels } from "@/lib/domain";
+import { kaizenStatusCategory, statusCategoryFill, workItemStatusRender } from "@/lib/status-system";
 
 const DAY = 86_400_000;
 
@@ -41,24 +42,6 @@ export type KaizenDashboardProject = {
   activities: KaizenDashboardActivity[];
 };
 
-const statusColors: Record<KaizenStatus, string> = {
-  PENDIENTE_CHARTER: "#a16207",
-  PLANIFICACION: "#579bfc",
-  EN_CURSO: "#fdab3d",
-  EN_PAUSA: "#784bd1",
-  COMPLETADO: "#00a878",
-  CANCELADO: "#676879"
-};
-
-const activityColors: Record<WorkItemStatus, string> = {
-  PENDIENTE: "#c4c4c4",
-  EN_PROCESO: "#579bfc",
-  BLOQUEADA: "#e2445c",
-  COMPLETADA: "#00a878",
-  CANCELADA: "#676879",
-  COMBINADA: "#784bd1"
-};
-
 function progress(activities: KaizenDashboardActivity[]) {
   const relevant = activities.filter((activity) => activity.status !== "COMBINADA");
   const closed = relevant.filter((activity) => ["COMPLETADA", "CANCELADA"].includes(activity.status)).length;
@@ -89,6 +72,7 @@ export function KaizenCommandCenter({ projects, generatedAt }: { projects: Kaize
 
   const items: WorkboardItem[] = visible.map((project) => {
     const projectProgress = progress(project.activities);
+    const statusCategory = kaizenStatusCategory(project.status);
     const overdue = project.activities.filter((activity) => activity.dueDate && new Date(activity.dueDate) < now && !["COMPLETADA", "CANCELADA", "COMBINADA"].includes(activity.status)).length;
     const blocked = project.activities.filter((activity) => activity.status === "BLOQUEADA").length;
     const charterPending = !project.hasCharter || project.status === "PENDIENTE_CHARTER";
@@ -101,9 +85,9 @@ export function KaizenCommandCenter({ projects, generatedAt }: { projects: Kaize
       subtitle: project.objective,
       group: project.status,
       groupLabel: kaizenStatusLabels[project.status],
-      groupColor: statusColors[project.status],
+      groupColor: statusCategoryFill(statusCategory),
       statusLabel: kaizenStatusLabels[project.status],
-      statusColor: statusColors[project.status],
+      statusCategory,
       owner: project.leaderName,
       location: project.plant ?? project.area,
       dueDate: project.endDate,
@@ -112,15 +96,19 @@ export function KaizenCommandCenter({ projects, generatedAt }: { projects: Kaize
       risk: alerts.length > 0 && !["COMPLETADO", "CANCELADO"].includes(project.status),
       riskLabel: alerts.join(" · "),
       tags: [project.area, project.sourceIdeaFolio ? `Origen ${project.sourceIdeaFolio}` : "", project.hasCharter ? "Charter listo" : ""].filter(Boolean),
-      children: project.activities.filter((activity) => activity.status !== "COMBINADA").map((activity) => ({
-        id: activity.id,
-        label: activity.action,
-        status: activity.status,
-        statusLabel: workItemStatusLabels[activity.status],
-        owner: activity.ownerName ?? "Sin asignar",
-        dueDate: activity.dueDate,
-        tone: activityColors[activity.status]
-      }))
+      children: project.activities.filter((activity) => activity.status !== "COMBINADA").map((activity) => {
+        const activityStatus = workItemStatusRender(activity.status);
+        return {
+          id: activity.id,
+          label: activity.action,
+          status: activity.status,
+          statusLabel: workItemStatusLabels[activity.status],
+          owner: activity.ownerName ?? "Sin asignar",
+          dueDate: activity.dueDate,
+          statusCategory: activityStatus.category,
+          statusReference: activityStatus.reference
+        };
+      })
     };
   });
 

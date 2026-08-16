@@ -10,16 +10,24 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  CircleCheckBig,
+  CircleDashed,
+  CircleSlash,
   Columns3,
   Copy,
+  GitMerge,
+  Inbox,
   LayoutList,
   Rows3,
   Search,
+  ShieldCheck,
   SlidersHorizontal,
   TriangleAlert,
-  X
+  X,
+  type LucideIcon
 } from "lucide-react";
 import { WorkboardInsights } from "@/components/workboard-insights";
+import { statusCategoryMeta, type StatusCategory } from "@/lib/status-system";
 
 export type WorkboardChild = {
   id: string;
@@ -28,7 +36,8 @@ export type WorkboardChild = {
   statusLabel: string;
   owner: string;
   dueDate: string | null;
-  tone: string;
+  statusCategory: StatusCategory;
+  statusReference?: boolean;
 };
 
 export type WorkboardItem = {
@@ -41,7 +50,8 @@ export type WorkboardItem = {
   groupLabel: string;
   groupColor: string;
   statusLabel: string;
-  statusColor: string;
+  statusCategory: StatusCategory;
+  statusReference?: boolean;
   owner: string;
   location: string;
   dueDate: string | null;
@@ -82,8 +92,28 @@ function initials(name: string) {
   return `${parts[0][0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
 }
 
-function WorkStatus({ color, label }: { color: string; label: string }) {
-  return <span className="workboard-status" style={{ "--status-color": color } as React.CSSProperties}><span>{label}</span></span>;
+const CATEGORY_ICON: Record<StatusCategory, LucideIcon> = {
+  ENTRADA: Inbox,
+  VALIDACION: ShieldCheck,
+  EJECUCION: CircleDashed,
+  CIERRE: CircleCheckBig,
+  DETENIDA: CircleSlash
+};
+
+function WorkStatus({ category, label, reference = false }: { category: StatusCategory; label: string; reference?: boolean }) {
+  const Icon = reference ? GitMerge : CATEGORY_ICON[category];
+  const token = statusCategoryMeta[category].token;
+  return (
+    <span
+      aria-label={`Estado: ${label}`}
+      className={`workboard-status ${reference ? "is-reference" : ""}`}
+      style={{ "--status-fill": `var(--st-${token}-fill)` } as React.CSSProperties}
+      title={label}
+    >
+      <Icon aria-hidden />
+      <span>{label}</span>
+    </span>
+  );
 }
 
 function Owner({ name }: { name: string }) {
@@ -339,11 +369,11 @@ export function OperationsWorkboard({
                               </button>
                               <button className="workboard-title-button" onClick={() => setFocusedId(item.id)} type="button"><strong>{item.title}</strong><small>{item.code} · {item.subtitle}</small></button>
                             </div>
-                            <div data-label="Estado"><WorkStatus color={item.statusColor} label={item.statusLabel} /></div>
+                            <div data-label="Estado"><WorkStatus category={item.statusCategory} label={item.statusLabel} reference={item.statusReference} /></div>
                             <div data-label="Responsable"><Owner name={item.owner} /></div>
                             <div data-label={locationLabel}><span className="workboard-text-cell">{item.location}</span></div>
                             <div data-label="Fecha"><span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>{item.risk ? <TriangleAlert className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-3.5 w-3.5" aria-hidden />}{dueLabel(item.dueDate)}</span></div>
-                            <div data-label="Avance" className="workboard-progress-cell"><span><i style={{ width: `${item.progress}%`, backgroundColor: item.statusColor }} /></span><strong>{item.progress}%</strong></div>
+                            <div data-label="Avance" className="workboard-progress-cell"><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></div>
                             <Link aria-label={`Abrir ${item.code}`} className="workboard-open" href={item.href}><ArrowRight className="h-4 w-4" aria-hidden /></Link>
                           </div>
                           {isExpanded ? (
@@ -357,7 +387,7 @@ export function OperationsWorkboard({
                               {item.children?.length ? (
                                 <div className="workboard-subitems">
                                   <div className="workboard-subitem is-head"><span>Subelemento</span><span>Estado</span><span>Responsable</span><span>Fecha</span></div>
-                                  {item.children.map((child) => <div className="workboard-subitem" key={child.id}><strong>{child.label}</strong><WorkStatus color={child.tone} label={child.statusLabel} /><span>{child.owner}</span><span>{dueLabel(child.dueDate)}</span></div>)}
+                                  {item.children.map((child) => <div className="workboard-subitem" key={child.id}><strong>{child.label}</strong><WorkStatus category={child.statusCategory} label={child.statusLabel} reference={child.statusReference} /><span>{child.owner}</span><span>{dueLabel(child.dueDate)}</span></div>)}
                                 </div>
                               ) : null}
                             </div>
@@ -374,23 +404,23 @@ export function OperationsWorkboard({
       ) : null}
 
       {view === "kanban" ? (
-        <div className="workboard-kanban">
+        groups.length ? <div className="workboard-kanban">
           {groups.map((group) => <section className="workboard-kanban-column" key={group.key} style={{ "--group-color": group.color } as React.CSSProperties}>
             <header><span>{group.label}</span><strong>{group.rows.length}</strong></header>
-            <div>{group.rows.map((item) => <Link className="workboard-kanban-card" href={item.href} key={item.id}><span className="workboard-kanban-code">{item.code}</span><h3>{item.title}</h3><p>{item.subtitle}</p><div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%`, backgroundColor: item.statusColor }} /></span><strong>{item.progress}%</strong></div><footer><Owner name={item.owner} /><span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>{item.risk ? <TriangleAlert className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-3.5 w-3.5" aria-hidden />}{dueLabel(item.dueDate)}</span></footer></Link>)}</div>
+            <div>{group.rows.map((item) => <Link className={`workboard-kanban-card ${item.risk ? "is-risk" : ""}`} href={item.href} key={item.id}><span className="workboard-kanban-code">{item.code}</span><h3>{item.title}</h3><p>{item.subtitle}</p><WorkStatus category={item.statusCategory} label={item.statusLabel} reference={item.statusReference} /><div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></div><footer><Owner name={item.owner} /><span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>{item.risk ? <TriangleAlert className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-3.5 w-3.5" aria-hidden />}{dueLabel(item.dueDate)}</span></footer></Link>)}</div>
           </section>)}
-        </div>
+        </div> : <div className="workboard-empty">{emptyLabel}</div>
       ) : null}
 
       {view === "panel" ? (
-        <div className="workboard-panel">
+        filtered.length ? <div className="workboard-panel">
           <WorkboardInsights
             items={filtered}
             metrics={metrics}
             onDrillGroup={(group) => { setStatus(group); setView("table"); }}
             onDrillOwner={(selectedOwner) => { setOwner(selectedOwner); setView("table"); }}
           />
-        </div>
+        </div> : <div className="workboard-empty">{emptyLabel}</div>
       ) : null}
 
       {view !== "panel" && totalPages > 1 ? (
@@ -413,7 +443,7 @@ export function OperationsWorkboard({
               <button aria-label="Cerrar detalle" className="icon-button" onClick={() => setFocusedId(null)} type="button"><X className="h-4 w-4" aria-hidden /></button>
             </header>
             <div className="workboard-drawer-body">
-              <div className="workboard-drawer-status"><WorkStatus color={focusedItem.statusColor} label={focusedItem.statusLabel} /><span>{focusedItem.progress}%</span></div>
+              <div className="workboard-drawer-status"><WorkStatus category={focusedItem.statusCategory} label={focusedItem.statusLabel} reference={focusedItem.statusReference} /><span>{focusedItem.progress}%</span></div>
               <section><span>Resumen</span><p>{focusedItem.subtitle}</p></section>
               <dl>
                 <div><dt>Responsable</dt><dd><Owner name={focusedItem.owner} /></dd></div>
@@ -423,7 +453,7 @@ export function OperationsWorkboard({
               </dl>
               {focusedItem.riskLabel ? <section className="is-alert"><span>Atencion</span><p>{focusedItem.riskLabel}</p></section> : null}
               {focusedItem.tags?.length ? <section><span>Etiquetas</span><div className="workboard-drawer-tags">{focusedItem.tags.map((tag) => <i key={tag}>{tag}</i>)}</div></section> : null}
-              {focusedItem.children?.length ? <section><span>Subelementos</span><div className="workboard-drawer-subitems">{focusedItem.children.map((child) => <div key={child.id}><strong>{child.label}</strong><WorkStatus color={child.tone} label={child.statusLabel} /><small>{child.owner} · {dueLabel(child.dueDate)}</small></div>)}</div></section> : null}
+              {focusedItem.children?.length ? <section><span>Subelementos</span><div className="workboard-drawer-subitems">{focusedItem.children.map((child) => <div key={child.id}><strong>{child.label}</strong><WorkStatus category={child.statusCategory} label={child.statusLabel} reference={child.statusReference} /><small>{child.owner} · {dueLabel(child.dueDate)}</small></div>)}</div></section> : null}
             </div>
             <footer><Link className="btn btn-primary w-full" href={focusedItem.href}>Abrir expediente completo<ArrowRight className="h-4 w-4" aria-hidden /></Link></footer>
           </aside>

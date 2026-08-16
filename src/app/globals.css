@@ -239,6 +239,13 @@
   --success: #14835f;
   --warning: #a16207;
   --danger: #d32236;
+  --st-entrada-fill: #538cd7;
+  --st-validacion-fill: #a276d4;
+  --st-ejecucion-fill: #bd7c0c;
+  --st-cierre-fill: #1e9d6f;
+  --st-detenida-fill: #818b98;
+  --st-ink: #171717;
+  --st-risk: #d32236;
   --shadow-soft: 0 1px 2px rgba(23, 26, 24, 0.035), 0 8px 24px rgba(23, 26, 24, 0.035);
   --shadow-raised: 0 14px 36px rgba(23, 26, 24, 0.09);
 }
@@ -254,6 +261,7 @@ html[data-theme="dark"] {
   --line: #2b313a;
   --line-strong: #3d4652;
   --brand-red-dark: #ff3659;
+  --st-risk: #ff3659;
   --brand-gray: #9da5b0;
   --secondary: #20242b;
   --accent: #32151d;
@@ -935,8 +943,8 @@ summary:focus-visible {
 .workboard-table-view { min-width: 0; padding: 0.8rem 0 1.25rem; }
 .workboard-group { margin: 0 0.9rem 1rem; border-left: 5px solid var(--group-color); }
 .workboard-group-header { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--group-color) 5%, var(--surface)); padding: 0 0.8rem 0 0.55rem; }
-.workboard-group-header button { display: inline-flex; min-height: 40px; min-width: 0; align-items: center; gap: 0.45rem; border: 0; background: transparent; color: var(--group-color); font-size: 0.88rem; font-weight: 900; }
-.workboard-group-header button strong { display: grid; min-width: 24px; height: 22px; place-items: center; border-radius: 11px; background: color-mix(in srgb, var(--group-color) 13%, var(--surface)); font-size: 0.68rem; }
+.workboard-group-header button { display: inline-flex; min-height: 40px; min-width: 0; align-items: center; gap: 0.45rem; border: 0; background: transparent; color: var(--foreground); font-size: 0.88rem; font-weight: 900; }
+.workboard-group-header button strong { display: grid; min-width: 24px; height: 22px; place-items: center; border-radius: 11px; background: color-mix(in srgb, var(--group-color) 13%, var(--surface)); color: var(--foreground); font-size: 0.68rem; }
 .workboard-group-header > span { color: var(--muted); font-size: 0.7rem; font-weight: 750; }
 
 .workboard-grid { overflow-x: auto; border-right: 1px solid var(--line); }
@@ -944,14 +952,14 @@ summary:focus-visible {
 .workboard-grid-row {
   display: grid;
   min-width: 1090px;
-  grid-template-columns: 42px minmax(290px, 2fr) 142px minmax(170px, 1fr) 132px 126px 145px 48px;
+  grid-template-columns: 42px minmax(290px, 2fr) 148px minmax(170px, 1fr) 132px 126px 145px 48px;
   align-items: stretch;
 }
 .workboard-grid-head { min-height: 38px; border-bottom: 1px solid var(--line); background: var(--surface-subtle); color: var(--muted); font-size: 0.72rem; font-weight: 850; }
 .workboard-grid-head > * { display: flex; align-items: center; border-right: 1px solid var(--line); padding: 0 0.65rem; }
 .workboard-grid-head label { justify-content: center; }
 .workboard-item { background: var(--surface); }
-.workboard-item.is-risk .workboard-primary-cell::before { background: #e2445c; }
+.workboard-item.is-risk .workboard-primary-cell::before { width: 4px; background: var(--st-risk); }
 .workboard-grid-row { min-height: 62px; border-bottom: 1px solid var(--line); transition: background-color 120ms ease; }
 .workboard.is-compact .workboard-grid-row { min-height: 50px; }
 .workboard.is-compact .workboard-grid-row > div { padding-top: 0.25rem; padding-bottom: 0.25rem; }
@@ -973,21 +981,22 @@ summary:focus-visible {
 .workboard-title-button strong { display: block; overflow: hidden; color: var(--foreground); font-size: 0.84rem; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
 .workboard-title-button small { display: block; overflow: hidden; margin-top: 0.23rem; color: var(--muted); font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
 
-.workboard-status { display: flex; width: 100%; min-height: 34px; align-items: center; justify-content: center; gap: 0.4rem; border: 1px solid color-mix(in srgb, var(--status-color) 34%, #fff); border-radius: 3px; background: color-mix(in srgb, var(--status-color) 14%, #fff); padding: 0.35rem 0.5rem; color: #171717; text-align: center; }
-.workboard-status::before { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--status-color); content: ""; }
-.workboard-status span { overflow: hidden; font-size: 0.79rem; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.workboard-status { display: flex; width: 100%; min-height: 34px; align-items: center; justify-content: flex-start; gap: 6px; border: 0; border-radius: 4px; background: var(--status-fill); padding: 0 10px; color: var(--st-ink); text-align: left; }
+.workboard-status svg { width: 14px; height: 14px; flex: 0 0 14px; stroke-width: 2.25; }
+.workboard-status span { overflow: hidden; font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.workboard-status.is-reference { border: 1px solid var(--muted); background: transparent; color: var(--muted); }
 .workboard-owner { display: flex; min-width: 0; align-items: center; gap: 0.45rem; }
 .workboard-owner > span:last-child { overflow: hidden; color: var(--foreground); font-size: 0.78rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 .workboard-avatar { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 50%; background: #323338; color: #fff; font-size: 0.62rem; font-weight: 900; }
 .workboard-text-cell { overflow: hidden; font-size: 0.75rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .workboard-date { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--muted); font-size: 0.78rem; font-weight: 750; white-space: nowrap; }
-.workboard-date.is-risk { color: #e2445c; font-weight: 950; }
+.workboard-date.is-risk { color: var(--st-risk); font-weight: 950; }
 .workboard-date.is-risk svg { flex: 0 0 auto; stroke-width: 3; }
 .workboard-progress-cell { gap: 0.5rem; }
 .workboard-progress-cell > span,
 .workboard-kanban-progress > span { height: 7px; flex: 1; overflow: hidden; border-radius: 4px; background: var(--line); }
 .workboard-progress-cell i,
-.workboard-kanban-progress i { display: block; height: 100%; border-radius: inherit; background: #00a878; transition: width 260ms ease; }
+.workboard-kanban-progress i { display: block; height: 100%; border-radius: inherit; background: var(--st-cierre-fill); transition: width 260ms ease; }
 .workboard-progress-cell strong,
 .workboard-kanban-progress strong { min-width: 31px; color: var(--foreground); font-size: 0.66rem; font-variant-numeric: tabular-nums; }
 .workboard-open { display: grid; min-height: 100%; place-items: center; color: var(--muted); }
@@ -1009,18 +1018,20 @@ summary:focus-visible {
 
 .workboard-kanban { display: grid; min-height: 560px; grid-auto-flow: column; grid-auto-columns: minmax(285px, 330px); gap: 0.8rem; overflow-x: auto; background: var(--surface-subtle); padding: 1rem; }
 .workboard-kanban-column { align-self: start; border-top: 4px solid var(--group-color); border-radius: 5px; background: color-mix(in srgb, var(--group-color) 4%, var(--surface)); }
-.workboard-kanban-column > header { display: flex; min-height: 46px; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0 0.75rem; color: var(--group-color); font-size: 0.78rem; font-weight: 900; }
-.workboard-kanban-column > header strong { display: grid; min-width: 25px; height: 22px; place-items: center; border-radius: 11px; background: color-mix(in srgb, var(--group-color) 14%, var(--surface)); font-size: 0.66rem; }
+.workboard-kanban-column > header { display: flex; min-height: 46px; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0 0.75rem; color: var(--foreground); font-size: 0.78rem; font-weight: 900; }
+.workboard-kanban-column > header strong { display: grid; min-width: 25px; height: 22px; place-items: center; border-radius: 11px; background: color-mix(in srgb, var(--group-color) 14%, var(--surface)); color: var(--foreground); font-size: 0.66rem; }
 .workboard-kanban-column > div { display: grid; gap: 0.55rem; padding: 0 0.55rem 0.7rem; }
 .workboard-kanban-card { display: block; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); padding: 0.75rem; box-shadow: 0 1px 3px rgba(23,23,23,.06); transition: border-color 120ms ease, transform 120ms ease; }
+.workboard-kanban-card.is-risk { border-left: 4px solid var(--st-risk); }
 .workboard-kanban-card:hover { border-color: var(--group-color); transform: translateY(-1px); }
-.workboard-kanban-code { color: var(--group-color); font-size: 0.64rem; font-weight: 900; }
+.workboard-kanban-code { color: var(--foreground); font-size: 0.64rem; font-weight: 900; }
 .workboard-kanban-card h3 { margin-top: 0.3rem; color: var(--foreground); font-size: 0.8rem; font-weight: 850; line-height: 1.35; }
 .workboard-kanban-card > p { display: -webkit-box; overflow: hidden; margin-top: 0.3rem; color: var(--muted); font-size: 0.67rem; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.workboard-kanban-card > .workboard-status { min-height: 30px; margin-top: 0.65rem; }
 .workboard-kanban-progress { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.75rem; }
 .workboard-kanban-card footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.7rem; border-top: 1px solid var(--line); padding-top: 0.65rem; }
 .workboard-kanban-card footer > span:last-child { color: var(--muted); font-size: 0.64rem; font-weight: 750; }
-.workboard-kanban-card footer > .workboard-date.is-risk { color: #e2445c; font-weight: 950; }
+.workboard-kanban-card footer > .workboard-date.is-risk { color: var(--st-risk); font-weight: 950; }
 .workboard-kanban-card .workboard-owner > span:last-child { max-width: 105px; }
 
 .workboard-panel { background: var(--surface-subtle); padding: 1rem; }
@@ -1096,6 +1107,7 @@ summary:focus-visible {
 .workboard-drawer > header h2 { margin-top: 0.3rem; color: var(--foreground); font-size: 1.18rem; font-weight: 900; line-height: 1.3; }
 .workboard-drawer-body { min-height: 0; flex: 1; overflow-y: auto; padding: 1rem; }
 .workboard-drawer-status { display: grid; grid-template-columns: 1fr 70px; gap: 0.6rem; }
+.workboard-drawer-status .workboard-status { min-height: 38px; }
 .workboard-drawer-status > span { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-subtle); color: var(--foreground); font-size: 0.78rem; font-weight: 900; }
 .workboard-drawer-body > section { margin-top: 1rem; border: 1px solid var(--line); border-radius: 5px; padding: 0.85rem; }
 .workboard-drawer-body > section > span { color: var(--muted); font-size: 0.62rem; font-weight: 900; text-transform: uppercase; }

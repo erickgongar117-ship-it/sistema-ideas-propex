@@ -1,10 +1,10 @@
-import type { IdeaStatus, KaizenStatus, WorkItemStatus } from "@prisma/client";
+import type { IdeaStatus, WorkItemStatus } from "@prisma/client";
 import Link from "next/link";
 import { CircleAlert } from "lucide-react";
-import { FollowUpTable, type FollowUpRow, type FollowUpTone } from "@/components/follow-up-table";
+import { FollowUpTable, type FollowUpRow } from "@/components/follow-up-table";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
-import { genbaStatusLabels, kaizenStatusLabels, statusLabels, statusTone, workItemStatusLabels, workProgress } from "@/lib/domain";
+import { genbaStatusLabels, kaizenStatusLabels, statusLabels, workItemStatusLabels, workProgress } from "@/lib/domain";
 import {
   buildIdeaVisibilityWhere,
   getManageableActivityOrgUnitIds,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/idea-access";
 import { userModuleAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
+import { genbaStatusCategory, ideaStatusCategory, kaizenStatusCategory } from "@/lib/status-system";
 
 export const dynamic = "force-dynamic";
 
@@ -34,31 +35,6 @@ const mcActionStatuses = new Set<IdeaStatus>([
   "EN_VALIDACION_FINAL",
   "RECHAZADA_VALIDACION"
 ]);
-
-const kaizenTone: Record<KaizenStatus, FollowUpTone> = {
-  PENDIENTE_CHARTER: "amber",
-  PLANIFICACION: "blue",
-  EN_CURSO: "green",
-  EN_PAUSA: "amber",
-  COMPLETADO: "green",
-  CANCELADO: "slate"
-};
-
-function ideaTone(value: IdeaStatus): FollowUpTone {
-  const tone = statusTone[value];
-  if (tone === "yellow") return "amber";
-  if (tone === "gray") return "slate";
-  if (tone === "purple") return "violet";
-  return tone;
-}
-
-function workItemTone(value: WorkItemStatus): FollowUpTone {
-  if (value === "COMPLETADA") return "green";
-  if (value === "BLOQUEADA") return "red";
-  if (value === "EN_PROCESO") return "blue";
-  if (value === "PENDIENTE") return "amber";
-  return "slate";
-}
 
 function nearestDueDate(dates: Array<Date | null | undefined>) {
   return dates
@@ -247,7 +223,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       assignment,
       owner,
       status: statusLabels[idea.status],
-      statusTone: ideaTone(idea.status),
+      statusCategory: ideaStatusCategory(idea.status),
       href: `/ideas/${idea.id}`,
       dueDate,
       updatedAt: idea.updatedAt,
@@ -293,7 +269,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       assignment,
       owner: project.leader.name,
       status: kaizenStatusLabels[project.status],
-      statusTone: kaizenTone[project.status],
+      statusCategory: kaizenStatusCategory(project.status),
       href: `/kaizen/${project.id}`,
       dueDate,
       updatedAt: project.updatedAt,
@@ -305,8 +281,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         status: activity.status,
         statusLabel: workItemStatusLabels[activity.status],
         owner: activity.owner?.name ?? "Sin responsable",
-        dueDate: activity.dueDate,
-        tone: workItemTone(activity.status)
+        dueDate: activity.dueDate
       }))
     });
   }
@@ -346,7 +321,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       assignment,
       owner: walk.coordinator.name,
       status: genbaStatusLabels[walk.status],
-      statusTone: walk.status === "ABIERTO" ? "blue" : walk.status === "CERRADO" ? "green" : "slate",
+      statusCategory: genbaStatusCategory(walk.status),
       href: `/genba/${walk.id}`,
       dueDate,
       updatedAt: walk.updatedAt,
@@ -358,8 +333,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         status: activity.status,
         statusLabel: workItemStatusLabels[activity.status],
         owner: activity.owner?.name ?? "Sin responsable",
-        dueDate: activity.dueDate,
-        tone: workItemTone(activity.status)
+        dueDate: activity.dueDate
       }))
     });
   }

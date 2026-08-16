@@ -1,16 +1,16 @@
+import type { WorkItemStatus } from "@prisma/client";
 import { OperationsWorkboard, type WorkboardItem, type WorkboardMetric } from "@/components/operations-workboard";
+import { workItemStatusRender, type StatusCategory } from "@/lib/status-system";
 
 export type FollowUpModule = "IDEA" | "KAIZEN" | "GENBA";
-export type FollowUpTone = "amber" | "blue" | "green" | "red" | "slate" | "violet";
 
 export type FollowUpChild = {
   id: string;
   label: string;
-  status: string;
+  status: WorkItemStatus;
   statusLabel: string;
   owner: string;
   dueDate: Date | null;
-  tone: FollowUpTone;
 };
 
 export type FollowUpRow = {
@@ -23,7 +23,7 @@ export type FollowUpRow = {
   assignment: string;
   owner: string;
   status: string;
-  statusTone: FollowUpTone;
+  statusCategory: StatusCategory;
   href: string;
   dueDate: Date | null;
   updatedAt: Date;
@@ -40,15 +40,6 @@ const moduleLabels: Record<FollowUpModule, string> = {
   IDEA: "Idea",
   KAIZEN: "Kaizen",
   GENBA: "GENBA"
-};
-
-const toneColors: Record<FollowUpTone, string> = {
-  amber: "#fdab3d",
-  blue: "#579bfc",
-  green: "#00a86b",
-  red: "#e2445c",
-  slate: "#7f8c8d",
-  violet: "#a25ddc"
 };
 
 const urgencyOrder = ["overdue", "today", "soon", "planned", "no-date"];
@@ -89,7 +80,7 @@ export function FollowUpTable({
       groupLabel: group.label,
       groupColor: group.color,
       statusLabel: row.status,
-      statusColor: toneColors[row.statusTone],
+      statusCategory: row.statusCategory,
       owner: row.owner,
       location: row.location,
       dueDate: row.dueDate?.toISOString() ?? null,
@@ -100,15 +91,19 @@ export function FollowUpTable({
       risk: row.overdue,
       riskLabel: row.overdue ? "Fecha compromiso vencida" : undefined,
       tags: [moduleLabel, row.status, row.assignment],
-      children: row.children?.map((child) => ({
-        id: child.id,
-        label: child.label,
-        status: child.status,
-        statusLabel: child.statusLabel,
-        owner: child.owner,
-        dueDate: child.dueDate?.toISOString() ?? null,
-        tone: toneColors[child.tone]
-      }))
+      children: row.children?.map((child) => {
+        const childStatus = workItemStatusRender(child.status);
+        return {
+          id: child.id,
+          label: child.label,
+          status: child.status,
+          statusLabel: child.statusLabel,
+          owner: child.owner,
+          dueDate: child.dueDate?.toISOString() ?? null,
+          statusCategory: childStatus.category,
+          statusReference: childStatus.reference
+        };
+      })
     };
   }).sort((left, right) => urgencyOrder.indexOf(left.group) - urgencyOrder.indexOf(right.group));
 
