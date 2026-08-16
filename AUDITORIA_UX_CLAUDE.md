@@ -19,13 +19,17 @@ Este documento es **honesto sobre su propia cobertura**. Reparto de la auditorí
 | Captura QR | Completa | Lectura directa |
 | Estados de carga/error/vacío, inventario de rutas | Completa | Inventario mecánico |
 | Entrenamientos y ProbocaCoins | **Parcial** | Estructura y consultas, no la lógica de cada formulario |
-| Capa visual (`globals.css`, panel ejecutivo) | **Parcial** | Métricas cuantitativas, no revisión pantalla por pantalla |
-| Benchmark externo | **Sin verificar en línea** | Ver §4: las URLs no se comprobaron con fetch |
+| Capa visual: color, contraste y estado | Completa | Métricas y cálculo de contraste reproducible (§4.7) |
+| Capa visual: `globals.css` pantalla por pantalla | **Parcial** | Métricas cuantitativas, no revisión de cada vista |
+| Benchmark de gestión visual | Completa | 9 fuentes abiertas y verificadas (§4.6) |
 
-**Las dos áreas parciales y el benchmark quedaron así porque el límite de sesión cortó cinco
-procesos de análisis a media ejecución.** Lo que está escrito abajo sobre esas áreas es
-verificable con los comandos que se citan; lo que no pude comprobar, se dice explícitamente.
-No hay nada inferido presentado como observado.
+**La única área que queda parcial es Entrenamientos/ProbocaCoins y el repaso visual pantalla
+por pantalla**, porque el límite de sesión cortó dos procesos de análisis. Lo escrito sobre
+ellas es verificable con los comandos que se citan; lo que no pude comprobar, se dice
+explícitamente. No hay nada inferido presentado como observado.
+
+El **§4 es el capítulo de gestión visual**: seis reglas derivadas del benchmark, el diagnóstico
+medido de PROpEx contra ellas y la paleta de estado propuesta.
 
 ---
 
@@ -303,6 +307,10 @@ Hay hex incrustados en TypeScript en al menos: `app-shell.tsx:136-144` (paleta d
 justamente lo que `CLAUDE.md` manda conservar — vive hardcodeada en un componente cliente**,
 no en tokens.
 
+Las consecuencias medibles de esto —**6 de 11 colores de estado fallan el contraste WCAG AA**,
+el mismo significado cambia de color entre pantallas, y hay **dos componentes de estado
+distintos** conviviendo— están cuantificadas en **§4.7**, y la paleta de reemplazo en **§4.8**.
+
 ### 3.4 La inversión está invertida
 
 `/seguimientos` es la bandeja de **todos los roles** y sí usa `OperationsWorkboard` vía
@@ -315,81 +323,188 @@ lote. **Antes de más BI, hay que arreglar el trabajo diario de los mil.**
 
 ---
 
-## 4. Benchmark: Monday, Asana, Linear, ClickUp, Jira
+## 4. Benchmark de gestión visual
 
-> **Advertencia de método.** El proceso que iba a comprobar cada URL con `fetch` murió por
-> límite de sesión. Las direcciones de abajo son documentación oficial estable y de uso
-> común, pero **no fueron verificadas en esta sesión**. Codex debe abrirlas antes de citarlas
-> fuera del equipo. Lo que sí es firme es el análisis de patrones: no depende de la URL.
+Esta sección no compara funciones ni precios. Compara **cómo cada herramienta comunica estado
+de un vistazo**, porque eso es lo que PROpEx necesita: que un tablero se lea como un tablero de
+piso — sin interpretar, sin abrir nada, a distancia.
 
-### Monday.com — el modelo de datos visible
-Resuelve mejor que nadie: **que gente no técnica configure su propio flujo sin programar.**
+**Todas las URLs de §4.6 fueron abiertas y verificadas en esta sesión.** Donde no pude
+confirmar el contenido, se dice.
 
-| Patrón copiable | Qué problema resuelve en PROpEx |
-|---|---|
-| **Board → Group → Item → Subitem** | Da la jerarquía real que hoy no existe: Proyecto → Fase → Actividad → Subactividad (§7) |
-| **Columnas tipadas** (estado, persona, fecha, número, archivo) con color por valor | Sustituye los 105 hex sueltos por un catálogo de estados con color asignado una sola vez |
-| **Batch actions** sobre filas seleccionadas | `OperationsWorkboard` ya tiene selección múltiple (`:293-300`) pero solo sabe "copiar folios". Falta aprobar/reasignar en lote |
+### 4.1 Las seis reglas que salen del benchmark
 
-- `https://support.monday.com/` · `https://developer.monday.com/api-reference/docs` · sistema de diseño Vibe: `https://vibe.monday.com/`
-- **No copiar:** los tableros configurables por el usuario final. En PROpEx el flujo lo fija
-  `CLAUDE.md`; dejar que cada área invente su tablero rompe la comparabilidad entre plantas.
+| # | Regla | De dónde sale |
+|---|---|---|
+| **VM-1** | **El color nunca va solo.** Siempre acompañado de texto, icono, forma o peso tipográfico | WCAG 1.4.1 (Nivel A). Asana lo aplica poniendo las fechas vencidas **en negritas**, no solo en rojo |
+| **VM-2** | **Las categorías de estado son fijas; los nombres y colores dentro de cada categoría, no** | Linear: las categorías (Backlog → Todo → In Progress → Done → Canceled) son inamovibles; el equipo solo reordena y renombra dentro de ellas |
+| **VM-3** | **Un color = un significado, en todo el sistema.** Una sola definición, no una por pantalla | Atlassian resuelve estado con un componente único (Lozenge) con variantes cerradas, no con hex sueltos |
+| **VM-4** | **Lo urgente se señala por redundancia, no por saturación**: color + posición + peso. Nunca "más rojo" | Asana (negritas en vencidos); NN/g sobre tablas |
+| **VM-5** | **El volumen se controla con estructura, no con scroll**: encabezados fijos, agrupación colapsable, techo por grupo, primera columna anclada en móvil | NN/g, *Data Tables: Four Major User Tasks* |
+| **VM-6** | **Tres a cinco destinos** en la navegación inferior. Menos, usa pestañas; más, usa cajón | Material Design 3, navigation bar |
 
-### Asana — el trabajo personal
-Resuelve mejor: **"¿qué me toca hoy?"** separado de "cómo va el proyecto".
+### 4.2 Monday.com — el modelo de datos visible
+**Su aporte visual:** la columna de estado como *tipo de dato*. El color no lo elige quien
+escribe la fila; está atado al valor del catálogo. Un tablero Monday se lee como un mosaico de
+bloques saturados porque cada celda de estado es un rectángulo lleno, no una etiqueta suelta.
 
-- **My Tasks con secciones temporales** (Hoy / Próximos / Después) — es exactamente lo que
-  `/seguimientos` intenta con "Pendientes / Seguimiento / Equipo", pero Asana ordena por
-  *cuándo*, no por *por qué*, que es lo que un operador entiende.
-- **Rules**: disparadores sin código ("si el estado pasa a Completada, notifica al líder").
-- `https://asana.com/guide` · `https://help.asana.com/`
-- **No copiar:** Portfolios y Goals. PROpEx ya tiene `/panorama`; una capa más de agregación
-  sobre 60 proyectos es peso muerto.
+- **Copiable:** el catálogo cerrado de estados con color asignado una sola vez. Sustituye los
+  105 hex de `globals.css` por una tabla de verdad.
+- **Copiable:** `Board → Group → Item → Subitem` como jerarquía visual — da el nivel de
+  subactividad que hoy no existe (§7).
+- **No copiar:** que el usuario final configure sus tableros. En PROpEx el flujo lo fija
+  `CLAUDE.md`; si cada área inventa su tablero se pierde la comparación entre plantas.
+- **Cuidado — esto ya pasó.** Los hex de estado de PROpEx (`#fdab3d`, `#579bfc`, `#e2445c`,
+  `#a25ddc`, `#784bd1`, `#676879`, `#c4c4c4`) **son la paleta de Monday copiada literalmente**,
+  repartida a mano en cuatro componentes. Se copiaron los valores sin el sistema que los
+  sostiene: sin catálogo, sin tokens y sin la verificación de contraste. Es exactamente el
+  "copiar superficialmente" que hay que evitar. Ver el diagnóstico en §4.7.
 
-### Linear — la densidad y el teclado
-Resuelve mejor: **velocidad para el usuario experto que vive dentro de la herramienta.**
+### 4.3 Asana — la redundancia de codificación
 
-- **Triage**: una bandeja donde lo entrante se acepta o se descarta con una tecla. Es el molde
-  natural para la bandeja del supervisor.
-- **Command palette** (Cmd+K) como navegación primaria. PROpEx **ya tiene** `WorkspaceSearch`
-  (`app-shell.tsx:457`) — hoy sirve de tapadera de las rutas huérfanas; debe pasar a ser un
-  atajo deliberado, no el único camino.
-- `https://linear.app/docs` · `https://linear.app/method`
-- **No copiar:** la densidad extrema ni la dependencia del teclado. El operador de planta usa
-  un celular con guantes. La estética Linear es para Mejora Continua en escritorio, no para el
-  piso.
+**Su aporte visual, y el más valioso de todo el benchmark:** su modo para daltonismo no se
+limita a cambiar colores. Al activarlo, Asana **remapea la paleta** para protanopia y
+deuteranopia **y además pone las fechas vencidas en negritas**. Es decir, añade un segundo
+canal de información que no depende del color en absoluto. Es un ajuste por persona, que no
+altera lo que ven los compañeros.
 
-### ClickUp — la advertencia
-Resuelve mejor: **cubrirlo todo.** Y por eso es la lección negativa más útil.
+- **Copiable, y es la regla VM-1:** lo vencido no se marca solo en rojo. Se marca en rojo **y**
+  en negritas **y** con icono. Rojo y verde son justamente el par que confunde la deuteranopía,
+  y en PROpEx `#e2445c` (vencido) y `#00a878` (completado) son ese par exacto.
+- **Copiable:** "Mi trabajo" agrupado por *cuándo* (hoy / próximos / después), no por *por qué*.
+  `/seguimientos` ya agrupa por urgencia en `follow-up-table.tsx:56-67` — va bien encaminado.
+- **No copiar:** Portfolios y Goals. `/panorama` ya existe; otra capa de agregación sobre 60
+  proyectos es peso muerto.
 
-- Jerarquía Space → Folder → List → Task → Subtask: útil como referencia de profundidad
-  máxima razonable (5 niveles ya es demasiado; PROpEx necesita 3).
-- `https://help.clickup.com/`
-- **No copiar:** casi nada de su superficie. ClickUp es el ejemplo canónico de saturación por
-  acumulación de funciones — que es exactamente hacia donde va `/entrenamientos` con sus
-  cuatro pantallas en una ruta.
+### 4.4 Linear — categorías fijas, apariencia libre
 
-### Jira — permisos y colas
-Resuelve mejor: **flujos y permisos auditables en organizaciones grandes.**
+**Su aporte visual:** el estado se dibuja como un **icono de progreso circular** que se llena,
+no como una etiqueta de color. La forma comunica el avance aunque el color no se distinga. Y
+estructuralmente: las categorías de flujo (Backlog → Todo → In Progress → Done → Canceled) son
+**fijas**; un equipo puede renombrar y recolorear estados *dentro* de una categoría y
+reordenarlos, pero no puede mover las categorías.
 
-- **Permission schemes**: el permiso se declara como esquema reutilizable, no se calcula al
-  vuelo. Es la respuesta directa al problema de §1.3 (siete caminos para aprobar).
-- **Queues** de Service Management: colas por filtro guardado, con SLA visible.
-- `https://support.atlassian.com/jira-software-cloud/` · `https://www.atlassian.com/software/jira/guides`
-- **No copiar:** el editor de workflows y los esquemas configurables por proyecto. Es
-  precisamente lo que hace a Jira inaccesible para personal operativo.
+- **Copiable, regla VM-2:** PROpEx tiene 17 estados de Idea (`domain.ts:64-82`) y 6 de
+  actividad. Agrupar en **cinco categorías fijas** — Entrada, Validación, Ejecución, Cierre,
+  Detenida — y que el color viva en la categoría, no en el estado. `dashboard-command-center.tsx:45-51`
+  ya tiene esos cinco grupos: hay que subirlos a `domain.ts` y usarlos en todas las pantallas.
+- **Copiable:** la forma como portador de significado (anillo de progreso), que cumple VM-1
+  sin gastar color.
+- **No copiar:** la densidad extrema ni el teclado como interfaz primaria. Sirve para Mejora
+  Continua en escritorio; el operador usa celular con guantes.
 
-### Referencias de norma
+### 4.5 ClickUp y Jira — las dos advertencias
 
-- WCAG 2.1: `https://www.w3.org/TR/WCAG21/`
-  · objetivo táctil (2.5.5): `https://www.w3.org/WAI/WCAG21/Understanding/target-size.html`
-  · contraste mínimo (1.4.3): `https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html`
-- Nielsen Norman Group, progressive disclosure: `https://www.nngroup.com/articles/progressive-disclosure/`
-- Material Design 3, barra de navegación inferior (**3 a 5 destinos**):
-  `https://m3.material.io/components/navigation-bar/guidelines`
-- Apple HIG, tab bars: `https://developer.apple.com/design/human-interface-guidelines/tab-bars`
-- Next.js App Router: `https://nextjs.org/docs/app/api-reference/file-conventions/loading`
-  y `https://nextjs.org/docs/app/api-reference/file-conventions/error`
+**ClickUp** es la lección negativa: jerarquía de cinco niveles (Space → Folder → List → Task →
+Subtask) y decenas de vistas conmutables. Su crítica recurrente es la sobrecarga por
+acumulación — que es exactamente hacia donde va `/entrenamientos` con cuatro pantallas en una
+ruta. **Tope para PROpEx: tres niveles.**
+
+**Jira** aporta un patrón visual sólido y uno peligroso.
+- **Copiable:** el **Lozenge** del Atlassian Design System — un componente único con variantes
+  cerradas para estado, en vez de color libre por pantalla. Su documentación lo define como una
+  etiqueta compacta para comunicar un atributo que afecta cómo se prioriza un objeto. Es la
+  regla VM-3 hecha componente. PROpEx **ya tiene** ese componente: `StatusPill`.
+- **Copiable:** las **colas por filtro guardado** de Service Management — el molde para
+  convertir las cinco rutas de bandeja en filtros de "Mi trabajo" (§5.4).
+- **No copiar:** el editor de flujos configurable por proyecto. Es lo que vuelve a Jira
+  inaccesible para personal operativo.
+
+### 4.6 Referencias verificadas
+
+Todas abiertas y comprobadas en esta sesión (2026-08-15):
+
+| Referencia | URL | Qué aporta |
+|---|---|---|
+| WCAG 2.1 SC **1.4.1 Uso del color** (Nivel A) | `https://www.w3.org/WAI/WCAG21/Understanding/use-of-color.html` | Texto exacto: el color no debe ser el único medio visual para transmitir información o distinguir un elemento |
+| WCAG 2.1 SC **1.4.11 Contraste no textual** (Nivel AA) | `https://www.w3.org/WAI/WCAG21/Understanding/non-text-contrast.html` | **3:1** para componentes de interfaz y objetos gráficos necesarios para entender el contenido |
+| WCAG 2.1 SC **2.5.5 Tamaño del objetivo** (**Nivel AAA**) | `https://www.w3.org/WAI/WCAG21/Understanding/target-size.html` | 44×44 px CSS. *Ojo: es AAA, no AA.* Se adopta como estándar interno por ser planta con guantes |
+| NN/g, **Progressive Disclosure** (Jakob Nielsen, 2006) | `https://www.nngroup.com/articles/progressive-disclosure/` | Mostrar pocas opciones principales; las secundarias solo si se piden |
+| NN/g, **Data Tables: Four Major User Tasks** | `https://www.nngroup.com/articles/data-tables/` | Encabezados congelados, zebra striping, resaltado al pasar el cursor; en móvil **anclar la primera columna** en vez de scroll horizontal ciego |
+| **Material Design 3**, navigation bar | `https://m3.material.io/components/navigation-bar/guidelines` | **3 a 5 destinos**. Menos de 3 → pestañas; más de 6 → cajón. Destinos de igual importancia |
+| **Asana**, modo para daltonismo | `https://asana.com/inside-asana/new-accessibility-feature-colorblind-friendly` · ajuste en `https://help.asana.com/s/article/display-settings` | Remapea la paleta (protanopia y deuteranopia) **y pone las fechas vencidas en negritas** |
+| **Linear**, configuración de flujos | `https://linear.app/docs/configuring-workflows` | Categorías fijas, estados renombrables y recoloreables dentro de cada una |
+| **Atlassian Design System**, Lozenge | `https://atlassian.design/components/lozenge/examples` | Componente único de estado con variantes cerradas |
+
+**Verificación parcial, no citar como fuente sin volver a abrir:** `https://vibe.monday.com/`
+(el sistema de diseño Vibe existe y el título responde, pero la página se arma con JavaScript y
+no pude leer su documentación de color) y la documentación de ClickUp.
+
+### 4.7 Diagnóstico de PROpEx contra las seis reglas
+
+| Regla | Estado | Evidencia |
+|---|---|---|
+| **VM-1** color nunca solo | **Parcial** | `StatusPill` cumple (color + punto + texto). `WorkStatus` cumple por el texto. **Pero las barras de avance no**: `operations-workboard.tsx:353` y `:387` tiñen la barra con `statusColor` sin etiqueta — ahí el color es el único portador |
+| **VM-2** categorías fijas | **No** | 17 estados planos (`domain.ts:64-82`). Los cinco grupos existen pero solo dentro de un componente cliente (`dashboard-command-center.tsx:45-51`) |
+| **VM-3** un color, un significado | **No** | Ver tabla de deriva abajo |
+| **VM-4** urgencia por redundancia | **No** | Lo vencido se marca solo con color y una clase `is-risk`. No hay negritas ni icono. Y rojo/verde son el par que confunde la deuteranopía |
+| **VM-5** volumen por estructura | **Parcial** | El workboard agrupa y colapsa bien. Los Kanban dedicados no tienen techo ni paginación (§8) |
+| **VM-6** 3-5 destinos móviles | **No** | `.slice(0, 3)` deja 3 y tira GENBA (`app-shell.tsx:292`) |
+
+**Dos defectos medibles y verificables:**
+
+**a) Seis de once colores de estado fallan el contraste**, con el color de texto que el propio
+componente elige. La causa está en `operations-workboard.tsx:86-92`: usa la fórmula de brillo
+YIQ con umbral `0.58` en lugar de la luminancia relativa de WCAG, y por eso pone texto blanco
+sobre colores medios donde el blanco no alcanza.
+
+| Color | Significado | Texto que elige | Contraste | AA 4.5:1 |
+|---|---|---|---|---|
+| `#579bfc` | En proceso / validación | blanco | **2.80** | **falla** |
+| `#00a878` | Completado | blanco | **3.06** | **falla** |
+| `#00a86b` | Completado *(otra pantalla)* | blanco | **3.08** | **falla** |
+| `#7f8c8d` | Neutro | blanco | **3.48** | **falla** |
+| `#e2445c` | Vencido / bloqueado | blanco | **4.03** | **falla** |
+| `#a25ddc` | Validación final | blanco | **4.09** | **falla** |
+| `#a16207` | Charter pendiente | blanco | 4.92 | pasa |
+| `#676879` | Cancelado | blanco | 5.48 | pasa |
+| `#784bd1` | En pausa | blanco | 5.64 | pasa |
+| `#fdab3d` | Ámbar / atención | oscuro | 9.45 | pasa |
+| `#c4c4c4` | Pendiente | oscuro | 10.28 | pasa |
+
+Los cuatro que más se ven — en proceso, completado, vencido y neutro — están entre los que
+fallan. La píldora usa `0.79rem` en negrita (`globals.css:977`), que **no** califica como texto
+grande, así que el umbral aplicable es 4.5:1.
+
+**b) El mismo significado cambia de color según la pantalla** — rompe VM-3:
+
+| Significado | Mi trabajo | Panel de Ideas | Kaizen / GENBA |
+|---|---|---|---|
+| Completado | `#00a86b` | `#00a878` | `#00a878` |
+| Neutro / cancelado | `#7f8c8d` | `#676879` | `#676879` |
+| Validación final | `#a25ddc` | `#a25ddc` | `#784bd1` |
+
+Un supervisor que pasa de "Mi trabajo" a Kaizen ve dos verdes distintos para lo mismo. En
+gestión visual eso no es un detalle estético: es ruido que obliga a interpretar.
+
+**c) Hay dos vocabularios de estado conviviendo.** `StatusPill` (pastel, borde, punto y texto,
+14 archivos — las pantallas operativas) y `WorkStatus` (relleno saturado, texto calculado, sin
+punto, `globals.css:976` — el workboard nuevo). Son dos idiomas para lo mismo.
+
+### 4.8 La paleta de estado propuesta
+
+Una sola definición, en `domain.ts`, expuesta como tokens CSS. Cinco categorías (VM-2), color
+con contraste verificado sobre texto oscuro (VM-1 y 1.4.11), y un segundo canal por categoría:
+
+| Categoría | Estados que agrupa | Fondo | Texto | Segundo canal |
+|---|---|---|---|---|
+| **Entrada** | Registrada, En revisión, Solicitud de información | azul claro | oscuro | icono de bandeja |
+| **Validación** | Aprobada por responsable, las tres validaciones | violeta claro | oscuro | icono de escudo |
+| **Ejecución** | Aprobada para implementar, Clasificación, En implementación | ámbar claro | oscuro | anillo de progreso |
+| **Cierre** | Implementada, Validación final, Cerrada | verde claro | oscuro | palomita |
+| **Detenida** | Rechazadas, Cancelada, Vencida | rojo claro | oscuro | icono de alto + **negritas** |
+
+Reglas de aplicación:
+1. **`StatusPill` es el único componente de estado.** `WorkStatus` se retira y el workboard lo
+   consume. Un idioma, no dos.
+2. **Fondo claro y texto oscuro**, como ya hace `StatusPill`. Resuelve el contraste de un golpe
+   y evita depender del cálculo de luminancia.
+3. **Lo vencido siempre lleva negritas e icono**, además de rojo (Asana, VM-4).
+4. **Las barras de avance llevan porcentaje escrito** — ya lo hace en la tabla
+   (`operations-workboard.tsx:353`), falta en la tarjeta Kanban.
+5. **El acento de módulo (ámbar Kaizen, rojo GENBA) no toca las píldoras de estado.** Tiñe
+   cabecera y bordes. Si el acento de GENBA (`#ea0029`) y el rojo de "vencido" (`#e2445c`)
+   comparten superficie, se pierden los dos.
 
 ---
 
@@ -617,8 +732,11 @@ impacto en este rango.
   acción principal a la derecha. `operations-workboard.tsx` ya emite `data-label` en cada celda
   (`:349-353`) — la base está puesta, falta la regla `@media` que la use.
 - Gantt y Kanban: en móvil se sustituyen por **lista agrupada**, no por scroll horizontal.
-- Objetivo táctil mínimo **44×44 px** en todo control (WCAG 2.5.5). Hoy hay controles de
-  `text-[9px]` con `min-w-5` en las fichas de `/seguimientos` (`:421`).
+- Si alguna tabla conserva scroll horizontal, **anclar la primera columna** — es la
+  recomendación de NN/g y hoy no se hace en ninguna.
+- Objetivo táctil mínimo **44×44 px** en todo control. Es WCAG 2.5.5, que es **Nivel AAA**, no
+  AA: lo adoptamos como estándar interno porque es planta y se opera con guantes. Hoy hay
+  controles de `text-[9px]` con `min-w-5` en las fichas de `/seguimientos` (`:421`).
 - Formularios de una sola columna, teclado correcto por campo (la captura ya lo hace bien:
   `inputMode="numeric"`, `:243`).
 
@@ -679,6 +797,8 @@ Consecuencias reales:
 | P0-6 | Confirmación en `deleteMembershipAction` y `deleteEscalationRuleAction`; validar rutas activas antes de borrar la membresía | Alto | Bajo | No se puede borrar una membresía que es ruta activa sin reasignar primero |
 | P0-7 | Paginación en servidor en `/seguimientos`, `/dashboard`, `/panorama`, `/kaizen`, `/genba` | Alto | Medio | Ninguna página trae más de 50 registros por request; verificado con 1000 ideas |
 | P0-8 | Rescatar las rutas huérfanas: enlazar `/configuracion/datos` y `/configuracion/migracion-2026`, y borrar `ideaNav`/`kaizenNav`/`genbaNav` | Medio | Bajo | Toda ruta viva tiene al menos un enlace entrante; el buscador no ofrece destinos inexistentes |
+| P0-9 | **Contraste de los estados**: sustituir el cálculo YIQ de `operations-workboard.tsx:86-92` por fondo claro + texto oscuro (§4.8) | Alto | Bajo | Los 11 colores de estado alcanzan 4.5:1; se verifica con el cálculo de §4.7 |
+| P0-10 | **Lo vencido deja de depender del color**: negritas + icono además del rojo (regla VM-4) | Alto | Bajo | Un usuario con deuteranopía distingue vencido de completado sin ver el color |
 
 **P1 — Cambia la experiencia diaria**
 
@@ -688,7 +808,8 @@ Consecuencias reales:
 | P1-2 | Expedientes Kaizen/GENBA con pestañas y cajón lateral *(pendiente que dejó Codex)* | Muy alto | Alto | Cerrar un proyecto no exige atravesar la bitácora en ningún ancho; un error no borra el formulario |
 | P1-3 | Eliminar `/kaizen/kanban` y `/genba/kanban`; Kanban como vista del tablero con techo de 20 tarjetas | Alto | Medio | Con 80 proyectos ninguna columna pasa de 20 tarjetas y existe "ver las restantes" |
 | P1-4 | Acciones en lote en "Mi trabajo" (aprobar, rechazar con motivo, reasignar, nueva fecha) | Alto | Medio | Un supervisor aprueba 10 ideas en una operación |
-| P1-5 | Tokens de color: mover los 62 hex de `.tsx` y la paleta de roles a variables CSS; resolver Colaborador vs Calidad y rol vs módulo | Alto | Medio | Cero literales hex en `.tsx`; la paleta de `CLAUDE.md` se lee de tokens |
+| P1-5 | **Un solo idioma de estado**: retirar `WorkStatus`, dejar `StatusPill` como único componente, y las cinco categorías fijas en `domain.ts` (§4.8) | Muy alto | Medio | Un mismo estado se ve idéntico en Mi trabajo, Ideas, Kaizen y GENBA |
+| P1-5b | Tokens de color: mover los 62 hex de `.tsx` y la paleta de roles a variables CSS; resolver Colaborador vs Calidad y rol vs módulo | Alto | Medio | Cero literales hex en `.tsx`; la paleta de `CLAUDE.md` se lee de tokens |
 | P1-6 | Móvil: 4 destinos fijos, tablas como tarjetas, objetivos táctiles de 44px | Alto | Medio | En 390×844 ninguna tabla se desborda y ningún control mide menos de 44px |
 | P1-7 | ProbocaCoins: unificar libro mayor y conciliación de duplicados *(pendiente que dejó Codex)* | Medio | Medio | Se detecta y corrige un movimiento duplicado dejando rastro en auditoría |
 | P1-8 | Partir `/entrenamientos` (1200 líneas, 4 pantallas) y arreglar `participant.findMany` sin `take` en `probocacoins:180` | Medio | Medio | Ninguna ruta supera 400 líneas; ninguna consulta trae los 1000+ participantes completos |
@@ -723,7 +844,10 @@ Consecuencias reales:
 | P1-2 | `src/app/(app)/kaizen/[id]/page.tsx`, `src/app/(app)/genba/[id]/page.tsx` | Pestañas + cajón lateral |
 | P1-3 | Borrar `src/app/(app)/kaizen/kanban/`, `src/app/(app)/genba/kanban/`, `src/app/(app)/kanban/`; ampliar `src/components/operations-workboard.tsx:383-390` | Kanban como vista |
 | P1-4 | `src/components/operations-workboard.tsx:293-300` + nuevas acciones en `src/app/actions.ts` | Lote |
-| P1-5 | `src/app/globals.css`, `src/components/app-shell.tsx:136-144`, `follow-up-table.tsx:45-52`, los tres `*-command-center.tsx` | Tokens |
+| P0-9 | `src/components/operations-workboard.tsx:84-94` y `src/app/globals.css:976-977` | Fondo claro + texto oscuro; borrar el cálculo YIQ |
+| P0-10 | `src/components/status-pill.tsx`, `src/components/operations-workboard.tsx:352` | Negritas + icono en vencido |
+| P1-5 | `src/lib/domain.ts` (cinco categorías + colores), `src/components/status-pill.tsx`, `src/components/operations-workboard.tsx:84-94` | Un solo componente de estado |
+| P1-5b | `src/app/globals.css`, `src/components/app-shell.tsx:136-144`, `follow-up-table.tsx:45-52`, los tres `*-command-center.tsx` | Tokens |
 | P1-6 | `src/app/globals.css` (`@media`), `src/components/app-shell.tsx:290-293` | Móvil |
 | P1-7 | `src/app/(app)/probocacoins/page.tsx:180` y `actions.ts` | Conciliación + `take` |
 | P1-8 | `src/app/(app)/entrenamientos/page.tsx` | Partir en 4 rutas |
@@ -754,9 +878,13 @@ Consecuencias reales:
    existe salida a la lista completa.
 9. **Aprobador que se va de vacaciones** — Desactiva a un revisor con 5 ideas pendientes.
    *Éxito:* se reasignan o alguien recibe alerta. *Hoy quedan huérfanas en silencio.*
-10. **Accesibilidad** — Recorrido completo con teclado y lector de pantalla en la captura y en
-    "Mi trabajo"; contraste automático sobre los colores de estado. *Éxito:* foco siempre
-    visible, ningún objetivo bajo 44px, contraste ≥4.5:1.
+10. **Gestión visual y accesibilidad** — Tres comprobaciones sobre el mismo tablero:
+    (a) *prueba de escala de grises* — captura "Mi trabajo" y conviértela a blanco y negro;
+    *éxito:* vencido, en proceso y completado siguen distinguiéndose (regla VM-1);
+    (b) *contraste* — pasar los 11 colores de estado por el cálculo de §4.7; *éxito:* todos
+    ≥4.5:1; *hoy fallan seis*;
+    (c) *teclado y lector de pantalla* en la captura y en "Mi trabajo"; *éxito:* foco siempre
+    visible y ningún objetivo bajo 44×44 px.
 
 ---
 
@@ -789,6 +917,12 @@ Consecuencias reales:
     y versiones duplicadas. Confirmar la fuente vigente con el usuario primero.
 12. **Migrar a un motor de BI externo.** El problema del panel no es la capacidad de
     graficación, es que las cifras no llevan a ninguna acción.
+13. **Añadir colores.** Ya hay 105 hex en `globals.css` y 62 en `.tsx` para cinco categorías de
+    estado. Cualquier necesidad nueva de distinción se resuelve con forma, icono, peso o
+    posición — nunca con un color más.
+14. **Copiar la paleta de Monday tal cual.** Ya se hizo (§4.2) y produjo los seis fallos de
+    contraste de §4.7. Se copia el *sistema* — catálogo cerrado, un color por significado,
+    contraste verificado — no los valores.
 
 ---
 
