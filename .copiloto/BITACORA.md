@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Audite el flujo y diseno integral de PROpEx y documente el rediseno recomendado
+
+Siguiente paso dejado: Codex debe leer AUDITORIA_UX_CLAUDE.md, contrastar las recomendaciones con el codigo y ejecutar primero los P0 reutilizando el workboard actual
+
+---
+
 ## 2026-08-15 -- codex (codex/hierarchy-training-coins) -- Rediseñé la navegación global, los tableros de Ideas/Kaizen/GENBA y el panorama ejecutivo con BI interactivo, filtros persistentes, lectura de riesgos, responsive y accesibilidad. Validé tsc, build:vercel y vistas 390x844/1440x900; commit b9852ef.
 
 Siguiente paso dejado: En src/app/(app)/probocacoins/page.tsx, unificar visualmente el libro mayor, añadir conciliación/eliminación controlada de duplicados y aplicar el mismo patrón de tablero; después revisar expedientes src/app/(app)/kaizen/[id] y src/app/(app)/genba/[id] con pestañas compactas.
