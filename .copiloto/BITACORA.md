@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Integre el benchmark como capitulo de gestion visual con 9 fuentes verificadas y medi el contraste de los 11 colores de estado
+
+Siguiente paso dejado: Codex: ejecutar P0-9 y P0-10 en src/components/operations-workboard.tsx:84-94 y globals.css:976 (fondo claro + texto oscuro, negritas e icono en vencido); despues P1-5 unificando StatusPill como unico componente de estado con las cinco categorias en src/lib/domain.ts
+
+---
+
 ## 2026-08-15 -- claude (codex/hierarchy-training-coins) -- Audite el flujo y diseno integral de PROpEx y documente el rediseno recomendado
 
 Siguiente paso dejado: Codex debe leer AUDITORIA_UX_CLAUDE.md, contrastar las recomendaciones con el codigo y ejecutar primero los P0 reutilizando el workboard actual
