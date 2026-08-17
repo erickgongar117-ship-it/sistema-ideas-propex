@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-17 -- claude (codex/hierarchy-training-coins) -- Retire la columna Avance del tablero de Ideas. Al ver la pantalla renderizada quedo claro que mi arreglo anterior se veia mal: la leyenda Por etapa repetida en todas las filas se lee como un error de carga. Ahora showProgress decide si la columna existe; Ideas queda con 7 columnas y Kaizen conserva las 8 con porcentajes reales. Restaure tambien un align-items que habia perdido al partir el bloque de rejilla. Commit 42a2f27; build, qa:propiedades, 20 de 20 en qa:follow-up-bulk y qa:diseno en 3 de 10.
+
+Siguiente paso dejado: Bajar los 70 colores sueltos dentro de reglas de src\app\globals.css a menos de 12 usando los 46 tokens ya declarados en :root; medir con pnpm run qa:diseno antes y despues. Despues los 48 usos de !important, de los cuales unos ocho son las variantes por rol del modo oscuro alrededor de la linea 2150, que se resuelven declarando esos valores como tokens dentro del bloque html data-theme dark en vez de sobrescribir. Meta: 6 de 10.
+
+---
+
 ## 2026-08-16 -- claude (codex/hierarchy-training-coins) -- Migre la paleta a tokens. app-shell.tsx pasa de 14 hex a cero: la paleta de roles que CLAUDE.md manda conservar estaba escrita dos veces y ahora tiene una sola fuente. Cree tokens de tinte por acento y de horizonte temporal, unificando el verde que estaba duplicado en dos valores para el mismo significado. Archivos .tsx con hex suelto de 14 a 4, colores distintos en .tsx de 57 a 30. Afine el medidor para separar tokens declarados de colores sueltos en reglas. Puntuacion de 1 de 9 a 3 de 10. Commit 9fcf887.
 
 Siguiente paso dejado: Bajar los 70 colores sueltos dentro de reglas de src\app\globals.css a menos de 12, reemplazandolos por los 46 tokens ya declarados en :root. Correr pnpm run qa:diseno antes y despues. Despues atacar los 48 usos de !important: una parte son las variantes aclaradas por rol del modo oscuro alrededor de la linea 2143, que se pueden resolver subiendo esos valores a tokens en el bloque html data-theme dark en vez de sobrescribir con !important. Meta: 6 de 10 medidas dentro de umbral.
