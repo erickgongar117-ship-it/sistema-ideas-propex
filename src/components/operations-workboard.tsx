@@ -369,13 +369,6 @@ export function OperationsWorkboard({
   const showProgress = useMemo(() => items.some((item) => item.progress !== null), [items]);
   /** Orden tal como se ve en pantalla; es el que usa la seleccion por rango con Shift. */
   const visibleOrder = useMemo(() => groups.flatMap((group) => group.rows.map((row) => row.id)), [groups]);
-  /**
-   * El boton de expandir solo existe si algo se puede expandir. En Ideas ningun registro
-   * tiene subelementos, asi que eran quince botones deshabilitados ocupando 40 px por fila:
-   * un control que nunca hace nada y que resta ancho al titulo, que es lo que si se lee.
-   * Misma regla que la columna de avance: no muestres un control sin datos detras.
-   */
-  const showExpand = useMemo(() => items.some((item) => Boolean(item.children?.length)), [items]);
   const focusedItem = items.find((item) => item.id === focusedId) ?? null;
   const activeFilters = Number(status !== "all") + Number(location !== "all") + Number(owner !== "all");
   const draggingItem = items.find((item) => item.id === draggingId) ?? null;
@@ -824,11 +817,9 @@ export function OperationsWorkboard({
                               />
                             </label>
                             <div className="workboard-primary-cell">
-                              {showExpand ? (
-                                <button aria-label={isExpanded ? `Contraer ${item.code}` : `Mostrar subelementos de ${item.code}`} className="workboard-expand-button" disabled={!item.children?.length} onClick={() => toggleSet(setExpanded, item.id)} type="button">
-                                  {isExpanded ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
-                                </button>
-                              ) : null}
+                              <button aria-label={isExpanded ? `Contraer ${item.code}` : `Mostrar subelementos de ${item.code}`} className="workboard-expand-button" disabled={!item.children?.length} onClick={() => toggleSet(setExpanded, item.id)} type="button">
+                                {isExpanded ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
+                              </button>
                               <button className="workboard-title-button" onClick={() => setFocusedId(item.id)} type="button"><strong>{item.title}</strong><small>{item.code} · {item.subtitle}</small></button>
                             </div>
                             <div data-label="Estado"><WorkStatus category={item.statusCategory} label={item.statusLabel} reference={item.statusReference} /></div>
