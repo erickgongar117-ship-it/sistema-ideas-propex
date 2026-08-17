@@ -2,7 +2,7 @@
 
 import type { IdeaCategory, IdeaStatus } from "@prisma/client";
 import { useEffect, useMemo, useState } from "react";
-import { OperationsWorkboard, type WorkboardItem } from "@/components/operations-workboard";
+import { OperationsWorkboard, type WorkboardGroupDefinition, type WorkboardItem } from "@/components/operations-workboard";
 import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
 import { statusLabels } from "@/lib/domain";
 import { ideaStatusCategory, statusCategoryFill, statusCategoryMeta, type StatusCategory } from "@/lib/status-system";
@@ -47,6 +47,16 @@ type DashboardCommandCenterProps = {
 // pintaba una constante por categoria y el tablero mostraba ficciones: toda idea en
 // ejecucion al 72%, una idea RECHAZADA al 100% y el grupo "Detenida" promediando 86%.
 // La misma idea decia 0% en Mi trabajo y 15% aqui. Ahora la columna muestra la etapa.
+
+/**
+ * Orden de flujo, no orden de llegada. Sin esto los grupos salian en el orden en que
+ * aparecia el primer registro de cada uno, y el tablero mostraba Ejecucion antes que
+ * Entrada: un tablero de proceso que ensena la fase 3 primero obliga a interpretar.
+ * Detenida va al final a proposito: es lo que ya no avanza.
+ */
+const IDEA_GROUPS: WorkboardGroupDefinition[] = (
+  ["ENTRADA", "VALIDACION", "EJECUCION", "CIERRE", "DETENIDA"] as StatusCategory[]
+).map((key) => ({ key, label: statusCategoryMeta[key].label, color: statusCategoryFill(key) }));
 
 function groupFor(status: IdeaStatus) {
   const key = ideaStatusCategory(status);
@@ -105,6 +115,7 @@ export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }
   const coins = visible.reduce((sum, idea) => sum + idea.pointsAssigned, 0);
 
   return <OperationsWorkboard
+    groupDefinitions={IDEA_GROUPS}
     items={items}
     locationLabel="Area"
     primaryLabel="Ideas"

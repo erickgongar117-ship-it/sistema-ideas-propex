@@ -2,12 +2,16 @@
 
 import type { GenbaStatus, WorkItemStatus } from "@prisma/client";
 import { useEffect, useMemo, useState } from "react";
-import { OperationsWorkboard, type WorkboardItem } from "@/components/operations-workboard";
+import { OperationsWorkboard, type WorkboardGroupDefinition, type WorkboardItem } from "@/components/operations-workboard";
 import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
 import { genbaStatusLabels, workItemStatusLabels } from "@/lib/domain";
 import { genbaStatusCategory, statusCategoryFill, workItemStatusRender } from "@/lib/status-system";
 
 const DAY = 86_400_000;
+
+/** Orden de flujo del recorrido; sin esto los grupos salen por orden de llegada. */
+const GENBA_GROUPS: WorkboardGroupDefinition[] = (["ABIERTO", "CERRADO", "CANCELADO"] as GenbaStatus[])
+  .map((key) => ({ key, label: genbaStatusLabels[key], color: statusCategoryFill(genbaStatusCategory(key)) }));
 
 export type GenbaDashboardActivity = {
   id: string;
@@ -107,6 +111,7 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
   const attendance = attendanceRows.length ? Math.min(100, Math.round(attendanceRows.reduce((sum, walk) => sum + Math.min(1, walk.attendedDepartments / walk.expectedDepartments) * 100, 0) / attendanceRows.length)) : 0;
 
   return <OperationsWorkboard
+    groupDefinitions={GENBA_GROUPS}
     items={items}
     locationLabel="Area visitada"
     primaryLabel="Recorridos"

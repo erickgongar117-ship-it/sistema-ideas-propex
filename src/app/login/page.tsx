@@ -51,15 +51,22 @@ export default async function LoginPage({ searchParams }: LoginProps) {
             <p className="mt-4 max-w-xl text-base leading-7 text-slate-200">
               Ideas de Mejora, Proyectos Kaizen y Recorridos GENBA en un mismo espacio de trabajo.
             </p>
+            {/*
+              Antes decia "PASO 1 / PASO 2 / PASO 3". No son pasos: son tres procesos que
+              corren en paralelo, y numerarlos hacia creer que hay que recorrerlos en orden.
+              Ademas el selector real de modulo esta en el formulario de la derecha, asi que
+              esta columna repetia el control. Ahora explica que hace cada uno, que es lo que
+              una persona nueva necesita saber antes de elegir.
+            */}
             <div className="mt-7 grid max-w-xl gap-3 sm:grid-cols-3">
               {[
-                ["1", "Ideas"],
-                ["2", "Kaizen"],
-                ["3", "GENBA"]
-              ].map(([number, label]) => (
-                <div className="border-l-2 border-brand-500 pl-3" key={number}>
-                  <p className="text-xs font-extrabold text-brand-100">PASO {number}</p>
-                  <p className="mt-1 text-sm font-extrabold">{label}</p>
+                ["Ideas", "Reporta una oportunidad de mejora desde tu area."],
+                ["Kaizen", "Proyectos de mejora con equipo, plan y evidencia."],
+                ["GENBA", "Recorridos de planta y las acciones que salen de ellos."]
+              ].map(([label, description]) => (
+                <div className="border-l-2 border-brand-500 pl-3" key={label}>
+                  <p className="text-sm font-extrabold">{label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-200">{description}</p>
                 </div>
               ))}
             </div>
