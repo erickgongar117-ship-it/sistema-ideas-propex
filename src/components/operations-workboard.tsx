@@ -367,6 +367,14 @@ export function OperationsWorkboard({
    * no tiene datos. En Kaizen y GENBA, donde el avance existe, la columna sigue igual.
    */
   const showProgress = useMemo(() => items.some((item) => item.progress !== null), [items]);
+  /**
+   * La columna de seleccion solo existe si el tablero puede HACER algo con la seleccion.
+   * El tablero de Ideas mostraba casillas sin ninguna accion de lote detras: invitaba a
+   * seleccionar y al final solo ofrecia copiar folios, asi que parecia que aprobar y
+   * rechazar estaban roto. En "Mi trabajo", donde el lote si existe, la casilla se revela
+   * al pasar el cursor para que no pese cuando no se esta usando.
+   */
+  const showSelection = Boolean(onBulkAction);
   /** Orden tal como se ve en pantalla; es el que usa la seleccion por rango con Shift. */
   const visibleOrder = useMemo(() => groups.flatMap((group) => group.rows.map((row) => row.id)), [groups]);
   const focusedItem = items.find((item) => item.id === focusedId) ?? null;
@@ -668,7 +676,7 @@ export function OperationsWorkboard({
   };
 
   return (
-    <section className={`workboard is-${density} ${showProgress ? "" : "has-no-progress"}`} aria-label={`${primaryLabel} - tablero de trabajo`}>
+    <section className={`workboard is-${density} ${showProgress ? "" : "has-no-progress"} ${showSelection ? "" : "has-no-selection"} ${selected.size ? "is-selecting" : ""}`} aria-label={`${primaryLabel} - tablero de trabajo`}>
       {/* Vistas y busqueda comparten fila: eran dos bandas de 54 y 62 px. */}
       <div className="workboard-controlbar no-print">
       <div className="workboard-viewbar">
@@ -796,7 +804,7 @@ export function OperationsWorkboard({
                 {!isCollapsed ? (
                   <div className="workboard-grid">
                     <div className="workboard-grid-head">
-                      <label><input aria-label={`Seleccionar filas visibles de ${group.label}`} checked={allSelected} onChange={(event) => selectGroup(group.rows.map((item) => item.id), event.target.checked)} type="checkbox" /></label>
+                      {showSelection ? <label title={`Seleccionar las filas visibles de ${group.label}`}><input aria-label={`Seleccionar filas visibles de ${group.label}`} checked={allSelected} onChange={(event) => selectGroup(group.rows.map((item) => item.id), event.target.checked)} type="checkbox" /></label> : null}
                       <span>{primaryLabel}</span><span>Estado</span><span>Responsable</span><span>{locationLabel}</span><span>Fecha</span>{showProgress ? <span>Avance</span> : null}<span />
                     </div>
                     {group.rows.map((item) => {
@@ -804,18 +812,20 @@ export function OperationsWorkboard({
                       return (
                         <div className={`workboard-item ${item.risk ? "is-risk" : ""}`} key={item.id}>
                           <div className="workboard-grid-row">
-                            <label
-                              className="workboard-check"
-                              onMouseDown={(event) => { shiftHeldRef.current = event.shiftKey; }}
-                              title="Selecciona. Con Shift marca todo el rango desde la ultima que tocaste"
-                            >
-                              <input
-                                aria-label={`Seleccionar ${item.code}`}
-                                checked={selected.has(item.id)}
-                                onChange={() => handleRowSelection(item.id, visibleOrder)}
-                                type="checkbox"
-                              />
-                            </label>
+                            {showSelection ? (
+                              <label
+                                className="workboard-check"
+                                onMouseDown={(event) => { shiftHeldRef.current = event.shiftKey; }}
+                                title="Selecciona. Con Shift marca todo el rango desde la ultima que tocaste"
+                              >
+                                <input
+                                  aria-label={`Seleccionar ${item.code}`}
+                                  checked={selected.has(item.id)}
+                                  onChange={() => handleRowSelection(item.id, visibleOrder)}
+                                  type="checkbox"
+                                />
+                              </label>
+                            ) : null}
                             <div className="workboard-primary-cell">
                               <button aria-label={isExpanded ? `Contraer ${item.code}` : `Mostrar subelementos de ${item.code}`} className="workboard-expand-button" disabled={!item.children?.length} onClick={() => toggleSet(setExpanded, item.id)} type="button">
                                 {isExpanded ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
