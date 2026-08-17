@@ -2738,3 +2738,17 @@ html[data-theme="dark"] .alert-info { border-color: #24547c; background: #142638
 .coin-drawer-form form { display: grid; gap: var(--space-150); margin-top: var(--space-100); }
 .coin-drawer-form-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: var(--space-150); }
 @media (max-width: 639px) { .coin-drawer-form-row { grid-template-columns: 1fr; } }
+
+/* Encabezados de seccion del panel de cuenta: dan la estructura que faltaba entre saldo,
+   resumen, procedencia, movimientos y alta. */
+.coin-drawer-section { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-150); margin-top: var(--space-300); margin-bottom: var(--space-100); color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.coin-drawer-section:first-of-type { margin-top: var(--space-200); }
+.coin-drawer-section a { color: var(--role-accent); font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.coin-drawer-section a:hover { text-decoration: underline; }
+
+.coin-drawer-sources { display: grid; gap: var(--space-100); }
+.coin-drawer-sources li { display: grid; grid-template-columns: minmax(96px, auto) minmax(0, 1fr) 64px; align-items: center; gap: var(--space-150); }
+.coin-drawer-sources span { color: var(--foreground); font-size: 13px; font-weight: 600; }
+.coin-drawer-sources i { display: block; height: 6px; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-subtle); }
+.coin-drawer-sources b { display: block; height: 100%; min-width: 3px; border-radius: inherit; background: var(--role-accent); }
+.coin-drawer-sources strong { color: var(--foreground); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }

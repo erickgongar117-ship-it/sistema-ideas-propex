@@ -21,7 +21,11 @@ export type CoinAccountDrawerProps = {
   redeemed: number;
   adjustments: number;
   movements: CoinAccountMovement[];
+  /** De donde salieron las monedas: Ideas, Kaizen, GENBA, Entrenamientos o manual. */
+  sources: Array<{ label: string; amount: number }>;
   closeHref: string;
+  /** Libro mayor completo de la persona, para cuando ocho movimientos no alcanzan. */
+  ledgerHref: string;
   /** UUID emitido por el servidor en cada render: hace idempotente el alta ante doble clic. */
   requestId: string;
   today: string;
@@ -48,12 +52,16 @@ export function CoinAccountDrawer({
   redeemed,
   adjustments,
   movements,
+  sources,
   closeHref,
+  ledgerHref,
   requestId,
   today,
   canManage,
   openForm
 }: CoinAccountDrawerProps) {
+  // Base de las barras de origen. Se protege contra cero para no dividir por cero.
+  const totalFromSources = Math.max(1, sources.reduce((sum, source) => sum + source.amount, 0));
   const drawerRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLAnchorElement | null>(null);
 
@@ -103,32 +111,49 @@ export function CoinAccountDrawer({
             {!participant.active ? <small>Persona retirada: solo consulta.</small> : null}
           </div>
 
+          <h3 className="coin-drawer-section">Resumen</h3>
           <dl className="coin-drawer-totals">
             <div><dt>Otorgadas</dt><dd>{money(awarded)}</dd></div>
             <div><dt>Canjeadas</dt><dd>{money(redeemed)}</dd></div>
             <div><dt>Ajustes</dt><dd>{money(adjustments)}</dd></div>
           </dl>
 
-          <section>
-            <span>Ultimos movimientos</span>
-            {movements.length ? (
-              <ul className="coin-drawer-movements">
-                {movements.map((movement) => (
-                  <li key={movement.id}>
-                    <strong className={movement.amount < 0 ? "is-negative" : ""}>
-                      {movement.amount > 0 ? "+" : ""}{money(movement.amount)}
-                    </strong>
-                    <span>{movement.description}</span>
-                    <small>{movement.occurredAt} · {movement.sourceLabel}</small>
+          {sources.length ? (
+            <>
+              <h3 className="coin-drawer-section">De donde vienen</h3>
+              <ul className="coin-drawer-sources">
+                {sources.map((source) => (
+                  <li key={source.label}>
+                    <span>{source.label}</span>
+                    <i><b style={{ width: `${Math.round((source.amount / totalFromSources) * 100)}%` }} /></i>
+                    <strong>{money(source.amount)}</strong>
                   </li>
                 ))}
               </ul>
-            ) : <p className="coin-drawer-empty">Esta persona todavia no tiene movimientos.</p>}
-          </section>
+            </>
+          ) : null}
+
+          <h3 className="coin-drawer-section">
+            Ultimos movimientos
+            {movements.length ? <Link href={ledgerHref}>Ver todo el libro mayor</Link> : null}
+          </h3>
+          {movements.length ? (
+            <ul className="coin-drawer-movements">
+              {movements.map((movement) => (
+                <li key={movement.id}>
+                  <strong className={movement.amount < 0 ? "is-negative" : ""}>
+                    {movement.amount > 0 ? "+" : ""}{money(movement.amount)}
+                  </strong>
+                  <span>{movement.description}</span>
+                  <small>{movement.occurredAt} · {movement.sourceLabel}</small>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="coin-drawer-empty">Esta persona todavia no tiene movimientos.</p>}
 
           {canManage && participant.active ? (
             <section className="coin-drawer-form">
-              <span>Registrar movimiento</span>
+              <h3 className="coin-drawer-section">Registrar movimiento</h3>
               <form action={createCoinTransactionAction}>
                 <input name="participantId" type="hidden" value={participant.id} />
                 {/* El requestId viaja en el formulario: si alguien pulsa dos veces, la accion

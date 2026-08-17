@@ -271,7 +271,7 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
   const errorMessage = query.error ? errorMessages[query.error] ?? "No fue posible registrar el movimiento." : null;
   const selectedBalance = selectedParticipant ? allBalances.get(selectedParticipant.id) ?? 0 : null;
   // El cajon muestra la cuenta completa de la persona, ajena a los filtros del libro mayor.
-  const [accountTotals, accountMovements] = selectedParticipant
+  const [accountTotals, accountMovements, accountSources] = selectedParticipant
     ? await Promise.all([
         prisma.coinTransaction.groupBy({
           by: ["type"],
@@ -283,9 +283,16 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
           orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
           take: 8,
           select: { id: true, amount: true, description: true, occurredAt: true, sourceType: true }
+        }),
+        // De donde vienen las monedas de esta persona. CLAUDE.md declara cuatro origenes y
+        // saberlo es justo lo que el panel no decia: un saldo sin procedencia no se audita.
+        prisma.coinTransaction.groupBy({
+          by: ["sourceType"],
+          where: { participantId: selectedParticipant.id, amount: { gt: 0 } },
+          _sum: { amount: true }
         })
       ])
-    : [[], []];
+    : [[], [], []];
   const totalFor = (type: CoinTransactionType) =>
     Math.abs(accountTotals.find((row) => row.type === type)?._sum.amount ?? 0);
   const openMovementPanel = Boolean(query.error && movementErrorCodes.has(query.error));
@@ -637,8 +644,13 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
             occurredAt: formatDate(movement.occurredAt),
             sourceLabel: sourceLabels[movement.sourceType]
           }))}
+          ledgerHref={coinsHref({ participant: selectedParticipant.id })}
           openForm={openMovementPanel}
           participant={selectedParticipant}
+          sources={accountSources
+            .filter((row) => (row._sum.amount ?? 0) > 0)
+            .map((row) => ({ label: sourceLabels[row.sourceType], amount: row._sum.amount ?? 0 }))
+            .sort((left, right) => right.amount - left.amount)}
           redeemed={totalFor(CoinTransactionType.REDEMPTION)}
           requestId={randomUUID()}
           today={new Date().toISOString().slice(0, 10)}
