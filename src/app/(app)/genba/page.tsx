@@ -1,13 +1,24 @@
 import Link from "next/link";
-import { Archive, Download, Plus } from "lucide-react";
+import { Archive, Download, Plus, TriangleAlert } from "lucide-react";
 import { GenbaCommandCenter, type GenbaDashboardWalk } from "@/components/genba-command-center";
 import { PageHeader } from "@/components/page-header";
 import { parseStringArray } from "@/lib/domain";
 import { requireGenbaAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
-export default async function GenbaDashboardPage() {
+export default async function GenbaDashboardPage({
+  searchParams
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { user, canManage } = await requireGenbaAccess();
+  const query = (await searchParams) ?? {};
+  const errorCode = typeof query.error === "string" ? query.error : null;
+  const errorMessage = errorCode === "combinacion"
+    ? "Para combinar dos acciones elige una de origen, una de destino distinta y escribe el motivo."
+    : errorCode
+      ? "No pudimos completar la operacion. Revisa los datos e intentalo de nuevo."
+      : null;
   const walks = await prisma.genbaWalk.findMany({
     where: {
       ...(!canManage ? { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } : {})
@@ -62,6 +73,7 @@ export default async function GenbaDashboardPage() {
           </>
         }
       />
+      {errorMessage ? <div className="alert alert-danger mb-5" role="alert"><TriangleAlert className="h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
       <GenbaCommandCenter generatedAt={new Date().toISOString()} walks={dashboardWalks} />
     </>
   );

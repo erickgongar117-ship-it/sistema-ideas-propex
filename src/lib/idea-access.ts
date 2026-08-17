@@ -172,6 +172,40 @@ export async function canDecideInitialIdea(user: IdeaAccessUser, ideaId: string)
   return Boolean(match);
 }
 
+/**
+ * Version por lote de canDecideInitialIdea. Resuelve el ambito organizacional UNA vez y
+ * decide todas las ideas con una sola consulta, en vez de repetir el escaneo completo de
+ * membresias y unidades por cada elemento.
+ */
+export async function decidableInitialIdeaIds(
+  user: IdeaAccessUser,
+  ideaIds: string[]
+): Promise<Set<string>> {
+  const unique = [...new Set(ideaIds.filter(Boolean))];
+  if (!unique.length) return new Set();
+  // Mismo atajo que canDecideInitialIdea: ADMIN decide cualquier idea sin comprobar ambito.
+  if (user.role === "ADMIN") return new Set(unique);
+
+  const supervisableOrgUnitIds = await getSupervisableOrgUnitIds(user.id);
+  const matches = await prisma.idea.findMany({
+    where: { AND: [{ id: { in: unique } }, buildInitialReviewWhere(user, supervisableOrgUnitIds)] },
+    select: { id: true }
+  });
+  return new Set(matches.map((idea) => idea.id));
+}
+
+/**
+ * Unidades donde la persona es ruta de apoyo activa. Se resuelve una vez por lote para no
+ * consultar la membresia elemento por elemento.
+ */
+export async function supportRoutingOrgUnitIds(userId: string): Promise<Set<string>> {
+  const memberships = await prisma.orgMembership.findMany({
+    where: { userId, active: true, canReceiveIdeas: true },
+    select: { orgUnitId: true }
+  });
+  return new Set(memberships.map((membership) => membership.orgUnitId));
+}
+
 export function buildDepartmentApprovalWhere(
   user: IdeaAccessUser,
   type: ApprovalType

@@ -16,9 +16,15 @@ import { managerialFactorForRule } from "@/lib/managerial-evaluation";
 import { userModuleAccess } from "@/lib/module-access";
 import { ideaMailBody, notify } from "@/lib/notifications";
 import { reconcileCoinSourceAmount, resolveParticipantFromCollaborator, resolveParticipantFromUser } from "@/lib/coins";
-import { canDecideDepartmentApproval, canDecideInitialIdea, canViewIdea } from "@/lib/idea-access";
+import {
+  canDecideDepartmentApproval,
+  canDecideInitialIdea,
+  canViewIdea,
+  decidableInitialIdeaIds,
+  supportRoutingOrgUnitIds
+} from "@/lib/idea-access";
 import { hardDeleteIdeaByFolio } from "@/lib/hard-delete";
-import { parseFollowUpBulkTarget } from "@/lib/follow-up-bulk";
+import { parseFollowUpBulkTarget, type FollowUpBulkTarget } from "@/lib/follow-up-bulk";
 import { kaizenClosureReadiness, reconciledKaizenStatus } from "@/lib/kaizen-closure";
 import {
   KAIZEN_STAGE_ORDER,
@@ -662,11 +668,35 @@ export async function bulkFollowUpAction(input: WorkboardBulkInput): Promise<Wor
   }
 
   const batchId = crypto.randomUUID();
+
+  // Permisos resueltos por lote. Antes cada elemento llamaba a canDecideInitialIdea, y esa
+  // llamada carga TODAS las membresias y unidades activas mas un recorrido de punto fijo
+  // (idea-access.ts:25). Con 50 elementos eran 50 escaneos completos de dos tablas.
+  const parsedTargets = new Map(
+    itemIds.map((itemId) => [itemId, parseFollowUpBulkTarget(itemId)] as const)
+  );
+  const initialApprovalIds = [...parsedTargets.values()]
+    .filter((target): target is FollowUpBulkTarget => target?.kind === "INITIAL")
+    .map((target) => target.targetId);
+  const ideaIdByInitialApproval = new Map<string, string>();
+  if (initialApprovalIds.length) {
+    const rows = await prisma.approval.findMany({
+      where: { id: { in: initialApprovalIds }, type: "SUPERVISOR" },
+      select: { id: true, ideaId: true }
+    });
+    for (const row of rows) ideaIdByInitialApproval.set(row.id, row.ideaId);
+  }
+  const decidableInitialIdeas = await decidableInitialIdeaIds(user, [...ideaIdByInitialApproval.values()]);
+  const needsSupportScope = [...parsedTargets.values()].some((target) => target?.kind === "SUPPORT");
+  const supportOrgUnitIds = needsSupportScope
+    ? await supportRoutingOrgUnitIds(user.id)
+    : new Set<string>();
+
   const results: WorkboardBulkItemResult[] = [];
   for (const itemId of itemIds) {
     let reference = "Registro no encontrado";
     try {
-      const target = parseFollowUpBulkTarget(itemId);
+      const target = parsedTargets.get(itemId) ?? null;
       if (!target) {
         results.push({ itemId, reference, ok: false, message: "La seleccion quedo desactualizada. Recarga la bandeja antes de continuar." });
         continue;
@@ -700,7 +730,7 @@ export async function bulkFollowUpAction(input: WorkboardBulkInput): Promise<Wor
             results.push({ itemId, reference, ok: false, message: "La idea ya avanzo y no admite otra decision inicial." });
             continue;
           }
-          if (!(await canDecideInitialIdea(user, idea.id))) {
+          if (!decidableInitialIdeas.has(idea.id)) {
             results.push({ itemId, reference, ok: false, message: "No esta asignada a tu ruta ni al equipo que supervisas." });
             continue;
           }
@@ -809,7 +839,13 @@ export async function bulkFollowUpAction(input: WorkboardBulkInput): Promise<Wor
           }
           const idea = approval.idea;
           reference = idea.folio;
-          if (!(await canDecideDepartmentApproval(user, idea.id, approval.type))) {
+          // Equivalente a canDecideDepartmentApproval sin consulta: la aprobacion ya esta
+          // cargada y (ideaId, type) es unico, asi que es la misma fila que buscaria.
+          if (!["PENDING", "MORE_INFO"].includes(approval.status)) {
+            results.push({ itemId, reference, ok: false, message: "Ya fue decidida por otra persona o cambio de etapa." });
+            continue;
+          }
+          if (user.role !== "ADMIN" && approval.assignedToId !== user.id) {
             results.push({ itemId, reference, ok: false, message: "Esta validacion ya no pertenece a tu departamento o ruta." });
             continue;
           }
@@ -861,10 +897,7 @@ export async function bulkFollowUpAction(input: WorkboardBulkInput): Promise<Wor
           }
           const idea = request.idea;
           reference = idea.folio;
-          const membership = await prisma.orgMembership.findFirst({
-            where: { userId: user.id, orgUnitId: request.orgUnitId, active: true, canReceiveIdeas: true },
-            select: { id: true }
-          });
+          const membership = supportOrgUnitIds.has(request.orgUnitId);
           if (!request.activatedAt || (!improvementManager && request.assignedToId !== user.id && !membership)) {
             results.push({ itemId, reference, ok: false, message: "La solicitud ya no pertenece a tu ruta de apoyo." });
             continue;

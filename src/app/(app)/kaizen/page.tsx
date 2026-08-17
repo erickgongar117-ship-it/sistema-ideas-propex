@@ -1,12 +1,23 @@
 import Link from "next/link";
-import { Archive, CalendarRange, Download, Plus } from "lucide-react";
+import { Archive, CalendarRange, Download, Plus, TriangleAlert } from "lucide-react";
 import { KaizenCommandCenter, type KaizenDashboardProject } from "@/components/kaizen-command-center";
 import { PageHeader } from "@/components/page-header";
 import { requireKaizenAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
-export default async function KaizenDashboardPage() {
+export default async function KaizenDashboardPage({
+  searchParams
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { user, canManage } = await requireKaizenAccess();
+  const query = (await searchParams) ?? {};
+  const errorCode = typeof query.error === "string" ? query.error : null;
+  const errorMessage = errorCode === "combinacion"
+    ? "Para combinar dos proyectos elige uno de origen, uno de destino distinto y escribe el motivo."
+    : errorCode
+      ? "No pudimos completar la operacion. Revisa los datos e intentalo de nuevo."
+      : null;
   const projects = await prisma.kaizenProject.findMany({
     where: {
       ...(!canManage ? { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } : {})
@@ -66,6 +77,7 @@ export default async function KaizenDashboardPage() {
           </>
         }
       />
+      {errorMessage ? <div className="alert alert-danger mb-5" role="alert"><TriangleAlert className="h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
       <KaizenCommandCenter canManage={canManage} generatedAt={new Date().toISOString()} projects={dashboardProjects} />
     </>
   );
