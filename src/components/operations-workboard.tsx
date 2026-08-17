@@ -367,6 +367,8 @@ export function OperationsWorkboard({
    * no tiene datos. En Kaizen y GENBA, donde el avance existe, la columna sigue igual.
    */
   const showProgress = useMemo(() => items.some((item) => item.progress !== null), [items]);
+  /** Orden tal como se ve en pantalla; es el que usa la seleccion por rango con Shift. */
+  const visibleOrder = useMemo(() => groups.flatMap((group) => group.rows.map((row) => row.id)), [groups]);
   const focusedItem = items.find((item) => item.id === focusedId) ?? null;
   const activeFilters = Number(status !== "all") + Number(location !== "all") + Number(owner !== "all");
   const draggingItem = items.find((item) => item.id === draggingId) ?? null;
@@ -471,6 +473,32 @@ export function OperationsWorkboard({
     ids.forEach((id) => checked ? next.add(id) : next.delete(id));
     return next;
   });
+
+  /**
+   * Seleccion por rango con Shift, como en Monday. Marcar veinte registros uno por uno es
+   * la queja mas repetida sobre las casillas: con esto se marca el primero, se sostiene
+   * Shift y se marca el ultimo. `shiftHeldRef` se llena en mousedown porque el evento
+   * `change` de un checkbox controlado no trae el estado de las teclas modificadoras.
+   */
+  const shiftHeldRef = useRef(false);
+  const lastTouchedRef = useRef<string | null>(null);
+
+  const handleRowSelection = (itemId: string, visibleOrder: string[]) => {
+    const anchor = lastTouchedRef.current;
+    if (shiftHeldRef.current && anchor && anchor !== itemId) {
+      const from = visibleOrder.indexOf(anchor);
+      const to = visibleOrder.indexOf(itemId);
+      if (from !== -1 && to !== -1) {
+        const range = visibleOrder.slice(Math.min(from, to), Math.max(from, to) + 1);
+        // El ancla manda: si estaba seleccionada, el rango se selecciona; si no, se limpia.
+        selectGroup(range, selected.has(anchor));
+        lastTouchedRef.current = itemId;
+        return;
+      }
+    }
+    toggleSet(setSelected, itemId);
+    lastTouchedRef.current = itemId;
+  };
 
   const copySelectedCodes = async () => {
     const codes = items.filter((item) => selected.has(item.id)).map((item) => item.code);
@@ -776,7 +804,18 @@ export function OperationsWorkboard({
                       return (
                         <div className={`workboard-item ${item.risk ? "is-risk" : ""}`} key={item.id}>
                           <div className="workboard-grid-row">
-                            <label className="workboard-check"><input aria-label={`Seleccionar ${item.code}`} checked={selected.has(item.id)} onChange={() => toggleSet(setSelected, item.id)} type="checkbox" /></label>
+                            <label
+                              className="workboard-check"
+                              onMouseDown={(event) => { shiftHeldRef.current = event.shiftKey; }}
+                              title="Selecciona. Con Shift marca todo el rango desde la ultima que tocaste"
+                            >
+                              <input
+                                aria-label={`Seleccionar ${item.code}`}
+                                checked={selected.has(item.id)}
+                                onChange={() => handleRowSelection(item.id, visibleOrder)}
+                                type="checkbox"
+                              />
+                            </label>
                             <div className="workboard-primary-cell">
                               <button aria-label={isExpanded ? `Contraer ${item.code}` : `Mostrar subelementos de ${item.code}`} className="workboard-expand-button" disabled={!item.children?.length} onClick={() => toggleSet(setExpanded, item.id)} type="button">
                                 {isExpanded ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
