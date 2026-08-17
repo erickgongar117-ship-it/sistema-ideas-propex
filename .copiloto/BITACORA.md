@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-17 -- claude (codex/hierarchy-training-coins) -- Elimine los catorce !important de la paleta oscura redefiniendo los tokens en el bloque html data-theme dark, en vez de sobrescribir --role-accent con ocho selectores por rol. Funciona porque la paleta ya son tokens: el var del estilo en linea resuelve solo y sigue al tema. Verificado leyendo tokens en ambos temas: los valores aclarados son identicos a los que producian las reglas viejas. Nombre cuatro colores que estaban sueltos. Colores sueltos dentro de reglas de 70 a 54; !important de 48 a 35. Durante el cambio rompi siete tokens dejandolos circulares y lo detecte verificando, antes de commitear. Commit 8f19cdb.
+
+Siguiente paso dejado: Quedan 54 colores sueltos dentro de reglas de src\app\globals.css y 35 !important. OJO con dos trampas ya identificadas: 1) los 20 usos de #ffffff y los 7 de #171717 NO se pueden reemplazar por --surface y --foreground, porque varios estan dentro de color-mix como base de mezcla o como tinta fija sobre color, y esos tokens se invierten en modo oscuro; hay que revisarlos uno por uno viendo el tema oscuro. 2) al reemplazar con un script, excluir las declaraciones de token o quedan circulares. Empezar por la paleta de la moneda en la clase proboca-coin, que son cinco colores de un artefacto de marca y merecen su propio grupo de tokens. Meta: 6 de 10 en pnpm run qa:diseno.
+
+---
+
 ## 2026-08-17 -- claude (codex/hierarchy-training-coins) -- Retire la columna Avance del tablero de Ideas. Al ver la pantalla renderizada quedo claro que mi arreglo anterior se veia mal: la leyenda Por etapa repetida en todas las filas se lee como un error de carga. Ahora showProgress decide si la columna existe; Ideas queda con 7 columnas y Kaizen conserva las 8 con porcentajes reales. Restaure tambien un align-items que habia perdido al partir el bloque de rejilla. Commit 42a2f27; build, qa:propiedades, 20 de 20 en qa:follow-up-bulk y qa:diseno en 3 de 10.
 
 Siguiente paso dejado: Bajar los 70 colores sueltos dentro de reglas de src\app\globals.css a menos de 12 usando los 46 tokens ya declarados en :root; medir con pnpm run qa:diseno antes y despues. Despues los 48 usos de !important, de los cuales unos ocho son las variantes por rol del modo oscuro alrededor de la linea 2150, que se resuelven declarando esos valores como tokens dentro del bloque html data-theme dark en vez de sobrescribir. Meta: 6 de 10.
