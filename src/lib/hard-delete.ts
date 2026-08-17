@@ -60,23 +60,44 @@ function unique(values: Array<string | null | undefined>) {
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
 
-async function deleteAuditReferences(
+/**
+ * Registra la purga en el AuditLog. ANTES esta funcion BORRABA el historial:
+ * eliminaba por entidad, por entityId y por coincidencia de texto en `details`.
+ * Despues de un reinicio no quedaba ninguna evidencia de que hubiera ocurrido, en un
+ * sistema cuyo proposito es la trazabilidad. Peor: el filtro por `details` se llevaba
+ * entradas de ProbocaCoins que mencionaban el folio mientras el movimiento financiero
+ * sobrevivia, contradiciendo el comentario de este mismo archivo sobre el libro mayor.
+ *
+ * El historial de lo borrado se conserva a proposito: un AuditLog que apunta a un
+ * registro inexistente es exactamente lo que debe quedar despues de una purga.
+ */
+async function recordPurgeInAuditLog(
   tx: TransactionClient,
-  entityIds: string[],
-  referenceTokens: string[],
-  entityNames: string[] = []
+  input: {
+    module: OperationalModule;
+    actorId: string | null;
+    entityIds: string[];
+    referenceTokens: string[];
+    purgeAll: boolean;
+  }
 ) {
-  if (entityNames.length) await tx.auditLog.deleteMany({ where: { entity: { in: entityNames } } });
-
-  for (const group of chunks(unique(entityIds), 300)) {
-    await tx.auditLog.deleteMany({ where: { entityId: { in: group } } });
-  }
-
-  for (const group of chunks(unique(referenceTokens), 20)) {
-    await tx.auditLog.deleteMany({
-      where: { OR: group.map((token) => ({ details: { contains: token } })) }
-    });
-  }
+  const folios = unique(input.referenceTokens).filter((token) => /^[A-Z]/.test(token));
+  const ids = unique(input.entityIds);
+  await tx.auditLog.create({
+    data: {
+      entity: "DataPurge",
+      entityId: input.module,
+      action: input.purgeAll ? "PURGE_MODULE" : "PURGE_RECORD",
+      userId: input.actorId,
+      details: JSON.stringify({
+        module: input.module,
+        alcance: input.purgeAll ? "modulo completo" : "registro puntual",
+        registros: ids.length,
+        folios: folios.slice(0, 200),
+        foliosOmitidos: Math.max(0, folios.length - 200)
+      })
+    }
+  });
 }
 
 async function deleteNotificationReferences(
@@ -121,7 +142,8 @@ async function deleteNotificationReferences(
 async function deleteIdeasInTransaction(
   tx: TransactionClient,
   ids: string[] | undefined,
-  purgeAll: boolean
+  purgeAll: boolean,
+  actorId: string | null
 ): Promise<DeleteSnapshot> {
   const ideas = await tx.idea.findMany({
     where: ids ? { id: { in: ids } } : {},
@@ -161,12 +183,13 @@ async function deleteIdeasInTransaction(
 
   await deleteNotificationReferences(tx, [...ideaIds, ...folios], purgeAll ? "IDEAS" : undefined);
   // Financial movements remain immutable even when an operational record is purged.
-  await deleteAuditReferences(
-    tx,
-    [...ideaIds, ...dependencyIds],
-    [...ideaIds, ...folios],
-    purgeAll ? ["Idea"] : []
-  );
+  await recordPurgeInAuditLog(tx, {
+    module: "IDEAS",
+    actorId,
+    entityIds: [...ideaIds, ...dependencyIds],
+    referenceTokens: folios,
+    purgeAll
+  });
 
   await tx.ideaFollower.deleteMany({ where: { ideaId: { in: ideaIds } } });
   await tx.ideaSupportRequest.deleteMany({ where: { ideaId: { in: ideaIds } } });
@@ -200,7 +223,8 @@ async function deleteIdeasInTransaction(
 async function deleteKaizensInTransaction(
   tx: TransactionClient,
   ids: string[] | undefined,
-  purgeAll: boolean
+  purgeAll: boolean,
+  actorId: string | null
 ): Promise<DeleteSnapshot> {
   const projects = await tx.kaizenProject.findMany({
     where: ids ? { id: { in: ids } } : {},
@@ -235,12 +259,13 @@ async function deleteKaizensInTransaction(
 
   await deleteNotificationReferences(tx, [...projectIds, ...activityIds, ...folios], purgeAll ? "KAIZEN" : undefined);
   // Keep the ledger intact; sourceId and descriptions preserve the financial audit trail.
-  await deleteAuditReferences(
-    tx,
-    [...projectIds, ...dependencyIds],
-    [...projectIds, ...activityIds, ...folios],
-    purgeAll ? ["KaizenProject", "KaizenActivity"] : []
-  );
+  await recordPurgeInAuditLog(tx, {
+    module: "KAIZEN",
+    actorId,
+    entityIds: [...projectIds, ...dependencyIds],
+    referenceTokens: folios,
+    purgeAll
+  });
 
   await tx.kaizenUpdate.deleteMany({ where: { projectId: { in: projectIds } } });
   await tx.kaizenAttachment.deleteMany({ where: { projectId: { in: projectIds } } });
@@ -258,7 +283,8 @@ async function deleteKaizensInTransaction(
 async function deleteGenbasInTransaction(
   tx: TransactionClient,
   ids: string[] | undefined,
-  purgeAll: boolean
+  purgeAll: boolean,
+  actorId: string | null
 ): Promise<DeleteSnapshot> {
   const walks = await tx.genbaWalk.findMany({
     where: ids ? { id: { in: ids } } : {},
@@ -299,12 +325,13 @@ async function deleteGenbasInTransaction(
 
   await deleteNotificationReferences(tx, [...walkIds, ...activityIds, ...folios], purgeAll ? "GENBA" : undefined);
   // Keep the ledger intact; deleting a walk must never change employee balances.
-  await deleteAuditReferences(
-    tx,
-    [...walkIds, ...dependencyIds],
-    [...walkIds, ...activityIds, ...folios],
-    purgeAll ? ["GenbaWalk", "GenbaActivity"] : []
-  );
+  await recordPurgeInAuditLog(tx, {
+    module: "GENBA",
+    actorId,
+    entityIds: [...walkIds, ...dependencyIds],
+    referenceTokens: folios,
+    purgeAll
+  });
 
   await tx.genbaUpdate.deleteMany({ where: { walkId: { in: walkIds } } });
   await tx.genbaAttachment.deleteMany({ where: { walkId: { in: walkIds } } });
@@ -400,48 +427,48 @@ async function finish(snapshot: DeleteSnapshot): Promise<HardDeleteResult> {
   return { ...counts, files };
 }
 
-export async function hardDeleteIdeaByFolio(folio: string) {
+export async function hardDeleteIdeaByFolio(folio: string, actorId: string | null = null) {
   const normalized = folio.trim().toUpperCase();
   const idea = await prisma.idea.findUnique({ where: { folio: normalized }, select: { id: true } });
   if (!idea) throw new HardDeleteNotFoundError("IDEAS", normalized);
   const snapshot = await prisma.$transaction(
-    (tx) => deleteIdeasInTransaction(tx, [idea.id], false),
+    (tx) => deleteIdeasInTransaction(tx, [idea.id], false, actorId),
     { maxWait: 5_000, timeout: 60_000 }
   );
   return finish(snapshot);
 }
 
-export async function hardDeleteKaizenByFolio(folio: string) {
+export async function hardDeleteKaizenByFolio(folio: string, actorId: string | null = null) {
   const normalized = folio.trim().toUpperCase();
   const project = await prisma.kaizenProject.findUnique({ where: { folio: normalized }, select: { id: true } });
   if (!project) throw new HardDeleteNotFoundError("KAIZEN", normalized);
   const snapshot = await prisma.$transaction(
-    (tx) => deleteKaizensInTransaction(tx, [project.id], false),
+    (tx) => deleteKaizensInTransaction(tx, [project.id], false, actorId),
     { maxWait: 5_000, timeout: 60_000 }
   );
   return finish(snapshot);
 }
 
-export async function hardDeleteGenbaByFolio(folio: string) {
+export async function hardDeleteGenbaByFolio(folio: string, actorId: string | null = null) {
   const normalized = folio.trim().toUpperCase();
   const walk = await prisma.genbaWalk.findUnique({ where: { folio: normalized }, select: { id: true } });
   if (!walk) throw new HardDeleteNotFoundError("GENBA", normalized);
   const snapshot = await prisma.$transaction(
-    (tx) => deleteGenbasInTransaction(tx, [walk.id], false),
+    (tx) => deleteGenbasInTransaction(tx, [walk.id], false, actorId),
     { maxWait: 5_000, timeout: 60_000 }
   );
   return finish(snapshot);
 }
 
-export async function purgeOperationalModules(modules: OperationalModule[]) {
+export async function purgeOperationalModules(modules: OperationalModule[], actorId: string | null = null) {
   const selected = new Set(modules);
   if (!selected.size) throw new Error("Selecciona al menos un modulo para reiniciar.");
 
   const snapshot = await prisma.$transaction(async (tx) => {
     const results: DeleteSnapshot[] = [];
-    if (selected.has("KAIZEN")) results.push(await deleteKaizensInTransaction(tx, undefined, true));
-    if (selected.has("GENBA")) results.push(await deleteGenbasInTransaction(tx, undefined, true));
-    if (selected.has("IDEAS")) results.push(await deleteIdeasInTransaction(tx, undefined, true));
+    if (selected.has("KAIZEN")) results.push(await deleteKaizensInTransaction(tx, undefined, true, actorId));
+    if (selected.has("GENBA")) results.push(await deleteGenbasInTransaction(tx, undefined, true, actorId));
+    if (selected.has("IDEAS")) results.push(await deleteIdeasInTransaction(tx, undefined, true, actorId));
     return mergeSnapshots(results);
   }, { maxWait: 5_000, timeout: 120_000 });
 

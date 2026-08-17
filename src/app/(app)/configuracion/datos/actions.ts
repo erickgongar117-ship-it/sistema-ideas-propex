@@ -83,7 +83,7 @@ function parseModule(value: string): OperationalModule | null {
 }
 
 export async function hardDeleteByFolioAction(formData: FormData) {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   const module = parseModule(text(formData, "module"));
   const folio = normalizeFolio(text(formData, "folio"));
   const confirmation = text(formData, "confirmation").toUpperCase().replace(/\s+/g, " ");
@@ -95,9 +95,9 @@ export async function hardDeleteByFolioAction(formData: FormData) {
 
   let result: HardDeleteResult;
   try {
-    if (module === "IDEAS") result = await hardDeleteIdeaByFolio(folio);
-    else if (module === "KAIZEN") result = await hardDeleteKaizenByFolio(folio);
-    else result = await hardDeleteGenbaByFolio(folio);
+    if (module === "IDEAS") result = await hardDeleteIdeaByFolio(folio, actor.id);
+    else if (module === "KAIZEN") result = await hardDeleteKaizenByFolio(folio, actor.id);
+    else result = await hardDeleteGenbaByFolio(folio, actor.id);
   } catch (error) {
     if (error instanceof HardDeleteNotFoundError) {
       redirect(dataUrl({ error: "no_existe", module, folio }));
@@ -116,7 +116,7 @@ export async function hardDeleteByFolioAction(formData: FormData) {
 }
 
 export async function purgeOperationalDataAction(formData: FormData) {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   const modules = formData.getAll("modules").map(String).map(parseModule).filter((value): value is OperationalModule => Boolean(value));
   const confirmation = text(formData, "confirmation").toUpperCase().replace(/\s+/g, " ");
 
@@ -125,7 +125,7 @@ export async function purgeOperationalDataAction(formData: FormData) {
 
   let result: HardDeleteResult;
   try {
-    result = await purgeOperationalModules(modules);
+    result = await purgeOperationalModules(modules, actor.id);
   } catch (error) {
     console.error("purgeOperationalDataAction", { modules, error });
     redirect(dataUrl({ error: "operacion_reinicio" }));

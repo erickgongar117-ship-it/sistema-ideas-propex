@@ -212,7 +212,7 @@ export default async function DataControlPage({ searchParams }: DataControlPageP
       </section>
 
       <section aria-label="Eliminacion individual" className="mb-10">
-        <SectionHeading description="Busca el folio correcto y confirma por escrito. Esta operacion no genera AuditLog y no tiene deshacer." title="Eliminar un registro" tone="red" />
+        <SectionHeading description="Busca el folio correcto y confirma por escrito. La operacion queda registrada en auditoria con tu usuario y el folio, pero no tiene deshacer." title="Eliminar un registro" tone="red" />
         <div className="grid gap-4 xl:grid-cols-3">
           {modules.map((module) => {
             const Icon = module.icon;
@@ -287,7 +287,7 @@ export default async function DataControlPage({ searchParams }: DataControlPageP
 
       <div className="mt-5 flex items-start gap-3 rounded-lg border border-slate-300 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
         <Database className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        <p><strong className="text-slate-800">Sin deshacer:</strong> estas operaciones eliminan las filas reales y sus dependencias; no crean una entrada de auditoria. Antes de usar el reinicio en produccion, descarga los concentrados que necesites conservar.</p>
+        <p><strong className="text-slate-800">Sin deshacer:</strong> estas operaciones eliminan las filas reales y sus dependencias. Queda una entrada de auditoria con quien ejecuto, el alcance y los folios eliminados, y el historial previo se conserva. Antes de usar el reinicio en produccion, descarga los concentrados que necesites conservar.</p>
       </div>
     </>
   );
