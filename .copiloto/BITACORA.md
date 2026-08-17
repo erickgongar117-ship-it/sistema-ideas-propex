@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-16 -- claude (codex/hierarchy-training-coins) -- Cree pnpm run qa:diseno, un medidor de adherencia al sistema visual con nueve medidas y umbral justificado. Primera corrida: 1 de 9. Corregi lo mas visible: 142 declaraciones font-size en rem con decimales arbitrarios convertidas a una escala de 8 pasos, de 31 tamanos distintos a 5 renderizados; sombras de elevacion unificadas en dos tokens; banda de control en una sola fila desde 1024px. Medido a 1280x720: primer registro en y=319, 44 por ciento del alto util contra el 57 del punto de partida. Commit 45e2cf0.
+
+Siguiente paso dejado: Bajar los tres excesos que quedan en pnpm run qa:diseno. Por orden de impacto visual: 1) los 57 colores hex escritos dentro de 14 archivos .tsx, empezando por src\components\app-shell.tsx que tiene la paleta de roles hardcodeada y src\app\(app)\panorama\page.tsx; moverlos a tokens en :root de src\app\globals.css. 2) los 109 colores distintos de globals.css, que deben bajar a menos de 40 reutilizando los tokens existentes. 3) los 48 usos de !important. Correr pnpm run qa:diseno antes y despues para medir; la meta es 6 de 9 medidas dentro de umbral.
+
+---
+
 ## 2026-08-16 -- claude (codex/hierarchy-training-coins) -- Apliqué el sistema visual del benchmark a la superficie ejecutiva: tres pesos tipograficos en vez de seis (108 declaraciones colapsadas a 600 y 700 sobre el 400 del cuerpo), cabecera compacta sin eyebrow, y las barras de vistas y busqueda fusionadas en una sola de 53px donde antes habia dos de 54 y 62. Tokens de espaciado, tipografia, alturas de fila, radios, elevacion y foco declarados en :root. Medido en el tablero a 1280x720: el primer registro pasa de y=396 a y=332, del 57 al 46 por ciento del alto util. Sin desbordamiento en 375x812. Commit 6365cd6.
 
 Siguiente paso dejado: Continuar la migracion visual a las pantallas que faltan usando los tokens ya declarados en :root de src\app\globals.css. Quedan por consumir: las variables de espaciado space-050 a space-600 y la escala tipografica font-body y font-h, que hoy solo usa la cabecera. Aplicarlas a las clases executive- de src\components\executive-portfolio-dashboard.tsx y a src\app\(app)\panorama\page.tsx, que es la otra pantalla que ve direccion. Medir igual que en el tablero: posicion Y del primer dato util respecto al alto de ventana, objetivo por debajo del 40 por ciento.
