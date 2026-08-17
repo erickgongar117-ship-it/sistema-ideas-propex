@@ -2710,3 +2710,31 @@ html[data-theme="dark"] .alert-info { border-color: #24547c; background: #142638
     transition: none !important;
   }
 }
+
+/* --- Cuenta de ProbocaCoins en panel lateral ------------------------------------------
+   Antes habia que bajar por toda la pantalla para ver el saldo de una persona, y el
+   formulario para registrar un movimiento no existia. Reutiliza la capa y el cajon del
+   tablero, que ya traen foco atrapado y cierre con Escape.                              */
+.coin-drawer-balance { display: grid; gap: var(--space-050); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-subtle); padding: var(--space-200); }
+.coin-drawer-balance > span { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.coin-drawer-balance > strong { display: inline-flex; align-items: center; gap: var(--space-100); color: var(--foreground); font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.coin-drawer-balance > small { color: var(--muted); font-size: 12px; }
+
+.coin-drawer-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--space-150); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+.coin-drawer-totals > div { border-right: 1px solid var(--line); padding: var(--space-150); }
+.coin-drawer-totals > div:last-child { border-right: 0; }
+.coin-drawer-totals dt { color: var(--muted); font-size: 12px; font-weight: 600; }
+.coin-drawer-totals dd { margin-top: 2px; color: var(--foreground); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.coin-drawer-movements { display: grid; gap: var(--space-100); margin-top: var(--space-100); }
+.coin-drawer-movements li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 0 var(--space-150); border-bottom: 1px solid var(--line); padding-bottom: var(--space-100); }
+.coin-drawer-movements li:last-child { border-bottom: 0; padding-bottom: 0; }
+.coin-drawer-movements strong { grid-row: 1 / span 2; align-self: center; color: var(--success-ink); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.coin-drawer-movements strong.is-negative { color: var(--st-risk); }
+.coin-drawer-movements span { color: var(--foreground); font-size: 13px; font-weight: 600; }
+.coin-drawer-movements small { color: var(--muted); font-size: 12px; }
+.coin-drawer-empty { margin-top: var(--space-100); color: var(--muted); font-size: 13px; }
+
+.coin-drawer-form form { display: grid; gap: var(--space-150); margin-top: var(--space-100); }
+.coin-drawer-form-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: var(--space-150); }
+@media (max-width: 639px) { .coin-drawer-form-row { grid-template-columns: 1fr; } }

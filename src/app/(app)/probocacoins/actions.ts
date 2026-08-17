@@ -147,6 +147,26 @@ export async function createCoinTransactionAction(formData: FormData) {
         createdById: user.id,
         occurredAt
       }, transaction);
+
+      // El saldo de una persona no puede cambiar sin dejar rastro. Hasta ahora la unica
+      // escritura al AuditLog en todo el dominio de monedas era la reversion de duplicados,
+      // asi que un alta manual solo dejaba `createdById` dentro de la propia transaccion, y
+      // ese campo se pone a null si el usuario se borra (onDelete: SetNull).
+      await transaction.auditLog.create({
+        data: {
+          entity: "CoinTransaction",
+          entityId: participantId,
+          action: "COIN_MOVEMENT_CREATED",
+          userId: user.id,
+          details: JSON.stringify({
+            type: requestedType,
+            amount: signedAmount,
+            sourceType,
+            sourceId: linkedSource?.sourceId ?? null,
+            via: "panel"
+          })
+        }
+      });
     });
   } catch (error) {
     if (error instanceof InsufficientBalanceError) {

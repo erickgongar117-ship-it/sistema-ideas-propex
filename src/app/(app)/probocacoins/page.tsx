@@ -18,6 +18,7 @@ import {
   WalletCards,
   X
 } from "lucide-react";
+import { CoinAccountDrawer } from "@/components/coin-account-drawer";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { ProbocaCoin } from "@/components/proboca-coin";
@@ -269,6 +270,24 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
     : null;
   const errorMessage = query.error ? errorMessages[query.error] ?? "No fue posible registrar el movimiento." : null;
   const selectedBalance = selectedParticipant ? allBalances.get(selectedParticipant.id) ?? 0 : null;
+  // El cajon muestra la cuenta completa de la persona, ajena a los filtros del libro mayor.
+  const [accountTotals, accountMovements] = selectedParticipant
+    ? await Promise.all([
+        prisma.coinTransaction.groupBy({
+          by: ["type"],
+          where: { participantId: selectedParticipant.id },
+          _sum: { amount: true }
+        }),
+        prisma.coinTransaction.findMany({
+          where: { participantId: selectedParticipant.id },
+          orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+          take: 8,
+          select: { id: true, amount: true, description: true, occurredAt: true, sourceType: true }
+        })
+      ])
+    : [[], []];
+  const totalFor = (type: CoinTransactionType) =>
+    Math.abs(accountTotals.find((row) => row.type === type)?._sum.amount ?? 0);
   const openMovementPanel = Boolean(query.error && movementErrorCodes.has(query.error));
   const openDuplicatePanel = Boolean(query.error && duplicateErrorCodes.has(query.error));
 
@@ -603,6 +622,28 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
         )}
         <Pagination currentPage={ledgerPage} pageSize={ledgerPageSize} path="/probocacoins" query={{ participant: selectedParticipant?.id, source: sourceFilter, type: typeFilter }} totalItems={transactionCount} totalPages={Math.max(1, Math.ceil(transactionCount / ledgerPageSize))} pageParam="ledgerPage" />
       </section>
+
+      {selectedParticipant ? (
+        <CoinAccountDrawer
+          adjustments={totalFor(CoinTransactionType.ADJUSTMENT)}
+          awarded={totalFor(CoinTransactionType.AWARD)}
+          balance={selectedBalance ?? 0}
+          canManage
+          closeHref={coinsHref({ q: search || undefined, peopleStatus: peopleStatus === "active" ? undefined : peopleStatus, page: currentPage })}
+          movements={accountMovements.map((movement) => ({
+            id: movement.id,
+            amount: movement.amount,
+            description: movement.description,
+            occurredAt: formatDate(movement.occurredAt),
+            sourceLabel: sourceLabels[movement.sourceType]
+          }))}
+          openForm={openMovementPanel}
+          participant={selectedParticipant}
+          redeemed={totalFor(CoinTransactionType.REDEMPTION)}
+          requestId={randomUUID()}
+          today={new Date().toISOString().slice(0, 10)}
+        />
+      ) : null}
     </>
   );
 }
