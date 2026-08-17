@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DragDropContext,
@@ -14,7 +15,9 @@ import {
   ArrowRight,
   BarChart3,
   CalendarDays,
+  CalendarClock,
   Check,
+  CheckCheck,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -27,12 +30,14 @@ import {
   GripVertical,
   Inbox,
   LayoutList,
+  LoaderCircle,
   MoreHorizontal,
   Rows3,
   Search,
   ShieldCheck,
   SlidersHorizontal,
   TriangleAlert,
+  UserRoundCheck,
   X,
   type LucideIcon
 } from "lucide-react";
@@ -72,6 +77,8 @@ export type WorkboardItem = {
   tags?: string[];
   children?: WorkboardChild[];
   allowedGroups?: string[];
+  bulkEntityId?: string;
+  bulkActions?: WorkboardBulkAction[];
 };
 
 export type WorkboardMetric = {
@@ -97,6 +104,32 @@ export type WorkboardMoveInput = {
 export type WorkboardMoveResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
+
+export type WorkboardBulkAction = "APPROVE" | "REJECT" | "REASSIGN" | "DUE_DATE";
+
+export type WorkboardBulkInput = {
+  action: WorkboardBulkAction;
+  itemIds: string[];
+  reason?: string;
+  assignee?: string;
+  dueDate?: string;
+};
+
+export type WorkboardBulkItemResult = {
+  itemId: string;
+  reference: string;
+  ok: boolean;
+  message: string;
+};
+
+export type WorkboardBulkResult = {
+  ok: boolean;
+  message: string;
+  succeeded: number;
+  failed: number;
+  results: WorkboardBulkItemResult[];
+  batchIds?: string[];
+};
 
 type View = "table" | "kanban" | "panel";
 type Sort = "priority" | "due" | "progress" | "title";
@@ -225,7 +258,9 @@ export function OperationsWorkboard({
   locationLabel = "Ubicacion",
   emptyLabel = "No hay registros con estos filtros",
   groupDefinitions,
-  onMoveItem
+  onMoveItem,
+  onBulkAction,
+  clientPagination = true
 }: {
   items: WorkboardItem[];
   metrics: WorkboardMetric[];
@@ -234,7 +269,10 @@ export function OperationsWorkboard({
   emptyLabel?: string;
   groupDefinitions?: WorkboardGroupDefinition[];
   onMoveItem?: (input: WorkboardMoveInput) => Promise<WorkboardMoveResult>;
+  onBulkAction?: (input: WorkboardBulkInput) => Promise<WorkboardBulkResult>;
+  clientPagination?: boolean;
 }) {
+  const router = useRouter();
   const [view, setView] = useState<View>("table");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
@@ -255,6 +293,12 @@ export function OperationsWorkboard({
   const [movingId, setMovingId] = useState<string | null>(null);
   const [moveNotice, setMoveNotice] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [bulkMode, setBulkMode] = useState<WorkboardBulkAction | null>(null);
+  const [bulkReason, setBulkReason] = useState("");
+  const [bulkAssignee, setBulkAssignee] = useState("");
+  const [bulkDueDate, setBulkDueDate] = useState("");
+  const [bulkPending, setBulkPending] = useState(false);
+  const [bulkFeedback, setBulkFeedback] = useState<WorkboardBulkResult | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -291,8 +335,11 @@ export function OperationsWorkboard({
     });
   }, [owner, searchMatched, sort, status]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageItems = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page, pageSize]);
+  const totalPages = clientPagination ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
+  const pageItems = useMemo(
+    () => clientPagination ? filtered.slice((page - 1) * pageSize, page * pageSize) : filtered,
+    [clientPagination, filtered, page, pageSize]
+  );
 
   const groups = useMemo(() => statuses.map((key) => {
     const rows = pageItems.filter((item) => item.group === key);
@@ -313,6 +360,8 @@ export function OperationsWorkboard({
   const focusedItem = items.find((item) => item.id === focusedId) ?? null;
   const activeFilters = Number(status !== "all") + Number(location !== "all") + Number(owner !== "all");
   const draggingItem = items.find((item) => item.id === draggingId) ?? null;
+  const selectedItems = useMemo(() => items.filter((item) => selected.has(item.id)), [items, selected]);
+  const bulkCount = (action: WorkboardBulkAction) => selectedItems.filter((item) => item.bulkActions?.includes(action)).length;
 
   useEffect(() => {
     setPage(1);
@@ -336,12 +385,16 @@ export function OperationsWorkboard({
   }, [density, primaryLabel, sort, view]);
 
   useEffect(() => {
+    if (!clientPagination) {
+      setPageSize(50);
+      return;
+    }
     const media = window.matchMedia("(max-width: 639px)");
     const updatePageSize = () => setPageSize(media.matches ? 12 : 50);
     updatePageSize();
     media.addEventListener("change", updatePageSize);
     return () => media.removeEventListener("change", updatePageSize);
-  }, []);
+  }, [clientPagination]);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 768px)");
@@ -354,6 +407,14 @@ export function OperationsWorkboard({
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
+
+  useEffect(() => {
+    const visibleIds = new Set(items.map((item) => item.id));
+    setSelected((current) => {
+      const next = new Set([...current].filter((id) => visibleIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [items]);
 
   useEffect(() => {
     if (!focusedId) return;
@@ -407,6 +468,123 @@ export function OperationsWorkboard({
     await navigator.clipboard.writeText(codes.join("\n"));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
+  };
+
+  const openBulkAction = (action: WorkboardBulkAction) => {
+    setBulkMode(action);
+    setBulkFeedback(null);
+    setBulkReason("");
+    setBulkAssignee("");
+    setBulkDueDate("");
+  };
+
+  const performBulkAction = async () => {
+    if (!bulkMode || !onBulkAction || bulkPending) return;
+    const eligible = selectedItems.filter((item) => item.bulkEntityId && item.bulkActions?.includes(bulkMode));
+    if (!eligible.length) {
+      setBulkFeedback({
+        ok: false,
+        message: "Ninguno de los elementos seleccionados admite esta accion.",
+        succeeded: 0,
+        failed: selectedItems.length,
+        results: selectedItems.map((item) => ({ itemId: item.id, reference: item.code, ok: false, message: "Esta accion no corresponde a su etapa o a tus permisos." }))
+      });
+      return;
+    }
+    if (bulkMode === "REJECT" && bulkReason.trim().length < 3) {
+      setBulkFeedback({ ok: false, message: "Escribe una razon clara de al menos 3 caracteres.", succeeded: 0, failed: 0, results: [] });
+      return;
+    }
+    if (bulkMode === "REASSIGN" && bulkAssignee.trim().length < 3) {
+      setBulkFeedback({ ok: false, message: "Escribe el correo o numero de empleado de la nueva persona responsable.", succeeded: 0, failed: 0, results: [] });
+      return;
+    }
+    if (bulkMode === "DUE_DATE" && !bulkDueDate) {
+      setBulkFeedback({ ok: false, message: "Selecciona la nueva fecha compromiso.", succeeded: 0, failed: 0, results: [] });
+      return;
+    }
+
+    setBulkPending(true);
+    setBulkFeedback(null);
+    try {
+      const targets = eligible.map((item) => item.bulkEntityId as string);
+      const batchResults: WorkboardBulkItemResult[] = [];
+      const targetItems = new Map(eligible.map((item) => [item.bulkEntityId as string, item]));
+      const chunks = Array.from({ length: Math.ceil(targets.length / 25) }, (_, index) => targets.slice(index * 25, index * 25 + 25));
+      const settledChunks = await Promise.allSettled(chunks.map((chunk) => onBulkAction({
+        action: bulkMode,
+        itemIds: chunk,
+        reason: bulkReason.trim() || undefined,
+        assignee: bulkAssignee.trim() || undefined,
+        dueDate: bulkDueDate || undefined
+      })));
+      for (const [index, settled] of settledChunks.entries()) {
+        if (settled.status === "fulfilled") {
+          batchResults.push(...settled.value.results);
+          const returnedTargets = new Set(settled.value.results.map((result) => result.itemId));
+          for (const target of chunks[index]) {
+            if (returnedTargets.has(target)) continue;
+            batchResults.push({
+              itemId: target,
+              reference: targetItems.get(target)?.code ?? "Registro",
+              ok: false,
+              message: settled.value.message || "El servidor rechazo este bloque. Actualiza la bandeja antes de reintentarlo."
+            });
+          }
+          continue;
+        }
+        for (const target of chunks[index]) {
+          batchResults.push({
+            itemId: target,
+            reference: targetItems.get(target)?.code ?? "Registro",
+            ok: false,
+            message: "No se pudo confirmar este bloque. Actualiza la bandeja antes de reintentarlo."
+          });
+        }
+      }
+      const skippedResults = selectedItems
+        .filter((item) => !item.bulkEntityId || !item.bulkActions?.includes(bulkMode))
+        .map((item) => ({
+          itemId: item.bulkEntityId ?? item.id,
+          reference: item.code,
+          ok: false,
+          message: "Esta accion no corresponde a su etapa o a tus permisos."
+        }));
+      const allResults = [...batchResults, ...skippedResults];
+      const batchIds = settledChunks.flatMap((settled) => settled.status === "fulfilled" ? settled.value.batchIds ?? [] : []);
+      const succeeded = allResults.filter((entry) => entry.ok).length;
+      const failed = allResults.length - succeeded;
+      const feedback: WorkboardBulkResult = {
+        ok: failed === 0,
+        message: failed
+          ? `${succeeded} ${succeeded === 1 ? "cambio aplicado" : "cambios aplicados"}; ${failed} ${failed === 1 ? "requiere revision" : "requieren revision"}.`
+          : `${succeeded} ${succeeded === 1 ? "cambio aplicado correctamente" : "cambios aplicados correctamente"}.`,
+        succeeded,
+        failed,
+        results: allResults,
+        batchIds
+      };
+      setBulkFeedback(feedback);
+      const successfulIds = new Set(batchResults.filter((entry) => entry.ok).map((entry) => entry.itemId));
+      setSelected((current) => new Set([...current].filter((id) => {
+        const item = items.find((candidate) => candidate.id === id);
+        return !item?.bulkEntityId || !successfulIds.has(item.bulkEntityId);
+      })));
+      if (succeeded) {
+        setBulkMode(null);
+        router.refresh();
+      }
+    } catch {
+      setBulkFeedback({
+        ok: false,
+        message: "No fue posible completar la operacion. Nada que no haya sido confirmado se mostrara como aplicado.",
+        succeeded: 0,
+        failed: eligible.length,
+        results: []
+      });
+    } finally {
+      setBulkPending(false);
+    }
   };
 
   const moveGroups: WorkboardGroupDefinition[] = groupDefinitions ?? statuses.map((key) => {
@@ -471,7 +649,7 @@ export function OperationsWorkboard({
       <div className="workboard-toolbar no-print">
         <label className="workboard-search">
           <Search className="h-[18px] w-[18px]" aria-hidden />
-          <input aria-label="Buscar en el tablero" onChange={(event) => setQuery(event.target.value)} placeholder={`Buscar ${primaryLabel.toLocaleLowerCase("es-MX")}`} value={query} />
+          <input aria-label="Filtrar los registros cargados en esta pagina" onChange={(event) => setQuery(event.target.value)} placeholder={`Filtrar esta pagina de ${primaryLabel.toLocaleLowerCase("es-MX")}`} value={query} />
           {query ? <button aria-label="Limpiar busqueda" onClick={() => setQuery("")} type="button"><X className="h-4 w-4" aria-hidden /></button> : null}
         </label>
         <button aria-expanded={filtersOpen} className={`workboard-filter-button ${filtersOpen || activeFilters ? "is-active" : ""}`} onClick={() => setFiltersOpen((current) => !current)} type="button">
@@ -480,12 +658,68 @@ export function OperationsWorkboard({
         {selected.size ? (
           <div className="workboard-selection">
             <span><Check className="h-4 w-4" aria-hidden />{selected.size} seleccionados</span>
+            {onBulkAction && bulkCount("APPROVE") ? <button onClick={() => openBulkAction("APPROVE")} type="button"><CheckCheck className="h-4 w-4" aria-hidden />Aprobar <i>{bulkCount("APPROVE")}</i></button> : null}
+            {onBulkAction && bulkCount("REJECT") ? <button onClick={() => openBulkAction("REJECT")} type="button"><CircleSlash className="h-4 w-4" aria-hidden />Rechazar <i>{bulkCount("REJECT")}</i></button> : null}
+            {onBulkAction && bulkCount("REASSIGN") ? <button onClick={() => openBulkAction("REASSIGN")} type="button"><UserRoundCheck className="h-4 w-4" aria-hidden />Reasignar <i>{bulkCount("REASSIGN")}</i></button> : null}
+            {onBulkAction && bulkCount("DUE_DATE") ? <button onClick={() => openBulkAction("DUE_DATE")} type="button"><CalendarClock className="h-4 w-4" aria-hidden />Nueva fecha <i>{bulkCount("DUE_DATE")}</i></button> : null}
             <Link href={items.find((item) => selected.has(item.id))?.href ?? "#"}>Abrir primero<ArrowRight className="h-4 w-4" aria-hidden /></Link>
             <button onClick={copySelectedCodes} type="button">{copied ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}{copied ? "Copiados" : "Copiar folios"}</button>
-            <button aria-label="Limpiar seleccion" onClick={() => setSelected(new Set())} type="button"><X className="h-4 w-4" aria-hidden /></button>
+            <button aria-label="Limpiar seleccion" onClick={() => { setSelected(new Set()); setBulkMode(null); setBulkFeedback(null); }} type="button"><X className="h-4 w-4" aria-hidden /></button>
           </div>
         ) : null}
       </div>
+
+      {bulkMode ? (
+        <section aria-labelledby="workboard-bulk-title" className="workboard-bulk-editor no-print">
+          <div>
+            <span>Accion en lote</span>
+            <h3 id="workboard-bulk-title">
+              {bulkMode === "APPROVE" ? "Aprobar ideas seleccionadas" : bulkMode === "REJECT" ? "Rechazar con una razon" : bulkMode === "REASSIGN" ? "Asignar una nueva persona" : "Cambiar fecha compromiso"}
+            </h3>
+            <p>
+              {bulkMode === "APPROVE"
+                ? "Se conservaran las areas de apoyo elegidas durante la captura. Abre una idea si necesitas agregar un apoyo distinto."
+                : bulkMode === "REJECT"
+                  ? "La razon quedara visible en cada expediente y en su auditoria."
+                  : bulkMode === "REASSIGN"
+                    ? "Usa el correo corporativo o el numero de empleado de 5 digitos."
+                    : "La misma fecha se aplicara solo a los registros que permitan reprogramacion."}
+            </p>
+          </div>
+          {bulkMode === "REJECT" ? (
+            <label><span>Razon obligatoria</span><textarea autoFocus maxLength={500} onChange={(event) => setBulkReason(event.target.value)} placeholder="Explica que debe corregirse o por que no procede" rows={3} value={bulkReason} /></label>
+          ) : null}
+          {bulkMode === "REASSIGN" ? (
+            <label><span>Correo o numero de empleado</span><input autoFocus onChange={(event) => setBulkAssignee(event.target.value)} placeholder="persona@proboca.net o 00123" value={bulkAssignee} /></label>
+          ) : null}
+          {bulkMode === "DUE_DATE" ? (
+            <label><span>Nueva fecha compromiso</span><input autoFocus onChange={(event) => setBulkDueDate(event.target.value)} type="date" value={bulkDueDate} /></label>
+          ) : null}
+          <footer>
+            <span>{bulkCount(bulkMode)} de {selectedItems.length} seleccionados aplican</span>
+            <button disabled={bulkPending} onClick={() => setBulkMode(null)} type="button">Cancelar</button>
+            <button className="is-primary" disabled={bulkPending} onClick={() => void performBulkAction()} type="button">
+              {bulkPending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <Check className="h-4 w-4" aria-hidden />}
+              {bulkPending ? "Procesando" : "Confirmar"}
+            </button>
+          </footer>
+        </section>
+      ) : null}
+
+      {bulkFeedback ? (
+        <section className={`workboard-bulk-feedback ${bulkFeedback.ok ? "is-success" : "is-error"}`} role={bulkFeedback.ok ? "status" : "alert"}>
+          <div>
+            {bulkFeedback.ok ? <CheckCircle2 className="h-5 w-5" aria-hidden /> : <TriangleAlert className="h-5 w-5" aria-hidden />}
+            <p><strong>{bulkFeedback.message}</strong>{bulkFeedback.failed ? <span>{bulkFeedback.failed} requieren revision.</span> : null}{bulkFeedback.batchIds?.length ? <span>Auditoria: {bulkFeedback.batchIds.join(", ")}</span> : null}</p>
+            <button aria-label="Cerrar resultado" onClick={() => setBulkFeedback(null)} type="button"><X className="h-4 w-4" aria-hidden /></button>
+          </div>
+          {bulkFeedback.results.some((entry) => !entry.ok) ? (
+            <ul aria-label="Elementos que no pudieron actualizarse">
+              {bulkFeedback.results.filter((entry) => !entry.ok).map((entry) => <li key={`${entry.itemId}-${entry.reference}`}><strong>{entry.reference}</strong><span>{entry.message}</span></li>)}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
 
       {moveError ? <div className="workboard-move-message is-error" role="alert"><TriangleAlert className="h-4 w-4" aria-hidden /><span>{moveError}</span><button aria-label="Cerrar aviso" onClick={() => setMoveError(null)} type="button"><X className="h-4 w-4" aria-hidden /></button></div> : null}
       {moveNotice ? <div className="workboard-move-message is-success" role="status"><CheckCircle2 className="h-4 w-4" aria-hidden /><span>{moveNotice}</span><button aria-label="Cerrar aviso" onClick={() => setMoveNotice(null)} type="button"><X className="h-4 w-4" aria-hidden /></button></div> : null}
@@ -641,7 +875,7 @@ export function OperationsWorkboard({
         </div> : <div className="workboard-empty">{emptyLabel}</div>
       ) : null}
 
-      {view !== "panel" && totalPages > 1 ? (
+      {clientPagination && view !== "panel" && totalPages > 1 ? (
         <nav aria-label="Paginacion del tablero" className="workboard-pagination no-print">
           <p>Mostrando {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filtered.length)} de {filtered.length}</p>
           <div>

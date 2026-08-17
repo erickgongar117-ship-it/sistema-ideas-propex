@@ -1,3 +1,5 @@
+import type { KaizenStatus } from "@prisma/client";
+
 type ClosureActivity = {
   status: string;
   evidenceCount: number;
@@ -22,4 +24,9 @@ export function kaizenClosureReadiness(input: {
     hasTeam,
     ready: input.hasCharter && allActivitiesResolved && hasCompletedResult && completedActivitiesHaveEvidence && hasTeam
   };
+}
+
+export function reconciledKaizenStatus(current: KaizenStatus, readyToClose: boolean): KaizenStatus {
+  if (current === "COMPLETADO" || current === "CANCELADO") return current;
+  return readyToClose ? "COMPLETADO" : current;
 }

@@ -1,5 +1,11 @@
 import type { WorkItemStatus } from "@prisma/client";
-import { OperationsWorkboard, type WorkboardItem, type WorkboardMetric } from "@/components/operations-workboard";
+import {
+  OperationsWorkboard,
+  type WorkboardBulkAction,
+  type WorkboardItem,
+  type WorkboardMetric
+} from "@/components/operations-workboard";
+import { bulkFollowUpAction } from "@/app/actions";
 import { workItemStatusRender, type StatusCategory } from "@/lib/status-system";
 
 export type FollowUpModule = "IDEA" | "KAIZEN" | "GENBA";
@@ -28,6 +34,8 @@ export type FollowUpRow = {
   dueDate: Date | null;
   updatedAt: Date;
   overdue: boolean;
+  bulkEntityId?: string;
+  bulkActions?: WorkboardBulkAction[];
   progress?: {
     completed: number;
     total: number;
@@ -59,10 +67,12 @@ function urgency(row: FollowUpRow, now: Date) {
 
 export function FollowUpTable({
   rows,
+  totalRows,
   emptyTitle,
   emptyDescription
 }: {
   rows: FollowUpRow[];
+  totalRows?: number;
   emptyTitle: string;
   emptyDescription: string;
 }) {
@@ -91,6 +101,8 @@ export function FollowUpTable({
       risk: row.overdue,
       riskLabel: row.overdue ? "Fecha compromiso vencida" : undefined,
       tags: [moduleLabel, row.status, row.assignment],
+      bulkEntityId: row.bulkEntityId,
+      bulkActions: row.bulkActions,
       children: row.children?.map((child) => {
         const childStatus = workItemStatusRender(child.status);
         return {
@@ -118,7 +130,7 @@ export function FollowUpTable({
     return row.dueDate.getTime() <= limit.getTime();
   }).length;
   const metrics: WorkboardMetric[] = [
-    { label: "En esta vista", value: rows.length, detail: "Registros dentro de tu alcance", color: "#171717" },
+    { label: "En esta vista", value: totalRows ?? rows.length, detail: "Registros dentro de tu alcance", color: "#171717" },
     { label: "Vencidos", value: rows.filter((row) => row.overdue).length, detail: "Requieren una decision o nueva fecha", color: "#e2445c" },
     { label: "Proximos 7 dias", value: dueSoon, detail: "Compromisos cercanos", color: "#fdab3d" },
     { label: "Avance medio", value: `${averageProgress}%`, detail: "Kaizen y GENBA con actividades", color: "#00a86b" }
@@ -126,10 +138,12 @@ export function FollowUpTable({
 
   return (
     <OperationsWorkboard
+      clientPagination={false}
       emptyLabel={`${emptyTitle}. ${emptyDescription}`}
       items={items}
       locationLabel="Planta y area"
       metrics={metrics}
+      onBulkAction={bulkFollowUpAction}
       primaryLabel="Trabajo"
     />
   );

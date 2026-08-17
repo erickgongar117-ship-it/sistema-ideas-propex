@@ -13,13 +13,14 @@ export function canManageImprovementModules(user: Pick<User, "role">) {
 
 export async function userModuleAccess(user: AccessUser) {
   if (canManageImprovementModules(user)) return { kaizen: true, genba: true };
-  const [kaizenAssignments, genbaAssignments] = await Promise.all([
+  const [kaizenAssignments, genbaAssignments, manageableActivityMemberships] = await Promise.all([
     prisma.kaizenProject.count({ where: { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } }),
-    prisma.genbaWalk.count({ where: { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } })
+    prisma.genbaWalk.count({ where: { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } }),
+    prisma.orgMembership.count({ where: { userId: user.id, active: true, canManageActivities: true } })
   ]);
   return {
-    kaizen: user.kaizenAccess || kaizenAssignments > 0,
-    genba: user.genbaAccess || genbaAssignments > 0
+    kaizen: user.kaizenAccess || kaizenAssignments > 0 || manageableActivityMemberships > 0,
+    genba: user.genbaAccess || genbaAssignments > 0 || manageableActivityMemberships > 0
   };
 }
 

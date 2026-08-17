@@ -20,6 +20,7 @@
     "db:backfill:identity-team": "tsx scripts/backfill-employee-numbers-and-kaizen-team.ts",
     "qa:scale": "tsx scripts/qa-scale-1000.ts",
     "qa:repositories": "tsx scripts/qa-repositories-closure.ts",
+    "qa:follow-up-bulk": "tsx scripts/qa-follow-up-bulk.ts",
     "reminders": "tsx scripts/reminders.ts",
     "export-demo": "tsx scripts/export-demo.ts",
     "migration:export:power-platform": "tsx scripts/export-power-platform.ts"

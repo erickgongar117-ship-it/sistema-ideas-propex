@@ -6,19 +6,30 @@ import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
 import { genbaStatusLabels, kaizenStatusLabels, statusLabels, workItemStatusLabels, workProgress } from "@/lib/domain";
 import {
-  buildIdeaVisibilityWhere,
   getManageableActivityOrgUnitIds,
   getSupervisableOrgUnitIds,
   hasGlobalIdeaAccess
 } from "@/lib/idea-access";
+import {
+  allocateFollowUpSlots,
+  followUpConsumedBeforePage,
+  followUpTotalPages,
+  type FollowUpModuleFilter
+} from "@/lib/follow-up-pagination";
+import { serializeFollowUpBulkTarget } from "@/lib/follow-up-bulk";
+import {
+  followUpGenbaWhere,
+  followUpIdeaWhere,
+  followUpKaizenWhere,
+  type FollowUpView
+} from "@/lib/follow-up-scope";
 import { userModuleAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 import { genbaStatusCategory, ideaStatusCategory, kaizenStatusCategory } from "@/lib/status-system";
 
 export const dynamic = "force-dynamic";
 
-type FollowUpView = "pendientes" | "seguimiento" | "equipo";
-type PageProps = { searchParams: Promise<{ vista?: string; error?: string }> };
+type PageProps = { searchParams: Promise<{ vista?: string; modulo?: string; pagina?: string; error?: string }> };
 
 const terminalIdeaStatuses = new Set<IdeaStatus>([
   "RECHAZADA_SUPERVISOR",
@@ -56,10 +67,21 @@ function sortRows(rows: FollowUpRow[], view: FollowUpView) {
   });
 }
 
+function followUpHref(view: FollowUpView, moduleFilter: FollowUpModuleFilter, page = 1) {
+  const params = new URLSearchParams({ vista: view });
+  if (moduleFilter !== "TODOS") params.set("modulo", moduleFilter.toLowerCase());
+  if (page > 1) params.set("pagina", String(page));
+  return `/seguimientos?${params.toString()}`;
+}
+
 export default async function FollowUpsPage({ searchParams }: PageProps) {
   const [user, query] = await Promise.all([requireUser(), searchParams]);
   const requestedView = query.vista;
   const activeView: FollowUpView = requestedView === "seguimiento" || requestedView === "equipo" ? requestedView : "pendientes";
+  const requestedModule = query.modulo?.toUpperCase();
+  const moduleFilter: FollowUpModuleFilter = requestedModule === "IDEA" || requestedModule === "KAIZEN" || requestedModule === "GENBA"
+    ? requestedModule
+    : "TODOS";
   const errorMessage = query.error === "sin_permiso"
     ? "No puedes decidir esa idea porque no está asignada a tu ruta ni al equipo que supervisas."
     : null;
@@ -69,13 +91,26 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     globalAccess ? Promise.resolve([]) : getManageableActivityOrgUnitIds(user.id),
     userModuleAccess(user)
   ]);
-  const ideaWhere = buildIdeaVisibilityWhere(user, supervisableOrgUnitIds);
-  const memberScope = supervisableOrgUnitIds.length
-    ? { active: true, orgUnitId: { in: supervisableOrgUnitIds } }
-    : null;
+  const scope = { user, globalAccess, supervisableOrgUnitIds, manageableOrgUnitIds };
+  const ideaWhere = followUpIdeaWhere(scope, activeView);
+  const kaizenWhere = followUpKaizenWhere({ ...scope, hasAccess: moduleAccess.kaizen }, activeView);
+  const genbaWhere = followUpGenbaWhere({ ...scope, hasAccess: moduleAccess.genba }, activeView);
+  const includesModule = (module: Exclude<FollowUpModuleFilter, "TODOS">) => moduleFilter === "TODOS" || moduleFilter === module;
+
+  const [ideaCount, kaizenCount, genbaCount] = await Promise.all([
+    includesModule("IDEA") ? prisma.idea.count({ where: ideaWhere }) : Promise.resolve(0),
+    includesModule("KAIZEN") ? prisma.kaizenProject.count({ where: kaizenWhere }) : Promise.resolve(0),
+    includesModule("GENBA") ? prisma.genbaWalk.count({ where: genbaWhere }) : Promise.resolve(0)
+  ]);
+  const moduleCounts = { IDEA: ideaCount, KAIZEN: kaizenCount, GENBA: genbaCount };
+  const pageSlots = allocateFollowUpSlots(moduleCounts, moduleFilter);
+  const portfolioOverview = moduleFilter === "TODOS";
+  const totalPages = portfolioOverview ? 1 : followUpTotalPages(moduleCounts, pageSlots);
+  const requestedPage = Math.max(1, Number.parseInt(query.pagina ?? "1", 10) || 1);
+  const currentPage = portfolioOverview ? 1 : Math.min(requestedPage, totalPages);
 
   const [ideas, kaizenProjects, genbaWalks] = await Promise.all([
-    prisma.idea.findMany({
+    pageSlots.IDEA ? prisma.idea.findMany({
       where: ideaWhere,
       include: {
         area: {
@@ -88,61 +123,39 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         approvals: { include: { assignedTo: true } },
         supportRequests: { include: { assignedTo: true, orgUnit: true } },
         followers: { where: { userId: user.id } },
-        escalationRule: { include: { reviewerMembership: true } }
+        escalationRule: { include: { reviewerMembership: true } },
+        participant: { select: { orgUnitId: true } },
+        kaizenProject: { select: { updatedAt: true } }
       },
-      orderBy: { updatedAt: "desc" }
-    }),
-    prisma.kaizenProject.findMany({
-      where: !moduleAccess.kaizen
-        ? { id: "__no_kaizen_access__" }
-        : globalAccess
-          ? {}
-          : {
-            OR: [
-              { leaderId: user.id },
-              { activities: { some: { ownerId: user.id } } },
-              ...(supervisableOrgUnitIds.length ? [{ orgUnitId: { in: supervisableOrgUnitIds } }] : []),
-              ...(memberScope
-                ? [
-                    { leader: { is: { orgMemberships: { some: memberScope } } } },
-                    { activities: { some: { owner: { is: { orgMemberships: { some: memberScope } } } } } }
-                  ]
-                : [])
-            ]
-          },
+      orderBy: activeView === "pendientes"
+        ? [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }]
+        : { updatedAt: "desc" },
+      skip: (currentPage - 1) * pageSlots.IDEA,
+      take: pageSlots.IDEA
+    }) : Promise.resolve([]),
+    pageSlots.KAIZEN ? prisma.kaizenProject.findMany({
+      where: kaizenWhere,
       include: {
         leader: true,
         orgUnit: { include: { plant: true } },
         activities: { include: { owner: true }, orderBy: { number: "asc" } },
         attachments: { where: { type: "CHARTER" }, select: { id: true } }
       },
-      orderBy: { updatedAt: "desc" }
-    }),
-    prisma.genbaWalk.findMany({
-      where: !moduleAccess.genba
-        ? { id: "__no_genba_access__" }
-        : globalAccess
-          ? {}
-          : {
-            OR: [
-              { coordinatorId: user.id },
-              { activities: { some: { ownerId: user.id } } },
-              ...(supervisableOrgUnitIds.length ? [{ orgUnitId: { in: supervisableOrgUnitIds } }] : []),
-              ...(memberScope
-                ? [
-                    { coordinator: { is: { orgMemberships: { some: memberScope } } } },
-                    { activities: { some: { owner: { is: { orgMemberships: { some: memberScope } } } } } }
-                  ]
-                : [])
-            ]
-          },
+      orderBy: activeView === "pendientes" ? [{ endDate: "asc" }, { updatedAt: "desc" }] : { updatedAt: "desc" },
+      skip: (currentPage - 1) * pageSlots.KAIZEN,
+      take: pageSlots.KAIZEN
+    }) : Promise.resolve([]),
+    pageSlots.GENBA ? prisma.genbaWalk.findMany({
+      where: genbaWhere,
       include: {
         coordinator: true,
         orgUnit: { include: { plant: true } },
         activities: { include: { owner: true }, orderBy: { number: "asc" } }
       },
-      orderBy: { updatedAt: "desc" }
-    })
+      orderBy: { updatedAt: "desc" },
+      skip: (currentPage - 1) * pageSlots.GENBA,
+      take: pageSlots.GENBA
+    }) : Promise.resolve([])
   ]);
 
   const buckets: Record<FollowUpView, FollowUpRow[]> = {
@@ -154,13 +167,24 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
   const manageableScope = new Set(manageableOrgUnitIds);
 
   for (const idea of ideas) {
+    const initialApproval = idea.approvals.find((approval) =>
+      approval.type === "SUPERVISOR" && ["PENDING", "MORE_INFO"].includes(approval.status)
+    );
     const pendingInitialApproval = idea.approvals.find((approval) =>
       approval.type === "SUPERVISOR" && approval.assignedToId === user.id && ["PENDING", "MORE_INFO"].includes(approval.status)
     );
-    const pendingApproval = idea.approvals.find((approval) =>
-      approval.type !== "SUPERVISOR" && approval.assignedToId === user.id && approval.status === "PENDING"
+    const pendingApprovals = idea.approvals.filter((approval) =>
+      approval.type !== "SUPERVISOR" &&
+      ["PENDING", "MORE_INFO"].includes(approval.status) &&
+      (approval.assignedToId === user.id || (user.role === "ADMIN" && !approval.assignedToId))
     );
-    const pendingSupport = idea.supportRequests.find((request) => request.assignedToId === user.id && request.status === "PENDING");
+    const pendingSupports = idea.supportRequests.filter((request) =>
+      Boolean(request.activatedAt) &&
+      ["PENDING", "MORE_INFO"].includes(request.status) &&
+      (request.assignedToId === user.id || (globalAccess && !request.assignedToId))
+    );
+    const pendingApproval = pendingApprovals[0];
+    const pendingSupport = pendingSupports[0];
     const orgUnit = idea.area.organizationUnit;
     const directInitialReview = Boolean(
       pendingInitialApproval ||
@@ -170,14 +194,12 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     );
     const teamInitialReview = Boolean(
       (orgUnit?.id && supervisedScope.has(orgUnit.id)) ||
-      (idea.escalationRule?.orgUnitId && supervisedScope.has(idea.escalationRule.orgUnitId))
+      (idea.escalationRule?.orgUnitId && supervisedScope.has(idea.escalationRule.orgUnitId)) ||
+      (idea.participant?.orgUnitId && supervisedScope.has(idea.participant.orgUnitId))
     );
-    const supervisorAction = initialReviewStatuses.has(idea.status) && (directInitialReview || teamInitialReview);
+    const supervisorAction = initialReviewStatuses.has(idea.status) && (user.role === "ADMIN" || directInitialReview || teamInitialReview);
     const ownerAction = idea.implementationOwnerId === user.id && ["APROBADA_PARA_IMPLEMENTAR", "EN_IMPLEMENTACION", "VENCIDA"].includes(idea.status);
-    const unassignedValidation = globalAccess && (
-      idea.approvals.some((approval) => approval.status === "PENDING" && !approval.assignedToId) ||
-      idea.supportRequests.some((request) => request.status === "PENDING" && !request.assignedToId)
-    );
+    const unassignedValidation = (user.role === "ADMIN" && pendingApprovals.some((approval) => !approval.assignedToId)) || (globalAccess && pendingSupports.some((request) => !request.assignedToId));
     const globalAction = globalAccess && mcActionStatuses.has(idea.status);
     const needsAction = Boolean(pendingInitialApproval || pendingApproval || pendingSupport || supervisorAction || ownerAction || unassignedValidation || globalAction);
     const directAssignment = Boolean(
@@ -193,7 +215,10 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     const dueDate = idea.dueDate;
     const supportLabel = pendingSupport ? `Apoyo solicitado · ${pendingSupport.orgUnit.name}` : null;
     const followerLabel = idea.followers[0]?.label;
-    const assignment = supervisorAction
+    const decisionCount = (supervisorAction && initialApproval ? 1 : 0) + pendingApprovals.length + pendingSupports.length;
+    const assignment = decisionCount > 1
+      ? `${decisionCount} validaciones pendientes · abre el expediente para revisar cada una`
+      : supervisorAction
       ? "Aprobación como responsable directo"
       : pendingApproval
         ? "Validación pendiente"
@@ -206,12 +231,53 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
               : globalAction
                 ? "Decisión de Mejora Continua"
                 : followerLabel ?? (directAssignment ? "Seguimiento asignado" : "Propuesta de tu equipo");
-    const owner = pendingInitialApproval?.assignedTo?.name
+    const owner = decisionCount > 1
+      ? "Varios responsables"
+      : pendingInitialApproval?.assignedTo?.name
       ?? pendingApproval?.assignedTo?.name
       ?? pendingSupport?.assignedTo?.name
       ?? idea.implementationOwner?.name
       ?? idea.supervisor?.name
       ?? (globalAction ? "Mejora Continua" : "Responsable por asignar");
+    const bulkActions: FollowUpRow["bulkActions"] = [];
+    const decisionTargets = [
+      ...(supervisorAction && initialApproval ? [{
+        kind: "INITIAL" as const,
+        targetId: initialApproval.id,
+        expectedTargetUpdatedAt: initialApproval.updatedAt.toISOString(),
+        expectedIdeaUpdatedAt: idea.updatedAt.toISOString()
+      }] : []),
+      ...pendingApprovals.map((approval) => ({
+        kind: "DEPARTMENT" as const,
+        targetId: approval.id,
+        expectedTargetUpdatedAt: approval.updatedAt.toISOString(),
+        expectedIdeaUpdatedAt: idea.updatedAt.toISOString()
+      })),
+      ...pendingSupports.map((request) => ({
+        kind: "SUPPORT" as const,
+        targetId: request.id,
+        expectedTargetUpdatedAt: request.updatedAt.toISOString(),
+        expectedIdeaUpdatedAt: idea.updatedAt.toISOString()
+      }))
+    ];
+    let bulkEntityId: string | undefined;
+    if (decisionTargets.length === 1) {
+      bulkActions.push("APPROVE", "REJECT");
+      bulkEntityId = serializeFollowUpBulkTarget(decisionTargets[0]);
+    } else if (
+      globalAccess &&
+      idea.classification &&
+      ["CLASIFICACION_MEJORA_CONTINUA", "EN_IMPLEMENTACION", "VENCIDA"].includes(idea.status)
+    ) {
+      bulkActions.push("REASSIGN", "DUE_DATE");
+      bulkEntityId = serializeFollowUpBulkTarget({
+        kind: "IMPLEMENTATION",
+        targetId: idea.id,
+        expectedTargetUpdatedAt: idea.updatedAt.toISOString(),
+        expectedIdeaUpdatedAt: idea.updatedAt.toISOString(),
+        expectedRelatedUpdatedAt: idea.kaizenProject?.updatedAt.toISOString()
+      });
+    }
 
     buckets[view].push({
       key: `idea-${idea.id}`,
@@ -227,7 +293,9 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       href: `/ideas/${idea.id}`,
       dueDate,
       updatedAt: idea.updatedAt,
-      overdue: isPastDue(dueDate, terminalIdeaStatuses.has(idea.status))
+      overdue: isPastDue(dueDate, terminalIdeaStatuses.has(idea.status)),
+      bulkEntityId,
+      bulkActions
     });
   }
 
@@ -341,6 +409,11 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
   sortRows(buckets.pendientes, "pendientes");
   sortRows(buckets.seguimiento, "seguimiento");
   sortRows(buckets.equipo, "equipo");
+  const totalItems = ideaCount + kaizenCount + genbaCount;
+  const loadedItems = buckets[activeView].length;
+  const consumedBefore = portfolioOverview ? 0 : followUpConsumedBeforePage(moduleCounts, pageSlots, currentPage);
+  const shownFrom = loadedItems ? consumedBefore + 1 : 0;
+  const shownTo = consumedBefore + loadedItems;
 
   const viewMeta: Record<FollowUpView, { title: string; description: string; emptyTitle: string; emptyDescription: string }> = {
     pendientes: {
@@ -379,20 +452,38 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         </div>
       ) : null}
 
+      <nav aria-label="Filtrar por modulo" className="follow-up-module-filter">
+        {([
+          ["TODOS", "Todo"],
+          ["IDEA", "Ideas"],
+          ["KAIZEN", "Kaizen"],
+          ["GENBA", "GENBA"]
+        ] as const).map(([value, label]) => (
+          <Link
+            aria-current={moduleFilter === value ? "page" : undefined}
+            className={moduleFilter === value ? "is-active" : ""}
+            href={followUpHref(activeView, value)}
+            key={value}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+
       <nav aria-label="Vistas de seguimiento" className="work-queue-tabs">
         {([
-          ["pendientes", "Pendientes", buckets.pendientes.length],
-          ["seguimiento", "Seguimiento", buckets.seguimiento.length],
-          ["equipo", "Equipo", buckets.equipo.length]
-        ] as const).map(([value, label, count]) => (
+          ["pendientes", "Pendientes"],
+          ["seguimiento", "Seguimiento"],
+          ["equipo", "Equipo"]
+        ] as const).map(([value, label]) => (
           <Link
             aria-current={activeView === value ? "page" : undefined}
             className={`flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-md px-1 text-[10px] font-extrabold transition sm:gap-2 sm:px-2 sm:text-sm ${activeView === value ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-ink"}`}
-            href={`/seguimientos?vista=${value}`}
+            href={followUpHref(value, moduleFilter)}
             key={value}
           >
             <span className="whitespace-nowrap">{label}</span>
-            <span className={`flex min-w-5 items-center justify-center rounded-full px-1 py-0.5 text-[9px] sm:min-w-6 sm:px-1.5 sm:text-[10px] ${activeView === value ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700"}`}>{count}</span>
+            {activeView === value ? <span className="flex min-w-5 items-center justify-center rounded-full bg-white/15 px-1 py-0.5 text-[9px] text-white sm:min-w-6 sm:px-1.5 sm:text-[10px]">{totalItems}</span> : null}
           </Link>
         ))}
       </nav>
@@ -403,13 +494,28 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
             <h2 className="text-xl font-extrabold text-ink" id={`follow-up-${activeView}`}>{currentMeta.title}</h2>
             <p className="mt-1 text-sm text-slate-600">{currentMeta.description}</p>
           </div>
-          <p className="text-xs font-extrabold text-slate-500">{buckets[activeView].length} {buckets[activeView].length === 1 ? "elemento" : "elementos"}</p>
+          <p className="text-xs font-extrabold text-slate-500">
+            {portfolioOverview
+              ? `${loadedItems} prioritarios de ${totalItems} · elige un módulo para consultar todo`
+              : `${loadedItems ? `${shownFrom}-${shownTo}` : "0"} de ${totalItems} ${totalItems === 1 ? "elemento" : "elementos"}`}
+          </p>
         </div>
         <FollowUpTable
           emptyDescription={currentMeta.emptyDescription}
           emptyTitle={currentMeta.emptyTitle}
           rows={buckets[activeView]}
+          totalRows={totalItems}
         />
+        {totalPages > 1 ? (
+          <nav aria-label="Paginacion de seguimientos" className="workboard-pagination mt-5 no-print">
+            <p>Pagina {currentPage} de {totalPages}</p>
+            <div>
+              {currentPage > 1 ? <Link href={followUpHref(activeView, moduleFilter, currentPage - 1)}>Anterior</Link> : <span aria-disabled="true">Anterior</span>}
+              <strong>{shownFrom}-{shownTo} de {totalItems}</strong>
+              {currentPage < totalPages ? <Link href={followUpHref(activeView, moduleFilter, currentPage + 1)}>Siguiente</Link> : <span aria-disabled="true">Siguiente</span>}
+            </div>
+          </nav>
+        ) : null}
       </section>
     </>
   );

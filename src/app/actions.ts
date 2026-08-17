@@ -4,10 +4,11 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { Prisma, type ApprovalType, type Classification, type GenbaStatus, type IdeaCategory, type KaizenStatus, type Priority, type Role, type WorkItemStatus } from "@prisma/client";
+import { Prisma, type ApprovalType, type Classification, type GenbaStatus, type IdeaCategory, type IdeaStatus, type KaizenActivity, type KaizenStatus, type Priority, type Role, type WorkItemStatus } from "@prisma/client";
+import type { WorkboardBulkInput, WorkboardBulkItemResult, WorkboardBulkResult } from "@/components/operations-workboard";
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
-import { genbaDepartments, impactOptions, kaizenStatusLabels, requiredApprovalTypes, roleHomePath } from "@/lib/domain";
+import { genbaDepartments, impactOptions, kaizenStatusLabels, nextValidationStatus, requiredApprovalTypes, roleHomePath, validationOrder } from "@/lib/domain";
 import { EmployeeNumberValidationError, normalizeEmployeeNumber } from "@/lib/employee-number";
 import { saveUpload } from "@/lib/files";
 import { createKaizenFromIdea } from "@/lib/kaizen-from-idea";
@@ -17,7 +18,8 @@ import { ideaMailBody, notify } from "@/lib/notifications";
 import { reconcileCoinSourceAmount, resolveParticipantFromCollaborator, resolveParticipantFromUser } from "@/lib/coins";
 import { canDecideDepartmentApproval, canDecideInitialIdea, canViewIdea } from "@/lib/idea-access";
 import { hardDeleteIdeaByFolio } from "@/lib/hard-delete";
-import { kaizenClosureReadiness } from "@/lib/kaizen-closure";
+import { parseFollowUpBulkTarget } from "@/lib/follow-up-bulk";
+import { kaizenClosureReadiness, reconciledKaizenStatus } from "@/lib/kaizen-closure";
 import {
   KAIZEN_STAGE_ORDER,
   validateKaizenStageTransition,
@@ -27,7 +29,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { managerFollowersForMembership, supportFlags, syncIdeaSupportRequests, validSupportUnits } from "@/lib/support-routing";
 import { appBaseUrl } from "@/lib/url";
-import { approveSupervisor, createValidationApprovals, markOverdueIdeas, nextFolio, notifyIdeaClosed, updateStatusAfterValidations } from "@/lib/workflow";
+import { approveSupervisor, createValidationApprovals, markOverdueIdeas, nextFolio, notifyIdeaClosed, supportUsersFor, updateStatusAfterValidations } from "@/lib/workflow";
 
 const text = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
 const checked = (formData: FormData, key: string) => ["on", "true", "1", "yes", "si"].includes(text(formData, key).toLowerCase());
@@ -43,6 +45,9 @@ const dateOrNull = (formData: FormData, key: string) => {
 };
 const isImprovementManager = (role: Role) => role === "ADMIN" || role === "MEJORA_CONTINUA";
 class KaizenAlreadyClosedError extends Error {}
+class KaizenPermissionChangedError extends Error {}
+class BulkFollowUpConflictError extends Error {}
+const terminalSourceIdeaStatuses: IdeaStatus[] = ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION", "CERRADA", "CANCELADA"];
 class GenbaWalkClosedError extends Error {
   constructor(readonly walkId: string) {
     super("El recorrido GENBA ya no esta abierto.");
@@ -138,16 +143,67 @@ async function ensureKaizenTransfer(input: {
   });
 }
 
-async function refreshKaizenProject(projectId: string) {
-  const project = await prisma.kaizenProject.findUniqueOrThrow({
-    where: { id: projectId },
-    include: { activities: true }
+async function refreshKaizenProject(projectId: string, actorId: string) {
+  const closed = await serializableTransaction(async (tx) => {
+    const project = await tx.kaizenProject.findUniqueOrThrow({
+      where: { id: projectId },
+      include: {
+        activities: { include: { attachments: true } },
+        attachments: true,
+        teamMembers: { select: { id: true } }
+      }
+    });
+    if (project.status === "COMPLETADO" || project.status === "CANCELADO") return false;
+    const readiness = kaizenClosureReadiness({
+      activities: project.activities.map((activity) => ({ status: activity.status, evidenceCount: activity.attachments.length })),
+      hasCharter: project.attachments.some((attachment) => attachment.type === "CHARTER"),
+      teamCount: project.teamMembers.length
+    });
+    const reconciledStatus = reconciledKaizenStatus(project.status, readiness.ready);
+    if (reconciledStatus === project.status) return false;
+
+    const closedAt = new Date();
+    const claimed = await tx.kaizenProject.updateMany({
+      where: { id: projectId, status: { notIn: ["COMPLETADO", "CANCELADO"] } },
+      data: {
+        status: reconciledStatus,
+        closedAt,
+        closedById: null,
+        closureNote: "Cierre automatico: Charter, equipo, actividades y evidencias completos. ProbocaCoins pendientes de revision."
+      }
+    });
+    if (!claimed.count) return false;
+    await tx.kaizenUpdate.create({
+      data: {
+        projectId,
+        userId: actorId,
+        comment: "El sistema cerro el proyecto al confirmar Charter, equipo, actividades resueltas y evidencias. ProbocaCoins pendientes de revision."
+      }
+    });
+    await tx.auditLog.create({
+      data: {
+        entity: "KaizenProject",
+        entityId: projectId,
+        action: "KAIZEN_AUTO_COMPLETED",
+        userId: actorId,
+        details: JSON.stringify({ via: "automatic_reconciliation", rewardsPending: true })
+      }
+    });
+    if (project.sourceIdeaId) {
+      await tx.idea.updateMany({
+        where: { id: project.sourceIdeaId, status: { notIn: terminalSourceIdeaStatuses } },
+        data: { status: "IMPLEMENTADA", implementedAt: closedAt }
+      });
+    }
+    return true;
   });
-  if (project.status === "COMPLETADO" || project.status === "CANCELADO") return;
-  const relevant = project.activities.filter((activity) => activity.status !== "COMBINADA");
-  const started = relevant.some((activity) => activity.status !== "PENDIENTE");
-  if (project.status === "PLANIFICACION" && started) {
-    await prisma.kaizenProject.update({ where: { id: projectId }, data: { status: "EN_CURSO" } });
+  if (closed) {
+    revalidatePath("/kaizen");
+    revalidatePath("/kaizen/kanban");
+    revalidatePath("/kaizen/gantt");
+    revalidatePath("/kaizen/repositorio");
+    revalidatePath(`/kaizen/${projectId}`);
+    revalidatePath("/seguimientos");
   }
 }
 
@@ -479,6 +535,495 @@ export async function supervisorDecisionAction(formData: FormData) {
   revalidatePath("/");
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}`);
+}
+
+async function resolveBulkAssignee(identifier: string) {
+  const value = identifier.trim().toLowerCase();
+  if (!value) return null;
+  if (value.includes("@")) {
+    return prisma.user.findUnique({ where: { email: value }, select: { id: true, name: true, email: true, active: true } });
+  }
+  try {
+    const employeeNumber = normalizeEmployeeNumber(value);
+    if (!employeeNumber) return null;
+    return prisma.user.findUnique({ where: { employeeNumber }, select: { id: true, name: true, email: true, active: true } });
+  } catch {
+    return null;
+  }
+}
+
+function bulkFollowUpSummary(results: WorkboardBulkItemResult[], batchId?: string): WorkboardBulkResult {
+  const succeeded = results.filter((result) => result.ok).length;
+  const failed = results.length - succeeded;
+  return {
+    ok: failed === 0,
+    message: failed
+      ? `${succeeded} ${succeeded === 1 ? "cambio aplicado" : "cambios aplicados"}; ${failed} ${failed === 1 ? "requiere revision" : "requieren revision"}.`
+      : `${succeeded} ${succeeded === 1 ? "cambio aplicado correctamente" : "cambios aplicados correctamente"}.`,
+    succeeded,
+    failed,
+    results,
+    ...(batchId ? { batchIds: [batchId] } : {})
+  };
+}
+
+const bulkFollowUpSchema = z.object({
+  action: z.enum(["APPROVE", "REJECT", "REASSIGN", "DUE_DATE"]),
+  itemIds: z.array(z.string().trim().min(1).max(320)).min(1).max(25),
+  reason: z.string().trim().max(1_000).optional(),
+  assignee: z.string().trim().max(320).optional(),
+  dueDate: z.string().trim().max(10).optional()
+});
+
+async function bestEffortBulkNotification(operation: () => Promise<void>) {
+  try {
+    await operation();
+    return "";
+  } catch {
+    return " El cambio quedo guardado, pero la notificacion requiere reintento desde la bandeja.";
+  }
+}
+
+async function validationStatusInTransaction(tx: Prisma.TransactionClient, ideaId: string): Promise<IdeaStatus> {
+  const [approvals, supportRequests] = await Promise.all([
+    tx.approval.findMany({ where: { ideaId, type: { in: validationOrder } }, select: { type: true, status: true } }),
+    tx.ideaSupportRequest.findMany({ where: { ideaId, activatedAt: { not: null } }, select: { status: true } })
+  ]);
+  if (approvals.some((approval) => approval.status === "REJECTED") || supportRequests.some((request) => request.status === "REJECTED")) {
+    return "RECHAZADA_VALIDACION";
+  }
+  if (approvals.some((approval) => approval.status === "MORE_INFO") || supportRequests.some((request) => request.status === "MORE_INFO")) {
+    return "SOLICITUD_INFORMACION";
+  }
+  const pendingTypes = approvals.filter((approval) => approval.status === "PENDING").map((approval) => approval.type);
+  if (pendingTypes.length) return nextValidationStatus(pendingTypes);
+  return supportRequests.some((request) => request.status === "PENDING") ? "APROBADA_SUPERVISOR" : "APROBADA_PARA_IMPLEMENTAR";
+}
+
+async function claimValidationIdeaStatus(input: {
+  tx: Prisma.TransactionClient;
+  ideaId: string;
+  expectedUpdatedAt: Date;
+  status: IdeaStatus;
+  rejectionReason?: string;
+}) {
+  const claimed = await input.tx.idea.updateMany({
+    where: {
+      id: input.ideaId,
+      updatedAt: input.expectedUpdatedAt,
+      status: { in: ["APROBADA_SUPERVISOR", "EN_VALIDACION_CALIDAD", "EN_VALIDACION_SEGURIDAD", "EN_VALIDACION_MANTENIMIENTO", "SOLICITUD_INFORMACION"] }
+    },
+    data: {
+      status: input.status,
+      ...(input.status === "RECHAZADA_VALIDACION" ? { rejectionReason: input.rejectionReason ?? "Rechazada en validacion" } : {}),
+      ...(input.status !== "SOLICITUD_INFORMACION" ? { moreInfoRequest: null } : {})
+    }
+  });
+  if (claimed.count !== 1) throw new BulkFollowUpConflictError();
+}
+
+export async function bulkFollowUpAction(input: WorkboardBulkInput): Promise<WorkboardBulkResult> {
+  const user = await requireUser();
+  const parsedInput = bulkFollowUpSchema.safeParse(input);
+  if (!parsedInput.success) {
+    return { ok: false, message: "Selecciona al menos un registro y una accion valida.", succeeded: 0, failed: 0, results: [] };
+  }
+  const cleanInput = parsedInput.data;
+  const itemIds = [...new Set(cleanInput.itemIds)];
+  const reason = cleanInput.reason ?? "";
+  if (cleanInput.action === "REJECT" && reason.length < 3) {
+    return { ok: false, message: "Escribe una razon clara antes de rechazar.", succeeded: 0, failed: itemIds.length, results: [] };
+  }
+
+  const improvementManager = isImprovementManager(user.role);
+  let assignee: Awaited<ReturnType<typeof resolveBulkAssignee>> = null;
+  if (cleanInput.action === "REASSIGN") {
+    if (!improvementManager) {
+      return { ok: false, message: "Solo Administracion o Mejora Continua pueden reasignar implementaciones.", succeeded: 0, failed: itemIds.length, results: [] };
+    }
+    assignee = await resolveBulkAssignee(cleanInput.assignee ?? "");
+    if (!assignee?.active) {
+      return { ok: false, message: "No encontramos una persona activa con ese correo o numero de empleado.", succeeded: 0, failed: itemIds.length, results: [] };
+    }
+  }
+
+  let nextDueDate: Date | null = null;
+  if (cleanInput.action === "DUE_DATE") {
+    if (!improvementManager) {
+      return { ok: false, message: "Solo Administracion o Mejora Continua pueden cambiar fechas en lote.", succeeded: 0, failed: itemIds.length, results: [] };
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanInput.dueDate ?? "")) {
+      return { ok: false, message: "Selecciona una fecha compromiso valida.", succeeded: 0, failed: itemIds.length, results: [] };
+    }
+    nextDueDate = new Date(`${cleanInput.dueDate}T12:00:00`);
+    if (Number.isNaN(nextDueDate.getTime())) {
+      return { ok: false, message: "La fecha elegida no pudo interpretarse.", succeeded: 0, failed: itemIds.length, results: [] };
+    }
+  }
+
+  const batchId = crypto.randomUUID();
+  const results: WorkboardBulkItemResult[] = [];
+  for (const itemId of itemIds) {
+    let reference = "Registro no encontrado";
+    try {
+      const target = parseFollowUpBulkTarget(itemId);
+      if (!target) {
+        results.push({ itemId, reference, ok: false, message: "La seleccion quedo desactualizada. Recarga la bandeja antes de continuar." });
+        continue;
+      }
+      const expectedTargetUpdatedAt = new Date(target.expectedTargetUpdatedAt);
+      const expectedIdeaUpdatedAt = new Date(target.expectedIdeaUpdatedAt);
+      const expectedRelatedUpdatedAt = target.expectedRelatedUpdatedAt
+        ? new Date(target.expectedRelatedUpdatedAt)
+        : null;
+
+      if (cleanInput.action === "APPROVE" || cleanInput.action === "REJECT") {
+        if (target.kind === "INITIAL") {
+          const approval = await prisma.approval.findUnique({
+            where: { id: target.targetId },
+            include: {
+              idea: {
+                include: {
+                  area: { include: { organizationUnit: true } },
+                  supportRequests: { include: { assignedTo: true, orgUnit: true } }
+                }
+              }
+            }
+          });
+          if (!approval || approval.type !== "SUPERVISOR") {
+            results.push({ itemId, reference, ok: false, message: "La aprobacion inicial ya no existe." });
+            continue;
+          }
+          const idea = approval.idea;
+          reference = idea.folio;
+          if (!["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"].includes(idea.status)) {
+            results.push({ itemId, reference, ok: false, message: "La idea ya avanzo y no admite otra decision inicial." });
+            continue;
+          }
+          if (!(await canDecideInitialIdea(user, idea.id))) {
+            results.push({ itemId, reference, ok: false, message: "No esta asignada a tu ruta ni al equipo que supervisas." });
+            continue;
+          }
+          if (!["PENDING", "MORE_INFO"].includes(approval.status)) {
+            results.push({ itemId, reference, ok: false, message: "Ya fue decidida por otra persona o cambio de etapa." });
+            continue;
+          }
+
+          if (cleanInput.action === "REJECT") {
+            await serializableTransaction(async (tx) => {
+              const claimedApproval = await tx.approval.updateMany({
+                where: { id: approval.id, updatedAt: expectedTargetUpdatedAt, status: { in: ["PENDING", "MORE_INFO"] } },
+                data: { assignedToId: user.id, status: "REJECTED", decision: "RECHAZAR", comments: reason, decidedAt: new Date() }
+              });
+              if (claimedApproval.count !== 1) throw new BulkFollowUpConflictError();
+              const claimedIdea = await tx.idea.updateMany({
+                where: { id: idea.id, updatedAt: expectedIdeaUpdatedAt, status: { in: ["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"] } },
+                data: { status: "RECHAZADA_SUPERVISOR", supervisorId: user.id, rejectionReason: reason }
+              });
+              if (claimedIdea.count !== 1) throw new BulkFollowUpConflictError();
+              await tx.auditLog.create({
+                data: { entity: "Idea", entityId: idea.id, action: "SUPERVISOR_REJECTED", userId: user.id, details: JSON.stringify({ comments: reason, via: "bulk", batchId }) }
+              });
+            });
+            const warning = await bestEffortBulkNotification(() => notify({
+              ideaId: idea.id,
+              to: idea.collaboratorEmail ?? "",
+              subject: `Idea rechazada por responsable directo - Folio ${idea.folio} - Area ${idea.area.code}`,
+              body: ideaMailBody({ folio: idea.folio, area: idea.area.code, problem: idea.problem, proposal: idea.proposal, action: `Rechazada: ${reason}`, ideaId: idea.id })
+            }));
+            results.push({ itemId, reference, ok: true, message: `Rechazada con la razon registrada.${warning}` });
+            continue;
+          }
+
+          const required = requiredApprovalTypes(idea);
+          const supportAssignments = await Promise.all(required.map(async (type) => ({
+            type,
+            users: await supportUsersFor(type, idea.area.organizationUnit?.plantId)
+          })));
+          const status = await serializableTransaction(async (tx) => {
+            const claimedApproval = await tx.approval.updateMany({
+              where: { id: approval.id, updatedAt: expectedTargetUpdatedAt, status: { in: ["PENDING", "MORE_INFO"] } },
+              data: { assignedToId: user.id, status: "APPROVED", decision: "APROBAR", comments: null, decidedAt: new Date() }
+            });
+            if (claimedApproval.count !== 1) throw new BulkFollowUpConflictError();
+            await tx.approval.deleteMany({
+              where: { ideaId: idea.id, type: { in: validationOrder.filter((type) => !required.includes(type)) } }
+            });
+            for (const assignment of supportAssignments) {
+              await tx.approval.upsert({
+                where: { ideaId_type: { ideaId: idea.id, type: assignment.type } },
+                update: { assignedToId: assignment.users[0]?.id ?? null, status: "PENDING", decision: null, comments: null, decidedAt: null },
+                create: { ideaId: idea.id, type: assignment.type, assignedToId: assignment.users[0]?.id ?? null }
+              });
+            }
+            await tx.ideaSupportRequest.updateMany({
+              where: { ideaId: idea.id },
+              data: { activatedAt: new Date(), status: "PENDING", decision: null, comments: null, decidedAt: null }
+            });
+            const dynamicPending = await tx.ideaSupportRequest.count({ where: { ideaId: idea.id, activatedAt: { not: null }, status: "PENDING" } });
+            const nextStatus = required.length ? nextValidationStatus(required) : dynamicPending ? "APROBADA_SUPERVISOR" : "APROBADA_PARA_IMPLEMENTAR";
+            const claimedIdea = await tx.idea.updateMany({
+              where: { id: idea.id, updatedAt: expectedIdeaUpdatedAt, status: { in: ["REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"] } },
+              data: { status: nextStatus, supervisorId: user.id, rejectionReason: null, moreInfoRequest: null }
+            });
+            if (claimedIdea.count !== 1) throw new BulkFollowUpConflictError();
+            await tx.auditLog.create({
+              data: { entity: "Idea", entityId: idea.id, action: "SUPERVISOR_APPROVED", userId: user.id, details: JSON.stringify({ status: nextStatus, via: "bulk", batchId }) }
+            });
+            return nextStatus;
+          });
+
+          const warning = await bestEffortBulkNotification(async () => {
+            for (const assignment of supportAssignments) {
+              for (const supportUser of assignment.users) {
+                await notify({
+                  ideaId: idea.id,
+                  to: supportUser.email,
+                  subject: `Idea de mejora pendiente de validacion - Folio ${idea.folio} - Area ${idea.area.code}`,
+                  body: ideaMailBody({ folio: idea.folio, area: idea.area.code, problem: idea.problem, proposal: idea.proposal, action: `Validar como ${assignment.type}`, ideaId: idea.id }),
+                  channels: ["EMAIL", "TEAMS"]
+                });
+              }
+            }
+            for (const request of idea.supportRequests) {
+              await notifyModuleAssignment({
+                to: request.assignedTo?.email,
+                subject: `Apoyo solicitado para la idea ${idea.folio}`,
+                lines: [`Area solicitante: ${idea.area.code}`, `Apoyo requerido de: ${request.orgUnit.name}`, `Problema: ${idea.problem}`],
+                path: `/ideas/${idea.id}`
+              });
+            }
+          });
+          results.push({ itemId, reference, ok: true, message: `Aprobada; siguiente etapa: ${status.replaceAll("_", " ").toLowerCase()}.${warning}` });
+          continue;
+        }
+
+        if (target.kind === "DEPARTMENT") {
+          const approval = await prisma.approval.findUnique({
+            where: { id: target.targetId },
+            include: { idea: { include: { area: true, supervisor: true } } }
+          });
+          if (!approval || !validationOrder.includes(approval.type)) {
+            results.push({ itemId, reference, ok: false, message: "La validacion departamental ya no existe." });
+            continue;
+          }
+          const idea = approval.idea;
+          reference = idea.folio;
+          if (!(await canDecideDepartmentApproval(user, idea.id, approval.type))) {
+            results.push({ itemId, reference, ok: false, message: "Esta validacion ya no pertenece a tu departamento o ruta." });
+            continue;
+          }
+          const status = await serializableTransaction(async (tx) => {
+            const claimed = await tx.approval.updateMany({
+              where: { id: approval.id, updatedAt: expectedTargetUpdatedAt, status: { in: ["PENDING", "MORE_INFO"] } },
+              data: {
+                assignedToId: user.id,
+                status: cleanInput.action === "APPROVE" ? "APPROVED" : "REJECTED",
+                decision: cleanInput.action === "APPROVE" ? "APROBAR" : "RECHAZAR",
+                comments: reason || null,
+                decidedAt: new Date()
+              }
+            });
+            if (claimed.count !== 1) throw new BulkFollowUpConflictError();
+            const nextStatus = await validationStatusInTransaction(tx, idea.id);
+            await claimValidationIdeaStatus({ tx, ideaId: idea.id, expectedUpdatedAt: expectedIdeaUpdatedAt, status: nextStatus, rejectionReason: reason });
+            await tx.auditLog.create({
+              data: { entity: "Idea", entityId: idea.id, action: `${approval.type}_${cleanInput.action === "APPROVE" ? "APROBAR" : "RECHAZAR"}`, userId: user.id, details: JSON.stringify({ comments: reason, via: "bulk", batchId, approvalId: approval.id }) }
+            });
+            return nextStatus;
+          });
+          const warning = await bestEffortBulkNotification(async () => {
+            const recipients = new Set<string>();
+            if (idea.supervisor?.email) recipients.add(idea.supervisor.email);
+            const managers = await prisma.user.findMany({ where: { role: { in: ["MEJORA_CONTINUA", "ADMIN"] }, active: true }, select: { email: true } });
+            managers.forEach((manager) => recipients.add(manager.email));
+            for (const to of recipients) {
+              await notify({
+                ideaId: idea.id,
+                to,
+                subject: `Validacion ${cleanInput.action === "APPROVE" ? "aprobada" : "rechazada"} - Folio ${idea.folio} - Area ${idea.area.code}`,
+                body: ideaMailBody({ folio: idea.folio, area: idea.area.code, problem: idea.problem, proposal: idea.proposal, action: `${approval.type}: ${reason || "APROBAR"}`, ideaId: idea.id })
+              });
+            }
+          });
+          results.push({ itemId, reference, ok: true, message: `${approval.type} ${cleanInput.action === "APPROVE" ? "aprobó" : "rechazó"}; etapa actualizada a ${status.replaceAll("_", " ").toLowerCase()}.${warning}` });
+          continue;
+        }
+
+        if (target.kind === "SUPPORT") {
+          const request = await prisma.ideaSupportRequest.findUnique({
+            where: { id: target.targetId },
+            include: { idea: { include: { area: true, supervisor: true } }, orgUnit: true }
+          });
+          if (!request) {
+            results.push({ itemId, reference, ok: false, message: "La solicitud de apoyo ya no existe." });
+            continue;
+          }
+          const idea = request.idea;
+          reference = idea.folio;
+          const membership = await prisma.orgMembership.findFirst({
+            where: { userId: user.id, orgUnitId: request.orgUnitId, active: true, canReceiveIdeas: true },
+            select: { id: true }
+          });
+          if (!request.activatedAt || (!improvementManager && request.assignedToId !== user.id && !membership)) {
+            results.push({ itemId, reference, ok: false, message: "La solicitud ya no pertenece a tu ruta de apoyo." });
+            continue;
+          }
+          const status = await serializableTransaction(async (tx) => {
+            const claimed = await tx.ideaSupportRequest.updateMany({
+              where: { id: request.id, updatedAt: expectedTargetUpdatedAt, activatedAt: { not: null }, status: { in: ["PENDING", "MORE_INFO"] } },
+              data: {
+                assignedToId: user.id,
+                status: cleanInput.action === "APPROVE" ? "APPROVED" : "REJECTED",
+                decision: cleanInput.action === "APPROVE" ? "APROBAR" : "RECHAZAR",
+                comments: reason || null,
+                decidedAt: new Date()
+              }
+            });
+            if (claimed.count !== 1) throw new BulkFollowUpConflictError();
+            const nextStatus = await validationStatusInTransaction(tx, idea.id);
+            await claimValidationIdeaStatus({ tx, ideaId: idea.id, expectedUpdatedAt: expectedIdeaUpdatedAt, status: nextStatus, rejectionReason: reason });
+            await tx.auditLog.create({
+              data: { entity: "IdeaSupportRequest", entityId: request.id, action: `DYNAMIC_SUPPORT_${cleanInput.action === "APPROVE" ? "APROBAR" : "RECHAZAR"}`, userId: user.id, details: JSON.stringify({ ideaId: idea.id, orgUnitId: request.orgUnitId, comments: reason, via: "bulk", batchId }) }
+            });
+            return nextStatus;
+          });
+          const warning = await bestEffortBulkNotification(async () => {
+            const recipients = new Set<string>();
+            if (idea.supervisor?.email) recipients.add(idea.supervisor.email);
+            const managers = await prisma.user.findMany({ where: { role: { in: ["MEJORA_CONTINUA", "ADMIN"] }, active: true }, select: { email: true } });
+            managers.forEach((manager) => recipients.add(manager.email));
+            for (const to of recipients) {
+              await notify({
+                ideaId: idea.id,
+                to,
+                subject: `${request.orgUnit.name}: ${cleanInput.action === "APPROVE" ? "aprobada" : "rechazada"} - ${idea.folio}`,
+                body: ideaMailBody({ folio: idea.folio, area: idea.area.code, problem: idea.problem, proposal: idea.proposal, action: `${request.orgUnit.name}: ${reason || "APROBAR"}`, ideaId: idea.id })
+              });
+            }
+          });
+          results.push({ itemId, reference, ok: true, message: `${request.orgUnit.name} ${cleanInput.action === "APPROVE" ? "aprobó" : "rechazó"}; etapa actualizada a ${status.replaceAll("_", " ").toLowerCase()}.${warning}` });
+          continue;
+        }
+
+        results.push({ itemId, reference, ok: false, message: "Este registro no corresponde a una validacion aprobable." });
+        continue;
+      }
+
+      if (target.kind !== "IMPLEMENTATION") {
+        results.push({ itemId, reference, ok: false, message: "Esta accion solo aplica a implementaciones clasificadas." });
+        continue;
+      }
+      const idea = await prisma.idea.findUnique({
+        where: { id: target.targetId },
+        include: {
+          area: true,
+          implementationOwner: true,
+          kaizenProject: { select: { id: true, updatedAt: true } }
+        }
+      });
+      if (!idea) {
+        results.push({ itemId, reference, ok: false, message: "La idea pudo haberse eliminado o ya no estar disponible." });
+        continue;
+      }
+      reference = idea.folio;
+      if (!improvementManager || !idea.classification || !["CLASIFICACION_MEJORA_CONTINUA", "EN_IMPLEMENTACION", "VENCIDA"].includes(idea.status)) {
+        results.push({ itemId, reference, ok: false, message: "La idea no esta clasificada o su etapa ya no permite esta accion." });
+        continue;
+      }
+      if (idea.kaizenProject && !expectedRelatedUpdatedAt) {
+        results.push({ itemId, reference, ok: false, message: "El proyecto Kaizen relacionado cambio de version. Actualiza la bandeja antes de continuar." });
+        continue;
+      }
+
+      if (cleanInput.action === "REASSIGN") {
+        if (!assignee || !idea.dueDate) {
+          results.push({ itemId, reference, ok: false, message: "Primero asigna una fecha compromiso; despues podras cambiar a la persona responsable." });
+          continue;
+        }
+        const currentDueDate = idea.dueDate;
+        if (idea.classification === "KAIZEN" && !idea.kaizenProject) {
+          results.push({ itemId, reference, ok: false, message: "La transferencia Kaizen esta pendiente. Abre el expediente para crearla antes de reasignar." });
+          continue;
+        }
+        await serializableTransaction(async (tx) => {
+          const claimed = await tx.idea.updateMany({
+            where: { id: idea.id, status: idea.status, updatedAt: expectedIdeaUpdatedAt },
+            data: { implementationOwnerId: assignee.id, status: "EN_IMPLEMENTACION" }
+          });
+          if (claimed.count !== 1) throw new BulkFollowUpConflictError();
+          if (idea.kaizenProject) {
+            const claimedKaizen = await tx.kaizenProject.updateMany({
+              where: { id: idea.kaizenProject.id, updatedAt: expectedRelatedUpdatedAt ?? undefined },
+              data: { leaderId: assignee.id }
+            });
+            if (claimedKaizen.count !== 1) throw new BulkFollowUpConflictError();
+          }
+          await tx.auditLog.create({
+            data: { entity: "Idea", entityId: idea.id, action: "IMPLEMENTATION_REASSIGNED", userId: user.id, details: JSON.stringify({ ownerId: assignee.id, via: "bulk", batchId }) }
+          });
+        });
+        const warning = await bestEffortBulkNotification(() => notifyModuleAssignment({
+          to: assignee.email,
+          subject: `Seguimiento asignado - idea ${idea.folio}`,
+          lines: [`Idea: ${idea.problem}`, `Fecha compromiso: ${currentDueDate.toLocaleDateString("es-MX")}`],
+          path: `/ideas/${idea.id}`
+        }));
+        results.push({ itemId, reference, ok: true, message: `Reasignada a ${assignee.name}.${warning}` });
+        continue;
+      }
+
+      if (!nextDueDate) throw new Error("Fecha no disponible");
+      if (idea.classification === "KAIZEN" && idea.implementationOwnerId && !idea.kaizenProject) {
+        results.push({ itemId, reference, ok: false, message: "La transferencia Kaizen esta pendiente. Abre el expediente para crearla antes de reprogramar." });
+        continue;
+      }
+      await serializableTransaction(async (tx) => {
+        const claimed = await tx.idea.updateMany({
+          where: { id: idea.id, status: idea.status, updatedAt: expectedIdeaUpdatedAt },
+          data: { dueDate: nextDueDate, ...(idea.status === "VENCIDA" && idea.implementationOwnerId ? { status: "EN_IMPLEMENTACION" } : {}) }
+        });
+        if (claimed.count !== 1) throw new BulkFollowUpConflictError();
+        if (idea.kaizenProject) {
+          const claimedKaizen = await tx.kaizenProject.updateMany({
+            where: { id: idea.kaizenProject.id, updatedAt: expectedRelatedUpdatedAt ?? undefined },
+            data: { endDate: nextDueDate }
+          });
+          if (claimedKaizen.count !== 1) throw new BulkFollowUpConflictError();
+        }
+        await tx.auditLog.create({
+          data: { entity: "Idea", entityId: idea.id, action: "IMPLEMENTATION_DUE_DATE_CHANGED", userId: user.id, details: JSON.stringify({ dueDate: cleanInput.dueDate, via: "bulk", batchId }) }
+        });
+      });
+      const warning = idea.implementationOwner?.email
+        ? await bestEffortBulkNotification(() => notifyModuleAssignment({
+            to: idea.implementationOwner?.email,
+            subject: `Nueva fecha compromiso - idea ${idea.folio}`,
+            lines: [`Idea: ${idea.problem}`, `Nueva fecha: ${nextDueDate.toLocaleDateString("es-MX")}`],
+            path: `/ideas/${idea.id}`
+          }))
+        : "";
+      results.push({ itemId, reference, ok: true, message: `Fecha actualizada al ${nextDueDate.toLocaleDateString("es-MX")}.${warning}` });
+    } catch (error) {
+      results.push({
+        itemId,
+        reference,
+        ok: false,
+        message: error instanceof BulkFollowUpConflictError
+          ? "Otra persona cambio este registro mientras trabajabas. Actualiza la bandeja y revisalo de nuevo."
+          : "No fue posible aplicar el cambio. El expediente conserva su ultimo estado confirmado."
+      });
+    }
+  }
+
+  if (results.some((result) => result.ok)) {
+    revalidatePath("/");
+    revalidatePath("/seguimientos");
+    revalidatePath("/dashboard");
+    revalidatePath("/ideas");
+    revalidatePath("/kaizen");
+  }
+  return bulkFollowUpSummary(results, batchId);
 }
 
 export async function validationDecisionAction(formData: FormData) {
@@ -1324,6 +1869,7 @@ export async function uploadKaizenCharterAction(formData: FormData) {
     prisma.kaizenUpdate.create({ data: { projectId, userId: user.id, comment: `Project Charter cargado: ${upload.filename}` } })
   ]);
   await auditLog({ entity: "KaizenProject", entityId: projectId, action: "KAIZEN_CHARTER_UPLOADED", userId: user.id, details: { filename: upload.filename } });
+  await refreshKaizenProject(projectId, user.id);
   revalidatePath("/kaizen");
   revalidatePath(`/kaizen/${projectId}`);
   redirect(`/kaizen/${projectId}`);
@@ -1334,40 +1880,47 @@ export async function addKaizenActivityAction(formData: FormData) {
   const projectId = text(formData, "projectId");
   const action = text(formData, "action");
   if (!action) redirect(`/kaizen/${projectId}?error=actividad`);
-  const currentProject = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId }, select: { status: true } });
-  if (currentProject.status === "COMPLETADO" || currentProject.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
-  const activity = await prisma.$transaction(async (tx) => {
-    const maximum = await tx.kaizenActivity.aggregate({ where: { projectId }, _max: { number: true } });
-    return tx.kaizenActivity.create({
-      data: {
-        projectId,
-        number: (maximum._max.number ?? 0) + 1,
-        problem: text(formData, "problem") || null,
-        action,
-        ownerId: text(formData, "ownerId") || null,
-        startDate: dateOrNull(formData, "startDate"),
-        dueDate: dateOrNull(formData, "dueDate"),
-        status: "PENDIENTE"
-      },
-      include: { owner: true, project: true }
+  let activity: Prisma.KaizenActivityGetPayload<{ include: { owner: true; project: true } }>;
+  try {
+    activity = await serializableTransaction(async (tx) => {
+      const project = await tx.kaizenProject.findUniqueOrThrow({ where: { id: projectId }, select: { status: true } });
+      if (project.status === "COMPLETADO" || project.status === "CANCELADO") throw new KaizenAlreadyClosedError();
+      const maximum = await tx.kaizenActivity.aggregate({ where: { projectId }, _max: { number: true } });
+      const created = await tx.kaizenActivity.create({
+        data: {
+          projectId,
+          number: (maximum._max.number ?? 0) + 1,
+          problem: text(formData, "problem") || null,
+          action,
+          ownerId: text(formData, "ownerId") || null,
+          startDate: dateOrNull(formData, "startDate"),
+          dueDate: dateOrNull(formData, "dueDate"),
+          status: "PENDIENTE"
+        },
+        include: { owner: true, project: true }
+      });
+      if (created.ownerId) {
+        await tx.kaizenTeamMember.upsert({
+          where: { projectId_userId: { projectId, userId: created.ownerId } },
+          update: {},
+          create: { projectId, userId: created.ownerId, role: "Responsable de actividad" }
+        });
+      }
+      await tx.kaizenUpdate.create({ data: { projectId, activityId: created.id, userId: user.id, comment: `Actividad #${created.number} creada.` } });
+      await tx.auditLog.create({ data: { entity: "KaizenActivity", entityId: created.id, action: "KAIZEN_ACTIVITY_CREATED", userId: user.id, details: JSON.stringify({ projectId }) } });
+      return created;
     });
-  });
-  if (activity.ownerId) {
-    await prisma.kaizenTeamMember.upsert({
-      where: { projectId_userId: { projectId, userId: activity.ownerId } },
-      update: {},
-      create: { projectId, userId: activity.ownerId, role: "Responsable de actividad" }
-    });
+  } catch (error) {
+    if (error instanceof KaizenAlreadyClosedError) redirect(`/kaizen/${projectId}?error=cerrado`);
+    throw error;
   }
-  await prisma.kaizenUpdate.create({ data: { projectId, activityId: activity.id, userId: user.id, comment: `Actividad #${activity.number} creada.` } });
-  await auditLog({ entity: "KaizenActivity", entityId: activity.id, action: "KAIZEN_ACTIVITY_CREATED", userId: user.id, details: { projectId } });
   await notifyModuleAssignment({
     to: activity.owner?.email,
     subject: `Actividad asignada en ${activity.project.folio}`,
     lines: [`Proyecto: ${activity.project.title}`, `Actividad: ${activity.action}`, `Fecha compromiso: ${activity.dueDate?.toLocaleDateString("es-MX") ?? "Por definir"}`],
     path: `/kaizen/${projectId}`
   });
-  await refreshKaizenProject(projectId);
+  await refreshKaizenProject(projectId, user.id);
   revalidatePath("/kaizen");
   revalidatePath("/kaizen/kanban");
   revalidatePath(`/kaizen/${projectId}`);
@@ -1380,29 +1933,36 @@ export async function updateKaizenActivityAction(formData: FormData) {
   const status = text(formData, "status") as WorkItemStatus;
   const editableStatuses: WorkItemStatus[] = ["PENDIENTE", "EN_PROCESO", "BLOQUEADA"];
   if (!editableStatuses.includes(status)) redirect("/kaizen");
-  const currentActivity = await prisma.kaizenActivity.findUniqueOrThrow({ where: { id: activityId }, include: { project: { select: { status: true } } } });
-  if (currentActivity.project.status === "COMPLETADO" || currentActivity.project.status === "CANCELADO") redirect(`/kaizen/${currentActivity.projectId}?error=cerrado`);
-  const activity = await prisma.$transaction(async (tx) => {
-    const updated = await tx.kaizenActivity.update({ where: { id: activityId }, data: {
-      problem: text(formData, "problem") || null,
-      action: text(formData, "action"),
-      ownerId: text(formData, "ownerId") || null,
-      startDate: dateOrNull(formData, "startDate"),
-      dueDate: dateOrNull(formData, "dueDate"),
-      status
-    } });
-    if (updated.ownerId) {
-      await tx.kaizenTeamMember.upsert({
-        where: { projectId_userId: { projectId: updated.projectId, userId: updated.ownerId } },
-        update: {},
-        create: { projectId: updated.projectId, userId: updated.ownerId, role: "Responsable de actividad" }
-      });
-    }
-    return updated;
-  });
-  await prisma.kaizenUpdate.create({ data: { projectId: activity.projectId, activityId, userId: user.id, comment: `Actividad #${activity.number} actualizada.` } });
-  await auditLog({ entity: "KaizenActivity", entityId: activityId, action: "KAIZEN_ACTIVITY_UPDATED", userId: user.id, details: { status } });
-  await refreshKaizenProject(activity.projectId);
+  let activity: KaizenActivity;
+  try {
+    activity = await serializableTransaction(async (tx) => {
+      const current = await tx.kaizenActivity.findUniqueOrThrow({ where: { id: activityId }, include: { project: { select: { status: true } } } });
+      if (current.project.status === "COMPLETADO" || current.project.status === "CANCELADO") throw new KaizenAlreadyClosedError();
+      const updated = await tx.kaizenActivity.update({ where: { id: activityId }, data: {
+        problem: text(formData, "problem") || null,
+        action: text(formData, "action"),
+        ownerId: text(formData, "ownerId") || null,
+        startDate: dateOrNull(formData, "startDate"),
+        dueDate: dateOrNull(formData, "dueDate"),
+        status
+      } });
+      if (updated.ownerId) {
+        await tx.kaizenTeamMember.upsert({
+          where: { projectId_userId: { projectId: updated.projectId, userId: updated.ownerId } },
+          update: {},
+          create: { projectId: updated.projectId, userId: updated.ownerId, role: "Responsable de actividad" }
+        });
+      }
+      await tx.kaizenUpdate.create({ data: { projectId: updated.projectId, activityId, userId: user.id, comment: `Actividad #${updated.number} actualizada.` } });
+      await tx.auditLog.create({ data: { entity: "KaizenActivity", entityId: activityId, action: "KAIZEN_ACTIVITY_UPDATED", userId: user.id, details: JSON.stringify({ status }) } });
+      return updated;
+    });
+  } catch (error) {
+    const projectId = await prisma.kaizenActivity.findUnique({ where: { id: activityId }, select: { projectId: true } });
+    if (error instanceof KaizenAlreadyClosedError && projectId) redirect(`/kaizen/${projectId.projectId}?error=cerrado`);
+    throw error;
+  }
+  await refreshKaizenProject(activity.projectId, user.id);
   revalidatePath("/kaizen/kanban");
   revalidatePath(`/kaizen/${activity.projectId}`);
   redirect(`/kaizen/${activity.projectId}`);
@@ -1421,23 +1981,37 @@ export async function closeKaizenActivityAction(formData: FormData) {
   const evidence = await saveUpload(formData.get("evidence") as File | null, `${activity.project.folio}-actividad-${activity.number}`);
   if (outcome === "COMPLETADA" && !evidence) redirect(`/kaizen/${activity.projectId}?error=evidencia`);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.kaizenActivity.update({
-      where: { id: activityId },
-      data: {
-        status: outcome,
-        completionNote: outcome === "COMPLETADA" ? note || "Actividad completada con evidencia." : null,
-        cancellationReason: outcome === "CANCELADA" ? note : null,
-        closedAt: new Date()
+  try {
+    await serializableTransaction(async (tx) => {
+      const current = await tx.kaizenActivity.findUniqueOrThrow({
+        where: { id: activityId },
+        include: { project: { select: { status: true, leaderId: true } } }
+      });
+      if (current.project.status === "COMPLETADO" || current.project.status === "CANCELADO") throw new KaizenAlreadyClosedError();
+      if (!isImprovementManager(user.role) && current.ownerId !== user.id && current.project.leaderId !== user.id) {
+        throw new KaizenPermissionChangedError();
       }
+      await tx.kaizenActivity.update({
+        where: { id: activityId },
+        data: {
+          status: outcome,
+          completionNote: outcome === "COMPLETADA" ? note || "Actividad completada con evidencia." : null,
+          cancellationReason: outcome === "CANCELADA" ? note : null,
+          closedAt: new Date()
+        }
+      });
+      if (evidence) {
+        await tx.kaizenAttachment.create({ data: { projectId: activity.projectId, activityId, type: "EVIDENCE", filename: evidence.filename, path: evidence.path, uploadedBy: user.name } });
+      }
+      await tx.kaizenUpdate.create({ data: { projectId: activity.projectId, activityId, userId: user.id, comment: outcome === "COMPLETADA" ? `Actividad #${activity.number} completada.` : `Actividad #${activity.number} cerrada sin ejecutar. Motivo: ${note}` } });
+      await tx.auditLog.create({ data: { entity: "KaizenActivity", entityId: activityId, action: `KAIZEN_ACTIVITY_${outcome}`, userId: user.id, details: JSON.stringify({ note, evidence: evidence?.filename }) } });
     });
-    if (evidence) {
-      await tx.kaizenAttachment.create({ data: { projectId: activity.projectId, activityId, type: "EVIDENCE", filename: evidence.filename, path: evidence.path, uploadedBy: user.name } });
-    }
-    await tx.kaizenUpdate.create({ data: { projectId: activity.projectId, activityId, userId: user.id, comment: outcome === "COMPLETADA" ? `Actividad #${activity.number} completada.` : `Actividad #${activity.number} cerrada sin ejecutar. Motivo: ${note}` } });
-  });
-  await auditLog({ entity: "KaizenActivity", entityId: activityId, action: `KAIZEN_ACTIVITY_${outcome}`, userId: user.id, details: { note, evidence: evidence?.filename } });
-  await refreshKaizenProject(activity.projectId);
+  } catch (error) {
+    if (error instanceof KaizenAlreadyClosedError) redirect(`/kaizen/${activity.projectId}?error=cerrado`);
+    if (error instanceof KaizenPermissionChangedError) redirect(`/kaizen/${activity.projectId}?error=sin_permiso`);
+    throw error;
+  }
+  await refreshKaizenProject(activity.projectId, user.id);
   revalidatePath("/kaizen");
   revalidatePath("/kaizen/kanban");
   revalidatePath(`/kaizen/${activity.projectId}`);
@@ -1455,13 +2029,19 @@ export async function mergeKaizenActivitiesAction(formData: FormData) {
     prisma.kaizenActivity.findUniqueOrThrow({ where: { id: targetId } })
   ]);
   if (source.projectId !== target.projectId) redirect(`/kaizen/${source.projectId}`);
-  if (source.project.status === "COMPLETADO" || source.project.status === "CANCELADO") redirect(`/kaizen/${source.projectId}?error=cerrado`);
-  await prisma.$transaction([
-    prisma.kaizenActivity.update({ where: { id: sourceId }, data: { status: "COMBINADA", mergedIntoId: targetId, mergeReason: reason, closedAt: new Date() } }),
-    prisma.kaizenUpdate.create({ data: { projectId: source.projectId, activityId: sourceId, userId: user.id, comment: `Actividad #${source.number} combinada con #${target.number}. Justificación: ${reason}` } })
-  ]);
-  await auditLog({ entity: "KaizenActivity", entityId: sourceId, action: "KAIZEN_ACTIVITY_MERGED", userId: user.id, details: { targetId, reason } });
-  await refreshKaizenProject(source.projectId);
+  try {
+    await serializableTransaction(async (tx) => {
+      const currentProject = await tx.kaizenProject.findUniqueOrThrow({ where: { id: source.projectId }, select: { status: true } });
+      if (currentProject.status === "COMPLETADO" || currentProject.status === "CANCELADO") throw new KaizenAlreadyClosedError();
+      await tx.kaizenActivity.update({ where: { id: sourceId }, data: { status: "COMBINADA", mergedIntoId: targetId, mergeReason: reason, closedAt: new Date() } });
+      await tx.kaizenUpdate.create({ data: { projectId: source.projectId, activityId: sourceId, userId: user.id, comment: `Actividad #${source.number} combinada con #${target.number}. Justificación: ${reason}` } });
+      await tx.auditLog.create({ data: { entity: "KaizenActivity", entityId: sourceId, action: "KAIZEN_ACTIVITY_MERGED", userId: user.id, details: JSON.stringify({ targetId, reason }) } });
+    });
+  } catch (error) {
+    if (error instanceof KaizenAlreadyClosedError) redirect(`/kaizen/${source.projectId}?error=cerrado`);
+    throw error;
+  }
+  await refreshKaizenProject(source.projectId, user.id);
   revalidatePath("/kaizen/kanban");
   revalidatePath(`/kaizen/${source.projectId}`);
   redirect(`/kaizen/${source.projectId}`);
@@ -1520,6 +2100,7 @@ export async function addKaizenTeamMemberAction(formData: FormData) {
     path: `/kaizen/${projectId}`
   });
   await auditLog({ entity: "KaizenTeamMember", entityId: `${projectId}:${userId}`, action: "KAIZEN_TEAM_MEMBER_UPSERTED", userId: user.id, details: { role } });
+  await refreshKaizenProject(projectId, user.id);
   revalidatePath(`/kaizen/${projectId}`);
   redirect(`/kaizen/${projectId}?success=equipo`);
 }
@@ -1606,7 +2187,10 @@ export async function closeKaizenProjectAction(formData: FormData) {
     await tx.kaizenUpdate.create({ data: { projectId, userId: user.id, comment: `${outcome === "COMPLETADO" ? "Proyecto completado" : "Proyecto cancelado"}. ${closureNote} ProbocaCoins del equipo: ${totalCoins}.` } });
     await tx.auditLog.create({ data: { entity: "KaizenProject", entityId: projectId, action: `KAIZEN_${outcome}`, userId: user.id, details: JSON.stringify({ closureNote, totalCoins }) } });
     if (outcome === "COMPLETADO" && project.sourceIdeaId) {
-      await tx.idea.update({ where: { id: project.sourceIdeaId }, data: { status: "IMPLEMENTADA", implementedAt: closedAt } });
+      await tx.idea.updateMany({
+        where: { id: project.sourceIdeaId, status: { notIn: terminalSourceIdeaStatuses } },
+        data: { status: "IMPLEMENTADA", implementedAt: closedAt }
+      });
     }
     });
   } catch (error) {
