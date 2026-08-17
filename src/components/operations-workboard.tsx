@@ -634,7 +634,9 @@ export function OperationsWorkboard({
 
   return (
     <section className={`workboard is-${density}`} aria-label={`${primaryLabel} - tablero de trabajo`}>
-      <div className="workboard-viewbar no-print">
+      {/* Vistas y busqueda comparten fila: eran dos bandas de 54 y 62 px. */}
+      <div className="workboard-controlbar no-print">
+      <div className="workboard-viewbar">
         <div className="workboard-tabs" aria-label="Vista del tablero">
           {([
             ["table", "Tabla", LayoutList],
@@ -649,7 +651,7 @@ export function OperationsWorkboard({
         <div className="workboard-view-meta"><span className="workboard-live-dot" />{filtered.length} registros</div>
       </div>
 
-      <div className="workboard-toolbar no-print">
+      <div className="workboard-toolbar">
         <label className="workboard-search">
           <Search className="h-[18px] w-[18px]" aria-hidden />
           <input aria-label="Filtrar los registros cargados en esta pagina" onChange={(event) => setQuery(event.target.value)} placeholder={`Filtrar esta pagina de ${primaryLabel.toLocaleLowerCase("es-MX")}`} value={query} />
@@ -670,6 +672,7 @@ export function OperationsWorkboard({
             <button aria-label="Limpiar seleccion" onClick={() => { setSelected(new Set()); setBulkMode(null); setBulkFeedback(null); }} type="button"><X className="h-4 w-4" aria-hidden /></button>
           </div>
         ) : null}
+      </div>
       </div>
 
       {bulkMode ? (

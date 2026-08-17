@@ -1,24 +1,26 @@
 export function PageHeader({
   title,
   description,
-  actions,
-  eyebrow = "PROpEx · Ideas de Mejora"
+  actions
 }: {
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  /**
+   * Ya no se dibuja. El "eyebrow" gastaba una banda completa para repetir el modulo, que
+   * la barra lateral ya indica. Medido en el tablero de Ideas: entre eyebrow, titulo,
+   * subtitulo, acciones, pestanas y buscador se consumia el 57% del alto util antes del
+   * primer registro. Monday, Jira y Linear abren con el titulo, no con un rotulo.
+   * Se conserva la prop para no romper las llamadas existentes.
+   */
   eyebrow?: string;
 }) {
   return (
-    <header className="mb-4 border-b border-line pb-4 sm:mb-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <header className="page-header">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="h-2 w-2 bg-brand-500" />
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-brand-700">{eyebrow}</p>
-          </div>
-          <h1 className="text-2xl font-extrabold leading-tight text-ink sm:text-[1.7rem]">{title}</h1>
-          {description ? <p className="mt-1.5 max-w-3xl text-sm leading-5 text-slate-600">{description}</p> : null}
+          <h1 className="page-header-title">{title}</h1>
+          {description ? <p className="page-header-description">{description}</p> : null}
         </div>
         {actions ? <div className="no-print flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
