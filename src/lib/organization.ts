@@ -1,6 +1,12 @@
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { OrganizationNode, OrganizationStructure, PlantCode } from "@/lib/organization-types";
+import type {
+  OrganizationNode,
+  OrganizationStructure,
+  PlantCode,
+  PublicCaptureNode,
+  PublicCaptureStructure
+} from "@/lib/organization-types";
 
 type SeedNode = {
   code: string;
@@ -230,6 +236,69 @@ function buildTree(flatNodes: Omit<OrganizationNode, "children">[]): Organizatio
   };
   sort(roots);
   return roots;
+}
+
+/**
+ * Estructura para la portada publica y el explorador de captura por QR.
+ *
+ * Trae SOLO lo que el explorador dibuja. La version completa serializaba cada membresia con
+ * nombre, correo, rol y puesto hacia un componente cliente en una pagina anonima: el
+ * directorio entero de la plantilla quedaba en el HTML de cualquier visita.
+ *
+ * Tampoco llama a `ensureOrganizationStructure`: la siembra no debe correr en el camino de
+ * lectura publico, donde cada escaneo disparaba escrituras contra la base.
+ */
+export async function getPublicCaptureStructure(): Promise<PublicCaptureStructure> {
+  const plants = await prisma.plant.findMany({
+    where: { active: true },
+    orderBy: [{ name: "asc" }],
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      active: true,
+      orgUnits: {
+        where: { active: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          parentId: true,
+          name: true,
+          type: true,
+          code: true,
+          responsible: true,
+          qrEnabled: true,
+          active: true,
+          captureArea: { select: { code: true, active: true } }
+        }
+      }
+    }
+  });
+
+  const entries = plants.map((plant) => {
+    const byParent = new Map<string | null, typeof plant.orgUnits>();
+    for (const unit of plant.orgUnits) {
+      const siblings = byParent.get(unit.parentId) ?? [];
+      siblings.push(unit);
+      byParent.set(unit.parentId, siblings);
+    }
+    const build = (parentId: string | null): PublicCaptureNode[] =>
+      (byParent.get(parentId) ?? []).map((unit) => ({
+        id: unit.id,
+        name: unit.name,
+        type: unit.type,
+        code: unit.code,
+        responsible: unit.responsible,
+        qrEnabled: unit.qrEnabled,
+        active: unit.active,
+        captureArea: unit.captureArea ? { code: unit.captureArea.code, active: unit.captureArea.active } : null,
+        children: build(unit.id)
+      }));
+
+    return [plant.code, { id: plant.id, code: plant.code, name: plant.name, active: plant.active, nodes: build(null) }] as const;
+  });
+
+  return Object.fromEntries(entries) as PublicCaptureStructure;
 }
 
 export async function getOrganizationStructure(): Promise<OrganizationStructure> {

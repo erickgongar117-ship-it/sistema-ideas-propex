@@ -12,7 +12,10 @@ import {
   Warehouse
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { OrganizationNode, OrganizationStructure, PlantCode } from "@/lib/organization-types";
+import type { PlantCode, PublicCaptureNode, PublicCaptureStructure } from "@/lib/organization-types";
+
+type OrganizationNode = PublicCaptureNode;
+type OrganizationStructure = PublicCaptureStructure;
 
 type CaptureItem = {
   node: OrganizationNode;

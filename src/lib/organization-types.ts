@@ -82,6 +82,36 @@ export type OrganizationPlant = {
 
 export type OrganizationStructure = Record<string, OrganizationPlant>;
 
+/**
+ * Proyeccion PUBLICA de la estructura, para la portada y el explorador de captura por QR.
+ *
+ * Deliberadamente NO incluye personas: ni correos, ni roles, ni membresias, ni reglas de
+ * escalamiento, ni el responsable de ruta. La portada es anonima, asi que todo lo que entre
+ * aqui queda al alcance de cualquiera que escanee un QR. Si una pantalla necesita personas,
+ * debe estar autenticada y usar `getOrganizationStructure`.
+ */
+export type PublicCaptureNode = {
+  id: string;
+  name: string;
+  type: OrgNodeType;
+  code: string;
+  responsible: string;
+  qrEnabled: boolean;
+  active: boolean;
+  captureArea: { code: string; active: boolean } | null;
+  children: PublicCaptureNode[];
+};
+
+export type PublicCapturePlant = {
+  id: string;
+  code: PlantCode;
+  name: string;
+  active: boolean;
+  nodes: PublicCaptureNode[];
+};
+
+export type PublicCaptureStructure = Record<string, PublicCapturePlant>;
+
 export type OrganizationActionResult = {
   ok: boolean;
   message: string;

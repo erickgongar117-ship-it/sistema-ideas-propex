@@ -3,12 +3,13 @@ import Link from "next/link";
 import { ArrowRight, Building2, CheckCircle2, LogIn, QrCode } from "lucide-react";
 import { CaptureAreaExplorer } from "@/components/capture-area-explorer";
 import { ThemeSelector } from "@/components/theme-selector";
-import { getOrganizationStructure } from "@/lib/organization";
+import { getPublicCaptureStructure } from "@/lib/organization";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const structure = await getOrganizationStructure();
+  // Proyeccion publica: sin personas, sin correos, sin membresias. Esta pagina es anonima.
+  const structure = await getPublicCaptureStructure();
 
   return (
     <main className="min-h-screen bg-white text-ink">
