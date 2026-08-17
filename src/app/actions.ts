@@ -2239,6 +2239,51 @@ export async function closeKaizenProjectAction(formData: FormData) {
   redirect(`/kaizen/${projectId}?success=cerrado${totalCoins ? `&coins=${totalCoins}` : ""}`);
 }
 
+/**
+ * Escribe la narrativa de cierre de un Kaizen ya cerrado.
+ *
+ * Por que existe: `refreshKaizenProject` cierra el proyecto en cuanto se cumplen los
+ * requisitos, y usa el MISMO predicado que habilita el boton "Completar Kaizen" de la
+ * pagina. En el camino feliz el auto-cierre siempre gana, asi que el formulario con el
+ * resultado nunca se alcanza y `closureNote` se queda con el texto de maquina para
+ * siempre. Esto le devuelve al lider la autoria del resultado sin reabrir el expediente.
+ */
+export async function updateKaizenClosureNoteAction(formData: FormData) {
+  const user = await requireUser();
+  const projectId = text(formData, "projectId");
+  const closureNote = text(formData, "closureNote").trim();
+  const project = await prisma.kaizenProject.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { id: true, status: true, leaderId: true }
+  });
+  if (!isImprovementManager(user.role) && project.leaderId !== user.id) {
+    redirect(`/kaizen/${projectId}?error=sin_permiso`);
+  }
+  if (project.status !== "COMPLETADO" && project.status !== "CANCELADO") {
+    redirect(`/kaizen/${projectId}?error=no_cerrado`);
+  }
+  if (closureNote.length < 10) redirect(`/kaizen/${projectId}?error=cierre_datos`);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.kaizenProject.update({ where: { id: projectId }, data: { closureNote, closedById: user.id } });
+    await tx.kaizenUpdate.create({
+      data: { projectId, userId: user.id, comment: "Resultado final del Kaizen registrado por el responsable." }
+    });
+    await tx.auditLog.create({
+      data: {
+        entity: "KaizenProject",
+        entityId: projectId,
+        action: "KAIZEN_CLOSURE_NOTE_SET",
+        userId: user.id,
+        details: JSON.stringify({ via: "form", length: closureNote.length })
+      }
+    });
+  });
+  revalidatePath(`/kaizen/${projectId}`);
+  revalidatePath("/kaizen/repositorio");
+  redirect(`/kaizen/${projectId}?success=cierre_nota`);
+}
+
 export async function updateKaizenRewardsAction(formData: FormData) {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const projectId = text(formData, "projectId");

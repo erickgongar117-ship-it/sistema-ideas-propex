@@ -11,6 +11,7 @@ import {
   removeKaizenTeamMemberAction,
   updateKaizenActivityAction,
   updateKaizenProjectAction,
+  updateKaizenClosureNoteAction,
   updateKaizenRewardsAction,
   uploadKaizenCharterAction
 } from "@/app/actions";
@@ -68,6 +69,10 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
   const overdue = project.activities.filter(isWorkItemOverdue).length;
   const projectClosed = project.status === "COMPLETADO" || project.status === "CANCELADO";
   const canManage = hasManagePermission && !projectClosed;
+  // El auto-cierre gana la carrera contra el boton "Completar Kaizen", asi que el resultado
+  // se escribe despues. El lider tambien puede, porque es quien conoce el resultado.
+  const canWriteClosureNote = projectClosed && (hasManagePermission || project.leaderId === user.id);
+  const closureNoteIsAutomatic = Boolean(project.closureNote?.startsWith("Cierre automatico:"));
   const relevantActivities = project.activities.filter((activity) => activity.status !== "COMBINADA");
   const closureReadiness = kaizenClosureReadiness({
     activities: relevantActivities.map((activity) => ({ status: activity.status, evidenceCount: activity.attachments.length })),
@@ -92,11 +97,14 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
     : query.error === "cierre_datos" ? "Escribe el resultado final o la causa de cancelacion."
     : query.error === "lider_equipo" ? "El lider no puede retirarse del equipo; cambia primero al lider del proyecto."
     : query.error === "responsable_equipo" ? "No puedes retirar a una persona que sigue asignada a una actividad."
+    : query.error === "sin_permiso" ? "Tu permiso sobre este expediente cambio mientras trabajabas. Pide acceso a Mejora Continua antes de reintentar."
+    : query.error === "no_cerrado" ? "El expediente sigue abierto: el resultado final se registra despues del cierre."
     : query.error === "cerrado" ? "Este expediente ya esta cerrado y se conserva en modo consulta."
     : query.error === "coins" ? "Las ProbocaCoins deben ser numeros enteros iguales o mayores a cero."
     : query.error ? "Revisa los campos obligatorios." : null;
   const successMessage = query.success === "equipo" ? "El equipo responsable se actualizo."
     : query.success === "cerrado" ? "El Kaizen se cerro y quedo disponible en el repositorio."
+    : query.success === "cierre_nota" ? "El resultado final quedo registrado en el expediente."
     : query.success === "coins" ? "Las ProbocaCoins del equipo se conciliaron correctamente."
     : null;
 
@@ -202,6 +210,20 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
                   <div className="flex justify-between gap-3 py-2.5"><dt className="font-bold text-slate-500">Cerro</dt><dd className="text-right font-extrabold text-ink">{project.closedBy?.name ?? "Sistema"}</dd></div>
                 </dl>
                 <p className="mt-3 border-l-4 border-slate-300 pl-3 text-sm leading-5 text-slate-700">{project.closureNote ?? "Sin nota de cierre."}</p>
+                {canWriteClosureNote ? (
+                  <details className="details-panel mt-4" open={query.error === "cierre_datos"}>
+                    <summary><span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-700" aria-hidden />{closureNoteIsAutomatic ? "Escribir el resultado final" : "Corregir el resultado final"}</span></summary>
+                    <form action={updateKaizenClosureNoteAction} className="grid gap-3 p-4">
+                      <input name="projectId" type="hidden" value={project.id} />
+                      <label>
+                        <span className="label">Resultado final o motivo *</span>
+                        <textarea className="field min-h-24" defaultValue={closureNoteIsAutomatic ? "" : project.closureNote ?? ""} minLength={10} name="closureNote" placeholder="Resultado alcanzado, sostenimiento o causa de cancelacion" required />
+                      </label>
+                      {closureNoteIsAutomatic ? <p className="text-xs leading-5 text-slate-500">El sistema cerro este expediente al confirmar los requisitos. Escribe el resultado real para que el repositorio conserve la narrativa y no el texto automatico.</p> : null}
+                      <button className="btn btn-secondary" type="submit"><CheckCircle2 className="h-4 w-4" aria-hidden />Guardar resultado</button>
+                    </form>
+                  </details>
+                ) : null}
                 {hasManagePermission && project.teamMembers.length ? (
                   <details className="details-panel mt-4">
                     <summary><span className="flex items-center gap-2"><Coins className="h-4 w-4 text-amber-700" aria-hidden />Ajustar ProbocaCoins</span></summary>
