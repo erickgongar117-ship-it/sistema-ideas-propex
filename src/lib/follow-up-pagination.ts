@@ -10,13 +10,17 @@ export function allocateFollowUpSlots(
 ): FollowUpModuleCounts {
   const slots: FollowUpModuleCounts = { IDEA: 0, KAIZEN: 0, GENBA: 0 };
   if (moduleFilter !== "TODOS") {
-    slots[moduleFilter] = counts[moduleFilter] > 0 ? limit : 0;
+    // Nunca se piden mas registros de los que existen: el `take` debe reflejar la realidad.
+    slots[moduleFilter] = Math.min(limit, counts[moduleFilter]);
     return slots;
   }
 
   const active = (Object.keys(counts) as Array<keyof FollowUpModuleCounts>).filter((key) => counts[key] > 0);
   if (!active.length) return slots;
-  const base = Math.floor(limit / active.length);
+  // Al menos un espacio por fuente con datos. Sin este minimo, un limite menor que el numero
+  // de fuentes deja registros inalcanzables: no caben en ninguna pagina y desaparecen.
+  // Con FOLLOW_UP_PAGE_SIZE la division ya alcanza; el minimo protege limites pequenos.
+  const base = Math.max(1, Math.floor(limit / active.length));
   for (const key of active) slots[key] = Math.min(base, counts[key]);
 
   let remaining = limit - Object.values(slots).reduce((sum, value) => sum + value, 0);

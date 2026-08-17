@@ -5,6 +5,7 @@
   "description": "Sistema de Ideas de Mejora PROpEx para captura, validacion, implementacion y cierre de mejoras.",
   "scripts": {
     "dev": "next dev",
+    "dev:local": "node scripts/dev-local.mjs",
     "build": "prisma generate && next build",
     "build:vercel": "prisma generate --schema prisma/schema.production.prisma && next build",
     "start": "next start",
@@ -22,6 +23,7 @@
     "qa:repositories": "tsx scripts/qa-repositories-closure.ts",
     "qa:follow-up-bulk": "tsx scripts/qa-follow-up-bulk.ts",
     "qa:rutas": "tsx scripts/qa-rutas.ts",
+    "qa:propiedades": "tsx scripts/qa-propiedades.ts",
     "reminders": "tsx scripts/reminders.ts",
     "export-demo": "tsx scripts/export-demo.ts",
     "migration:export:power-platform": "tsx scripts/export-power-platform.ts"

@@ -46,6 +46,15 @@ const tests: Array<[string, () => void]> = [
   ["el filtro de modulo reserva la pagina completa", () => {
     assert.deepEqual(allocateFollowUpSlots({ IDEA: 100, KAIZEN: 100, GENBA: 100 }, "KAIZEN"), { IDEA: 0, KAIZEN: 50, GENBA: 0 });
   }],
+  // Regresion: el filtro pedia el limite completo aunque hubiera menos registros.
+  ["el filtro nunca pide mas registros de los que existen", () => {
+    assert.deepEqual(allocateFollowUpSlots({ IDEA: 1254, KAIZEN: 152, GENBA: 34 }, "GENBA"), { IDEA: 0, KAIZEN: 0, GENBA: 34 });
+  }],
+  // Regresion: con menos espacios que fuentes, dos modulos quedaban sin espacio y sus
+  // registros no aparecian en ninguna pagina.
+  ["ninguna fuente con datos se queda sin espacio", () => {
+    assert.deepEqual(allocateFollowUpSlots({ IDEA: 1673, KAIZEN: 193, GENBA: 51 }, "TODOS", 1), { IDEA: 1, KAIZEN: 1, GENBA: 1 });
+  }],
   ["el total de paginas sigue la fuente mas larga", () => {
     assert.equal(followUpTotalPages({ IDEA: 100, KAIZEN: 10, GENBA: 10 }, { IDEA: 30, KAIZEN: 10, GENBA: 10 }), 4);
   }],
