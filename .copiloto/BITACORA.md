@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-16 -- claude (codex/hierarchy-training-coins) -- Agregue fuzzing por propiedades (pnpm run qa:propiedades, 40 propiedades, 1M+ comprobaciones por corrida) que encontro y corrigio dos defectos reales de paginacion: el filtro pedia mas registros de los existentes, y con menos espacios que fuentes activas dos modulos quedaban sin espacio y sus registros eran inalcanzables. Agregue pnpm run dev:local, que arranca Next contra prisma/dev.db en vez de la produccion de .env.local, y .claude/launch.json. Audite la app renderizada como ADMIN contra la base local. Commits c7420ba y 965ec92.
+
+Siguiente paso dejado: En src/components/dashboard-command-center.tsx, progressByCategory asigna un avance FIJO por categoria (ENTRADA 15, VALIDACION 40, EJECUCION 72, CIERRE 100, DETENIDA 100) y se pinta como barra de avance real en el tablero de Ideas. Verificado en la app: toda idea en ejecucion muestra 72 por ciento y una idea RECHAZADA muestra 100 por ciento. Sustituir por un avance real derivado de hitos del flujo, o quitar la barra en Ideas y dejar solo la pildora de estado. Es el defecto de confianza mas visible del tablero.
+
+---
+
 ## 2026-08-16 -- claude (codex/hierarchy-training-coins) -- Elimine el N+1 de permisos de bulkFollowUpAction: decidableInitialIdeaIds y supportRoutingOrgUnitIds resuelven por lote, y la validacion departamental pasa a memoria. Un lote de 50 baja de ~150 consultas con 100 escaneos completos a 3 consultas de permisos. Agregue scripts/qa-rutas.ts (pnpm run qa:rutas), auditor mecanico de las 39 rutas que ya encontro y permitio corregir los ?error=combinacion huerfanos de /kaizen y /genba. Commit c7420ba; tsc, build:vercel, 18/18 y qa:rutas en verde.
 
 Siguiente paso dejado: Ejecutar 'pnpm run qa:rutas'. Quedan 17 defectos bloqueantes, todos del mismo tipo: findMany sin take en 17 rutas. Empezar por src/app/(app)/panorama/page.tsx (7 findMany) y src/app/(app)/dashboard/page.tsx (6), que son las dos mas pesadas; aplicar take/skip igual que en src/app/(app)/seguimientos/page.tsx, que ya usa follow-up-pagination.ts. Meta: que 'pnpm run qa:rutas --strict' salga con codigo 0.
