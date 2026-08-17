@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-16 -- claude (codex/hierarchy-training-coins) -- Migre la paleta a tokens. app-shell.tsx pasa de 14 hex a cero: la paleta de roles que CLAUDE.md manda conservar estaba escrita dos veces y ahora tiene una sola fuente. Cree tokens de tinte por acento y de horizonte temporal, unificando el verde que estaba duplicado en dos valores para el mismo significado. Archivos .tsx con hex suelto de 14 a 4, colores distintos en .tsx de 57 a 30. Afine el medidor para separar tokens declarados de colores sueltos en reglas. Puntuacion de 1 de 9 a 3 de 10. Commit 9fcf887.
+
+Siguiente paso dejado: Bajar los 70 colores sueltos dentro de reglas de src\app\globals.css a menos de 12, reemplazandolos por los 46 tokens ya declarados en :root. Correr pnpm run qa:diseno antes y despues. Despues atacar los 48 usos de !important: una parte son las variantes aclaradas por rol del modo oscuro alrededor de la linea 2143, que se pueden resolver subiendo esos valores a tokens en el bloque html data-theme dark en vez de sobrescribir con !important. Meta: 6 de 10 medidas dentro de umbral.
+
+---
+
 ## 2026-08-16 -- claude (codex/hierarchy-training-coins) -- Cree pnpm run qa:diseno, un medidor de adherencia al sistema visual con nueve medidas y umbral justificado. Primera corrida: 1 de 9. Corregi lo mas visible: 142 declaraciones font-size en rem con decimales arbitrarios convertidas a una escala de 8 pasos, de 31 tamanos distintos a 5 renderizados; sombras de elevacion unificadas en dos tokens; banda de control en una sola fila desde 1024px. Medido a 1280x720: primer registro en y=319, 44 por ciento del alto util contra el 57 del punto de partida. Commit 45e2cf0.
 
 Siguiente paso dejado: Bajar los tres excesos que quedan en pnpm run qa:diseno. Por orden de impacto visual: 1) los 57 colores hex escritos dentro de 14 archivos .tsx, empezando por src\components\app-shell.tsx que tiene la paleta de roles hardcodeada y src\app\(app)\panorama\page.tsx; moverlos a tokens en :root de src\app\globals.css. 2) los 109 colores distintos de globals.css, que deben bajar a menos de 40 reutilizando los tokens existentes. 3) los 48 usos de !important. Correr pnpm run qa:diseno antes y despues para medir; la meta es 6 de 9 medidas dentro de umbral.
