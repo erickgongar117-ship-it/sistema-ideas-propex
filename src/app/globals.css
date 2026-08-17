@@ -1073,6 +1073,13 @@ summary:focus-visible {
   grid-template-columns: 42px minmax(290px, 2fr) 148px minmax(170px, 1fr) 132px 126px 145px 48px;
   align-items: stretch;
 }
+/* Tableros sin avance medible (Ideas): se retira la columna en vez de dejarla en blanco. */
+.workboard.has-no-progress .workboard-grid-head,
+.workboard.has-no-progress .workboard-grid-row {
+  min-width: 945px;
+  grid-template-columns: 42px minmax(290px, 2fr) 148px minmax(170px, 1fr) 132px 126px 48px;
+  align-items: stretch;
+}
 .workboard-grid-head { position: sticky; top: 0; z-index: 2; min-height: 38px; border-bottom: 1px solid var(--line); background: var(--surface-subtle); color: var(--muted); font-size: 12px; font-weight: 600; }
 .workboard-grid-head > * { display: flex; align-items: center; border-right: 1px solid var(--line); padding: 0 0.65rem; }
 .workboard-grid-head label { justify-content: center; }

@@ -360,6 +360,13 @@ export function OperationsWorkboard({
     };
   }).filter((group) => view === "kanban" || group.rows.length), [filtered, groupDefinitions, items, pageItems, statuses, view]);
 
+  /**
+   * Si NINGUN elemento del tablero tiene porcentaje real, la columna "Avance" no se dibuja.
+   * Una columna con la misma leyenda en todas las filas se lee como un error de carga, y eso
+   * es peor que el porcentaje inventado que acabamos de quitar: no muestres una columna que
+   * no tiene datos. En Kaizen y GENBA, donde el avance existe, la columna sigue igual.
+   */
+  const showProgress = useMemo(() => items.some((item) => item.progress !== null), [items]);
   const focusedItem = items.find((item) => item.id === focusedId) ?? null;
   const activeFilters = Number(status !== "all") + Number(location !== "all") + Number(owner !== "all");
   const draggingItem = items.find((item) => item.id === draggingId) ?? null;
@@ -633,7 +640,7 @@ export function OperationsWorkboard({
   };
 
   return (
-    <section className={`workboard is-${density}`} aria-label={`${primaryLabel} - tablero de trabajo`}>
+    <section className={`workboard is-${density} ${showProgress ? "" : "has-no-progress"}`} aria-label={`${primaryLabel} - tablero de trabajo`}>
       {/* Vistas y busqueda comparten fila: eran dos bandas de 54 y 62 px. */}
       <div className="workboard-controlbar no-print">
       <div className="workboard-viewbar">
@@ -762,7 +769,7 @@ export function OperationsWorkboard({
                   <div className="workboard-grid">
                     <div className="workboard-grid-head">
                       <label><input aria-label={`Seleccionar filas visibles de ${group.label}`} checked={allSelected} onChange={(event) => selectGroup(group.rows.map((item) => item.id), event.target.checked)} type="checkbox" /></label>
-                      <span>{primaryLabel}</span><span>Estado</span><span>Responsable</span><span>{locationLabel}</span><span>Fecha</span><span>Avance</span><span />
+                      <span>{primaryLabel}</span><span>Estado</span><span>Responsable</span><span>{locationLabel}</span><span>Fecha</span>{showProgress ? <span>Avance</span> : null}<span />
                     </div>
                     {group.rows.map((item) => {
                       const isExpanded = expanded.has(item.id);
@@ -780,7 +787,7 @@ export function OperationsWorkboard({
                             <div data-label="Responsable"><Owner name={item.owner} /></div>
                             <div data-label={locationLabel}><span className="workboard-text-cell">{item.location}</span></div>
                             <div data-label="Fecha"><span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>{item.risk ? <TriangleAlert className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-3.5 w-3.5" aria-hidden />}{dueLabel(item.dueDate)}</span></div>
-                            <div data-label="Avance" className="workboard-progress-cell">{item.progress === null ? <span className="workboard-progress-na" title="Esta etapa no se mide en porcentaje">Por etapa</span> : <><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></>}</div>
+                            {showProgress ? <div data-label="Avance" className="workboard-progress-cell">{item.progress === null ? <span className="workboard-progress-na" title="Esta etapa no se mide en porcentaje">Sin actividades</span> : <><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></>}</div> : null}
                             <Link aria-label={`Abrir ${item.code}`} className="workboard-open" href={item.href}><ArrowRight className="h-4 w-4" aria-hidden /></Link>
                           </div>
                           {isExpanded ? (
