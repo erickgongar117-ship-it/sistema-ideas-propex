@@ -43,21 +43,17 @@ type DashboardCommandCenterProps = {
   timing: { supervisor: string; validation: string; implementation: string };
 };
 
-const progressByCategory: Record<StatusCategory, number> = {
-  ENTRADA: 15,
-  VALIDACION: 40,
-  EJECUCION: 72,
-  CIERRE: 100,
-  DETENIDA: 100
-};
+// Una Idea no tiene actividades que contar, asi que no tiene porcentaje real. Antes se
+// pintaba una constante por categoria y el tablero mostraba ficciones: toda idea en
+// ejecucion al 72%, una idea RECHAZADA al 100% y el grupo "Detenida" promediando 86%.
+// La misma idea decia 0% en Mi trabajo y 15% aqui. Ahora la columna muestra la etapa.
 
 function groupFor(status: IdeaStatus) {
   const key = ideaStatusCategory(status);
   return {
     key,
     label: statusCategoryMeta[key].label,
-    color: statusCategoryFill(key),
-    progress: status === "VENCIDA" ? 72 : progressByCategory[key]
+    color: statusCategoryFill(key)
   };
 }
 
@@ -95,8 +91,8 @@ export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }
       owner: idea.supervisorName ?? "Sin responsable",
       location: idea.areaCode,
       dueDate: idea.dueDate,
-      progress: group.progress,
-      progressLabel: `${group.progress}% del flujo completado`,
+      progress: null,
+      progressLabel: `Etapa: ${statusLabels[idea.status]}`,
       risk: overdue || !idea.supervisorName,
       riskLabel: overdue ? "Compromiso vencido" : !idea.supervisorName ? "Responsable pendiente" : undefined,
       tags: [`Categoria ${idea.category}`, ...idea.impactTypes, ...support, idea.pointsAssigned ? `${idea.pointsAssigned} ProbocaCoins` : ""].filter(Boolean)

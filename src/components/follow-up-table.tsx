@@ -94,10 +94,10 @@ export function FollowUpTable({
       owner: row.owner,
       location: row.location,
       dueDate: row.dueDate?.toISOString() ?? null,
-      progress: row.progress?.percent ?? 0,
+      progress: row.progress?.percent ?? null,
       progressLabel: row.progress
         ? `${row.progress.completed} de ${row.progress.total} actividades completadas`
-        : "Seguimiento por etapa",
+        : `Etapa: ${row.status}`,
       risk: row.overdue,
       riskLabel: row.overdue ? "Fecha compromiso vencida" : undefined,
       tags: [moduleLabel, row.status, row.assignment],

@@ -12,6 +12,8 @@ type GroupInsight = {
   label: string;
   color: string;
   count: number;
+  /** Cuantos del grupo tienen porcentaje real. Las Ideas no cuentan para el promedio. */
+  measurable: number;
   progress: number;
   risks: number;
 };
@@ -35,16 +37,18 @@ export function WorkboardInsights({
         label: item.groupLabel,
         color: item.groupColor,
         count: 0,
+        measurable: 0,
         progress: 0,
         risks: 0
       };
       current.count += 1;
-      current.progress += item.progress;
+      // Solo promedia lo que tiene denominador real; una Idea no aporta porcentaje.
+      if (item.progress !== null) { current.measurable += 1; current.progress += item.progress; }
       current.risks += Number(Boolean(item.risk));
       result.set(item.group, current);
     });
     return [...result.values()]
-      .map((group) => ({ ...group, progress: group.count ? Math.round(group.progress / group.count) : 0 }))
+      .map((group) => ({ ...group, progress: group.measurable ? Math.round(group.progress / group.measurable) : 0 }))
       .sort((a, b) => b.count - a.count);
   }, [items]);
 
@@ -66,7 +70,10 @@ export function WorkboardInsights({
   const groupByLabel = useMemo(() => new Map(groups.map((group) => [group.label, group.key])), [groups]);
   const riskItems = useMemo(() => items.filter((item) => item.risk).slice(0, 7), [items]);
   const totalRisks = items.filter((item) => item.risk).length;
-  const averageProgress = items.length ? Math.round(items.reduce((sum, item) => sum + item.progress, 0) / items.length) : 0;
+  const measurableItems = items.filter((item) => item.progress !== null);
+  const averageProgress = measurableItems.length
+    ? Math.round(measurableItems.reduce((sum, item) => sum + (item.progress ?? 0), 0) / measurableItems.length)
+    : null;
   const owned = items.filter((item) => item.owner && item.owner !== "Sin responsable" && item.owner !== "Sin asignar").length;
 
   const statusOption = useMemo<EChartsOption>(() => ({
@@ -138,8 +145,9 @@ export function WorkboardInsights({
       <section aria-label="Lectura rapida" className="workboard-pulse">
         <article>
           <span><Gauge className="h-4 w-4" aria-hidden />Avance promedio</span>
-          <strong>{averageProgress}%</strong>
-          <i><b style={{ width: `${averageProgress}%` }} /></i>
+          <strong>{averageProgress === null ? "—" : `${averageProgress}%`}</strong>
+          <i><b style={{ width: `${averageProgress ?? 0}%` }} /></i>
+          {averageProgress === null ? <small>Esta seleccion se sigue por etapa</small> : <small>Solo proyectos con actividades</small>}
         </article>
         <article>
           <span><AlertTriangle className="h-4 w-4" aria-hidden />Requieren atencion</span>

@@ -70,7 +70,9 @@ export type WorkboardItem = {
   owner: string;
   location: string;
   dueDate: string | null;
-  progress: number;
+  /** Porcentaje real. `null` cuando el elemento no tiene denominador (una Idea no tiene
+   *  actividades que contar): en ese caso NO se dibuja barra, se muestra la etapa. */
+  progress: number | null;
   progressLabel: string;
   risk?: boolean;
   riskLabel?: string;
@@ -238,7 +240,7 @@ function WorkboardKanbanCard({
         <h3>{item.title}</h3>
         <p>{item.subtitle}</p>
         <WorkStatus category={item.statusCategory} label={item.statusLabel} reference={item.statusReference} />
-        <div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></div>
+        {item.progress === null ? null : <div className="workboard-kanban-progress"><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></div>}
         <footer>
           <Owner name={item.owner} />
           <span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>
@@ -327,7 +329,7 @@ export function OperationsWorkboard({
     const rows = searchMatched.filter((item) => (status === "all" || item.group === status) && (owner === "all" || item.owner === owner));
     return [...rows].sort((a, b) => {
       if (sort === "title") return a.title.localeCompare(b.title, "es-MX");
-      if (sort === "progress") return a.progress - b.progress || a.title.localeCompare(b.title, "es-MX");
+      if (sort === "progress") return (a.progress ?? 101) - (b.progress ?? 101) || a.title.localeCompare(b.title, "es-MX");
       const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
       const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
       if (sort === "due") return aDate - bDate || a.title.localeCompare(b.title, "es-MX");
@@ -346,7 +348,8 @@ export function OperationsWorkboard({
     const allRows = filtered.filter((item) => item.group === key);
     const source = items.find((item) => item.group === key);
     const definition = groupDefinitions?.find((group) => group.key === key);
-    const average = allRows.length ? Math.round(allRows.reduce((sum, item) => sum + item.progress, 0) / allRows.length) : 0;
+    const measurable = allRows.filter((item) => item.progress !== null);
+    const average = measurable.length ? Math.round(measurable.reduce((sum, item) => sum + (item.progress ?? 0), 0) / measurable.length) : null;
     return {
       key,
       rows,
@@ -750,7 +753,7 @@ export function OperationsWorkboard({
                     {isCollapsed ? <ChevronRight className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
                     <span>{group.label}</span><strong>{group.total}</strong>
                   </button>
-                  <span>{group.average}% promedio</span>
+                  <span>{group.average === null ? `${group.total} registros` : `${group.average}% promedio`}</span>
                 </header>
                 {!isCollapsed ? (
                   <div className="workboard-grid">
@@ -774,7 +777,7 @@ export function OperationsWorkboard({
                             <div data-label="Responsable"><Owner name={item.owner} /></div>
                             <div data-label={locationLabel}><span className="workboard-text-cell">{item.location}</span></div>
                             <div data-label="Fecha"><span aria-label={item.risk ? `Fecha en riesgo: ${dueLabel(item.dueDate)}` : undefined} className={`workboard-date ${item.risk ? "is-risk" : ""}`} title={item.risk ? item.riskLabel : undefined}>{item.risk ? <TriangleAlert className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-3.5 w-3.5" aria-hidden />}{dueLabel(item.dueDate)}</span></div>
-                            <div data-label="Avance" className="workboard-progress-cell"><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></div>
+                            <div data-label="Avance" className="workboard-progress-cell">{item.progress === null ? <span className="workboard-progress-na" title="Esta etapa no se mide en porcentaje">Por etapa</span> : <><span><i style={{ width: `${item.progress}%` }} /></span><strong>{item.progress}%</strong></>}</div>
                             <Link aria-label={`Abrir ${item.code}`} className="workboard-open" href={item.href}><ArrowRight className="h-4 w-4" aria-hidden /></Link>
                           </div>
                           {isExpanded ? (
@@ -895,7 +898,7 @@ export function OperationsWorkboard({
               <button aria-label="Cerrar detalle" className="icon-button" onClick={() => setFocusedId(null)} type="button"><X className="h-4 w-4" aria-hidden /></button>
             </header>
             <div className="workboard-drawer-body">
-              <div className="workboard-drawer-status"><WorkStatus category={focusedItem.statusCategory} label={focusedItem.statusLabel} reference={focusedItem.statusReference} /><span>{focusedItem.progress}%</span></div>
+              <div className="workboard-drawer-status"><WorkStatus category={focusedItem.statusCategory} label={focusedItem.statusLabel} reference={focusedItem.statusReference} /><span>{focusedItem.progress === null ? "—" : `${focusedItem.progress}%`}</span></div>
               <section><span>Resumen</span><p>{focusedItem.subtitle}</p></section>
               <dl>
                 <div><dt>Responsable</dt><dd><Owner name={focusedItem.owner} /></dd></div>

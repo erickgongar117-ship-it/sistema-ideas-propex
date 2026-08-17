@@ -1070,6 +1070,7 @@ summary:focus-visible {
 .workboard-kanban-progress > span { height: 7px; flex: 1; overflow: hidden; border-radius: 4px; background: var(--line); }
 .workboard-progress-cell i,
 .workboard-kanban-progress i { display: block; height: 100%; border-radius: inherit; background: var(--st-cierre-fill); transition: width 260ms ease; }
+.workboard-progress-na { color: var(--muted); font-size: 0.72rem; font-weight: 700; font-style: normal; }
 .workboard-progress-cell strong,
 .workboard-kanban-progress strong { min-width: 31px; color: var(--foreground); font-size: 0.66rem; font-variant-numeric: tabular-nums; }
 .workboard-open { display: grid; min-height: 100%; place-items: center; color: var(--muted); }
