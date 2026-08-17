@@ -24,6 +24,7 @@
     "qa:follow-up-bulk": "tsx scripts/qa-follow-up-bulk.ts",
     "qa:rutas": "tsx scripts/qa-rutas.ts",
     "qa:propiedades": "tsx scripts/qa-propiedades.ts",
+    "qa:diseno": "tsx scripts/qa-diseno.ts",
     "reminders": "tsx scripts/reminders.ts",
     "export-demo": "tsx scripts/export-demo.ts",
     "migration:export:power-platform": "tsx scripts/export-power-platform.ts"
