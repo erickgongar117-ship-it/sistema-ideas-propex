@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-16 -- claude (codex/hierarchy-training-coins) -- Termine y verifique el trabajo que Codex dejo sin commitear: decisiones en lote sobre cuatro tipos de destino, paginacion real de 50 por servidor en Mi trabajo, cierre automatico de Kaizen y correccion de canManageActivities. Agregue lo que faltaba: el script qa:follow-up-bulk en package.json y las decisiones del lote en DECISIONES.md. Commit d150188; tsc, build:vercel y 18/18 pruebas en verde.
+
+Siguiente paso dejado: En src/app/actions.ts, bulkFollowUpAction: las comprobaciones canDecideInitialIdea (linea ~703) y canDecideDepartmentApproval (linea ~812) corren dentro del bucle por elemento, y cada una llama a resolveOrgUnitScopeIds (src/lib/idea-access.ts:25), que carga TODAS las membresias y unidades activas mas un bucle de punto fijo. Con 50 elementos son 50 escaneos completos. Izar el ambito una sola vez con getSupervisableOrgUnitIds y resolver el permiso en UNA consulta: prisma.idea.findMany con AND de id in itemIds y buildInitialReviewWhere (idea-access.ts:120), guardando el resultado en un Set. Objetivo: bajar de ~150 consultas a menos de 10 por lote.
+
+---
+
 ## 2026-08-16 -- codex (codex/hierarchy-training-coins) -- Solicite a Claude una auditoria 360 en solo lectura y recibi una evaluacion completa: 5.0/10, benchmark, arquitectura de informacion, redisenos de seis pantallas, 32 recomendaciones, 27 pruebas y tres sprints priorizados.
 
 Por que: La auditoria identifica operacion masiva 2.5/10 y confiabilidad 3.0/10 como las mayores brechas; el diseno visual ya alcanza 7.5/10 y accesibilidad 8.0/10.
