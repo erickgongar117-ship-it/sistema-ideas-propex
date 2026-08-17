@@ -116,7 +116,10 @@ const bangs = (css.match(/!important/g) ?? []).length;
 
 type Check = { nombre: string; valor: number; umbral: number; detalle: string };
 const checks: Check[] = [
-  { nombre: "Tokens de color declarados", valor: tokenHex.size, umbral: 60, detalle: "La definicion, no la deuda. Un sistema completo ronda 40-60." },
+  // Umbral de 90 y no de 60: aqui viven TRES temas (claro, oscuro y captura), y cada uno
+  // declara su propia variante de los acentos de marca. Un sistema de un solo tema ronda
+  // 40-60; con tres, el doble es lo esperado. Lo que sigue siendo deuda es la linea de abajo.
+  { nombre: "Tokens de color declarados", valor: tokenHex.size, umbral: 90, detalle: "La definicion, no la deuda. Con tres temas, 60-90 es lo normal." },
   { nombre: "Colores sueltos dentro de reglas CSS", valor: inlineHex.size, umbral: 12, detalle: "Escritos dentro de una regla en vez de un token: no se reutilizan ni cambian de tema." },
   { nombre: "Archivos .tsx con hex suelto", valor: tsxHexByFile.size, umbral: 0, detalle: [...tsxHexByFile.keys()].slice(0, 6).join(", ") },
   { nombre: "Colores hex distintos en .tsx", valor: tsxHexTotal.size, umbral: 0, detalle: "Deberian venir de tokens; asi no se pueden auditar ni cambiar de tema." },
