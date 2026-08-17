@@ -1,10 +1,10 @@
 const accents = {
-  dark: "#171a18",
-  green: "#14835f",
-  red: "#d32236",
-  gray: "#626a70",
-  blue: "#176fc1",
-  amber: "#b7791f"
+  dark: "var(--brand-black)",
+  green: "var(--supervisor)",
+  red: "var(--quality)",
+  gray: "var(--safety)",
+  blue: "var(--maintenance)",
+  amber: "var(--warning)"
 };
 
 export function SectionHeading({

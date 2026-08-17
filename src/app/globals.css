@@ -230,6 +230,23 @@
   --quality: #d32236;
   --safety: #626a70;
   --maintenance: #176fc1;
+  /* Tintes suaves de cada acento. Vivian escritos a mano en app-shell.tsx, duplicando la
+     paleta de roles que CLAUDE.md manda conservar; ahora hay una sola fuente. */
+  --brand-black-soft: #f0f0f0;
+  --brand-red-soft: #fff1f4;
+  --supervisor-soft: #e9f6f0;
+  --quality-soft: #fff0f2;
+  --safety-soft: #f0f2f3;
+  --maintenance-soft: #edf5fc;
+  --warning-soft: #fff7d6;
+  /* Horizonte temporal de "Mi trabajo". No es estado: es cuando vence. Vivia escrito a
+     mano en cuatro componentes, y el verde estaba duplicado (#00a86b y #00a878 para lo
+     mismo), asi que la misma urgencia cambiaba de color entre pantallas. */
+  --time-overdue: #e2445c;
+  --time-today: #fdab3d;
+  --time-soon: #579bfc;
+  --time-planned: #00a878;
+  --time-none: #a5adba;
   --role-accent: #171717;
   --role-soft: #f0f0f0;
   --primary: #ea0029;

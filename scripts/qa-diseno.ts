@@ -43,10 +43,24 @@ function expand(hex: string) {
   return value.length === 4 ? `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}` : value;
 }
 
-const cssHex = new Set([...css.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((match) => expand(match[0])));
+// Un token declarado en :root NO es deuda: es la definicion. La deuda es el color escrito
+// dentro de una regla, que nadie puede reutilizar ni cambiar cuando cambia el tema.
+const rootBlocks = [...css.matchAll(/(?::root|html\[data-theme="dark"\]|\.capture-theme)\s*\{([^}]*)\}/g)]
+  .map((match) => match[1])
+  .join("\n");
+const tokenHex = new Set([...rootBlocks.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((match) => expand(match[0])));
+const cssHexAll = new Set([...css.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((match) => expand(match[0])));
+const inlineHex = new Set([...cssHexAll].filter((hex) => !tokenHex.has(hex)));
 
+/* Fuera de alcance a proposito:
+   - calculadora-pollos: carpeta no versionada, CLAUDE.md pide no tocarla.
+   - api/qr: genera un PNG; los colores tienen que ser literales, no `var()`.
+   Los graficos SI se cuentan: ECharts pinta en canvas y no resuelve `var()`, pero la
+   solucion correcta es leer los tokens en tiempo de ejecucion, no fijar el color. */
+const OUT_OF_SCOPE = /calculadora-pollos|api[\/]qr/;
 const tsxHexByFile = new Map<string, Set<string>>();
 for (const file of tsx) {
+  if (OUT_OF_SCOPE.test(file)) continue;
   const body = readFileSync(file, "utf8");
   const found = [...body.matchAll(/#[0-9a-fA-F]{6}\b/g)].map((match) => expand(match[0]));
   if (found.length) tsxHexByFile.set(relative(ROOT, file), new Set(found));
@@ -102,7 +116,8 @@ const bangs = (css.match(/!important/g) ?? []).length;
 
 type Check = { nombre: string; valor: number; umbral: number; detalle: string };
 const checks: Check[] = [
-  { nombre: "Colores distintos en globals.css", valor: cssHex.size, umbral: 40, detalle: "Un producto usa 12-20. Cada color extra es una decision que alguien tendra que repetir mal." },
+  { nombre: "Tokens de color declarados", valor: tokenHex.size, umbral: 60, detalle: "La definicion, no la deuda. Un sistema completo ronda 40-60." },
+  { nombre: "Colores sueltos dentro de reglas CSS", valor: inlineHex.size, umbral: 12, detalle: "Escritos dentro de una regla en vez de un token: no se reutilizan ni cambian de tema." },
   { nombre: "Archivos .tsx con hex suelto", valor: tsxHexByFile.size, umbral: 0, detalle: [...tsxHexByFile.keys()].slice(0, 6).join(", ") },
   { nombre: "Colores hex distintos en .tsx", valor: tsxHexTotal.size, umbral: 0, detalle: "Deberian venir de tokens; asi no se pueden auditar ni cambiar de tema." },
   { nombre: "Tamanos fuera de la escala", valor: offScale.length, umbral: 0, detalle: offScale.slice(0, 8).map(([size, count]) => `${size}x${count}`).join(" ") },

@@ -109,11 +109,11 @@ export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }
     locationLabel="Area"
     primaryLabel="Ideas"
     metrics={[
-      { label: "Ideas visibles", value: visible.length, detail: `${pending} requieren seguimiento`, color: "#579bfc" },
-      { label: "Cerradas", value: closed, detail: `${visible.length ? Math.round((closed / visible.length) * 100) : 0}% de la seleccion`, color: "#00a878" },
-      { label: "Vencidas", value: overdue, detail: `Respuesta supervisor ${timing.supervisor}`, color: "#e2445c" },
-      { label: "ProbocaCoins", value: coins.toLocaleString("es-MX"), detail: "Saldo asignado en ideas", color: "#fdab3d" },
-      { label: "Portafolio", value: `${portfolio.kaizen.active}K · ${portfolio.genba.total}G`, detail: "Kaizen activos y recorridos GENBA", color: "#171717" }
+      { label: "Ideas visibles", value: visible.length, detail: `${pending} requieren seguimiento`, color: "var(--time-soon)" },
+      { label: "Cerradas", value: closed, detail: `${visible.length ? Math.round((closed / visible.length) * 100) : 0}% de la seleccion`, color: "var(--time-planned)" },
+      { label: "Vencidas", value: overdue, detail: `Respuesta supervisor ${timing.supervisor}`, color: "var(--time-overdue)" },
+      { label: "ProbocaCoins", value: coins.toLocaleString("es-MX"), detail: "Saldo asignado en ideas", color: "var(--time-today)" },
+      { label: "Portafolio", value: `${portfolio.kaizen.active}K · ${portfolio.genba.total}G`, detail: "Kaizen activos y recorridos GENBA", color: "var(--brand-black)" }
     ]}
   />;
 }

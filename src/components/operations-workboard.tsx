@@ -356,7 +356,7 @@ export function OperationsWorkboard({
       total: allRows.length,
       average,
       label: definition?.label ?? source?.groupLabel ?? key,
-      color: definition?.color ?? source?.groupColor ?? "#64748b"
+      color: definition?.color ?? source?.groupColor ?? "var(--muted)"
     };
   }).filter((group) => view === "kanban" || group.rows.length), [filtered, groupDefinitions, items, pageItems, statuses, view]);
 
@@ -592,7 +592,7 @@ export function OperationsWorkboard({
 
   const moveGroups: WorkboardGroupDefinition[] = groupDefinitions ?? statuses.map((key) => {
     const source = items.find((item) => item.group === key);
-    return { key, label: source?.groupLabel ?? key, color: source?.groupColor ?? "#64748b" };
+    return { key, label: source?.groupLabel ?? key, color: source?.groupColor ?? "var(--muted)" };
   });
 
   const performMove = async (item: WorkboardItem, toGroup: string, via: WorkboardMoveInput["via"]) => {

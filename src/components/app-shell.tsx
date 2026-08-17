@@ -133,14 +133,18 @@ const unifiedNav: NavItem[] = [
   { href: "/configuracion", label: "Configuracion", shortLabel: "Ajustes", icon: Settings, roles: ["ADMIN"], group: "system" }
 ];
 
+// La paleta por rol vive en tokens de globals.css, no aqui. Antes estaba escrita dos veces
+// —en :root y en este componente cliente— y las dos copias podian separarse sin que nadie
+// lo notara. Estos valores solo se inyectan en --role-accent y --role-soft, asi que `var()`
+// se resuelve igual y ademas sigue al tema.
 const roleTheme: Record<Role, { accent: string; soft: string; home: string; context: string }> = {
-  ADMIN: { accent: "#171717", soft: "#f0f0f0", home: "/dashboard", context: "Control del sistema" },
-  MEJORA_CONTINUA: { accent: "#171717", soft: "#f0f0f0", home: "/dashboard", context: "Seguimiento global" },
-  SUPERVISOR: { accent: "#14835f", soft: "#e9f6f0", home: "/seguimientos", context: "Seguimiento de tu área" },
-  CALIDAD: { accent: "#d32236", soft: "#fff0f2", home: "/seguimientos", context: "Calidad e inocuidad" },
-  SEGURIDAD: { accent: "#626a70", soft: "#f0f2f3", home: "/seguimientos", context: "Seguridad industrial" },
-  MANTENIMIENTO: { accent: "#176fc1", soft: "#edf5fc", home: "/seguimientos", context: "Factibilidad técnica" },
-  COLABORADOR: { accent: "#ea0029", soft: "#fff1f4", home: "/seguimientos", context: "Trabajo asignado" }
+  ADMIN: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/dashboard", context: "Control del sistema" },
+  MEJORA_CONTINUA: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/dashboard", context: "Seguimiento global" },
+  SUPERVISOR: { accent: "var(--supervisor)", soft: "var(--supervisor-soft)", home: "/seguimientos", context: "Seguimiento de tu área" },
+  CALIDAD: { accent: "var(--quality)", soft: "var(--quality-soft)", home: "/seguimientos", context: "Calidad e inocuidad" },
+  SEGURIDAD: { accent: "var(--safety)", soft: "var(--safety-soft)", home: "/seguimientos", context: "Seguridad industrial" },
+  MANTENIMIENTO: { accent: "var(--maintenance)", soft: "var(--maintenance-soft)", home: "/seguimientos", context: "Factibilidad técnica" },
+  COLABORADOR: { accent: "var(--brand-red)", soft: "var(--brand-red-soft)", home: "/seguimientos", context: "Trabajo asignado" }
 };
 
 const groupLabels = {
@@ -266,9 +270,9 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
   const roleBaseTheme = roleTheme[user.role];
   const currentModule = pathname.startsWith("/kaizen") ? "kaizen" : pathname.startsWith("/genba") ? "genba" : "ideas";
   const theme = currentModule === "kaizen"
-    ? { ...roleBaseTheme, accent: "#a16207", soft: "#fff7d6", context: "Proyectos Kaizen", home: "/kaizen" }
+    ? { ...roleBaseTheme, accent: "var(--warning)", soft: "var(--warning-soft)", context: "Proyectos Kaizen", home: "/kaizen" }
     : currentModule === "genba"
-      ? { ...roleBaseTheme, accent: "#ea0029", soft: "#fff1f4", context: "Recorridos GENBA", home: "/genba" }
+      ? { ...roleBaseTheme, accent: "var(--brand-red)", soft: "var(--brand-red-soft)", context: "Recorridos GENBA", home: "/genba" }
       : roleBaseTheme;
   const visibleNav = useMemo(() => {
     return unifiedNav.filter((item) => {

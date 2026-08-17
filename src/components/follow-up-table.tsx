@@ -53,16 +53,16 @@ const moduleLabels: Record<FollowUpModule, string> = {
 const urgencyOrder = ["overdue", "today", "soon", "planned", "no-date"];
 
 function urgency(row: FollowUpRow, now: Date) {
-  if (row.overdue) return { key: "overdue", label: "Vencidos", color: "#e2445c" };
-  if (!row.dueDate) return { key: "no-date", label: "Sin fecha compromiso", color: "#a5adba" };
+  if (row.overdue) return { key: "overdue", label: "Vencidos", color: "var(--time-overdue)" };
+  if (!row.dueDate) return { key: "no-date", label: "Sin fecha compromiso", color: "var(--time-none)" };
 
   const endToday = new Date(now);
   endToday.setHours(23, 59, 59, 999);
   const endSoon = new Date(endToday);
   endSoon.setDate(endSoon.getDate() + 7);
-  if (row.dueDate.getTime() <= endToday.getTime()) return { key: "today", label: "Para hoy", color: "#fdab3d" };
-  if (row.dueDate.getTime() <= endSoon.getTime()) return { key: "soon", label: "Proximos 7 dias", color: "#579bfc" };
-  return { key: "planned", label: "Programados", color: "#00a86b" };
+  if (row.dueDate.getTime() <= endToday.getTime()) return { key: "today", label: "Para hoy", color: "var(--time-today)" };
+  if (row.dueDate.getTime() <= endSoon.getTime()) return { key: "soon", label: "Proximos 7 dias", color: "var(--time-soon)" };
+  return { key: "planned", label: "Programados", color: "var(--time-planned)" };
 }
 
 export function FollowUpTable({
@@ -130,10 +130,10 @@ export function FollowUpTable({
     return row.dueDate.getTime() <= limit.getTime();
   }).length;
   const metrics: WorkboardMetric[] = [
-    { label: "En esta vista", value: totalRows ?? rows.length, detail: "Registros dentro de tu alcance", color: "#171717" },
-    { label: "Vencidos", value: rows.filter((row) => row.overdue).length, detail: "Requieren una decision o nueva fecha", color: "#e2445c" },
-    { label: "Proximos 7 dias", value: dueSoon, detail: "Compromisos cercanos", color: "#fdab3d" },
-    { label: "Avance medio", value: `${averageProgress}%`, detail: "Kaizen y GENBA con actividades", color: "#00a86b" }
+    { label: "En esta vista", value: totalRows ?? rows.length, detail: "Registros dentro de tu alcance", color: "var(--brand-black)" },
+    { label: "Vencidos", value: rows.filter((row) => row.overdue).length, detail: "Requieren una decision o nueva fecha", color: "var(--time-overdue)" },
+    { label: "Proximos 7 dias", value: dueSoon, detail: "Compromisos cercanos", color: "var(--time-today)" },
+    { label: "Avance medio", value: `${averageProgress}%`, detail: "Kaizen y GENBA con actividades", color: "var(--time-planned)" }
   ];
 
   return (

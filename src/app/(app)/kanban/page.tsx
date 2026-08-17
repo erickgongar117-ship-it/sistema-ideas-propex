@@ -28,7 +28,7 @@ export default async function KanbanPage() {
           {kanbanColumns.map((column, index) => {
             const columnIdeas = ideas.filter((idea) => column.statuses.includes(idea.status));
             return (
-              <section className="min-h-[520px] rounded-lg border border-line bg-[#eef1ef]" key={column.title}>
+              <section className="min-h-[520px] rounded-lg border border-line bg-[var(--surface-subtle)]" key={column.title}>
                 <div className={`h-1 rounded-t-lg ${columnColors[index]}`} />
                 <div className="flex min-h-[74px] items-start justify-between gap-3 border-b border-line bg-white p-4">
                   <div>

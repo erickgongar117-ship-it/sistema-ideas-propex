@@ -111,10 +111,10 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
     locationLabel="Area visitada"
     primaryLabel="Recorridos"
     metrics={[
-      { label: "Recorridos visibles", value: visible.length, detail: `${visible.filter((walk) => walk.status === "ABIERTO").length} abiertos`, color: "#579bfc" },
-      { label: "Avance de acciones", value: `${activities.length ? Math.round((completed / activities.length) * 100) : 0}%`, detail: `${completed} de ${activities.length} cerradas`, color: "#00a878" },
-      { label: "Acciones vencidas", value: overdue, detail: "Compromisos fuera de fecha", color: "#e2445c" },
-      { label: "Asistencia", value: `${attendance}%`, detail: "Cumplimiento de areas convocadas", color: "#fdab3d" }
+      { label: "Recorridos visibles", value: visible.length, detail: `${visible.filter((walk) => walk.status === "ABIERTO").length} abiertos`, color: "var(--time-soon)" },
+      { label: "Avance de acciones", value: `${activities.length ? Math.round((completed / activities.length) * 100) : 0}%`, detail: `${completed} de ${activities.length} cerradas`, color: "var(--time-planned)" },
+      { label: "Acciones vencidas", value: overdue, detail: "Compromisos fuera de fecha", color: "var(--time-overdue)" },
+      { label: "Asistencia", value: `${attendance}%`, detail: "Cumplimiento de areas convocadas", color: "var(--time-today)" }
     ]}
   />;
 }

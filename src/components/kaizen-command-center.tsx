@@ -184,10 +184,10 @@ export function KaizenCommandCenter({
     onMoveItem={canManage ? moveProject : undefined}
     primaryLabel="Proyectos"
     metrics={[
-      { label: "Kaizen visibles", value: visible.length, detail: `${visible.filter((project) => ["PLANIFICACION", "EN_CURSO", "EN_PAUSA"].includes(project.status)).length} activos`, color: "#579bfc" },
-      { label: "Avance global", value: `${allActivities.length ? Math.round((completed / allActivities.length) * 100) : 0}%`, detail: `${completed} de ${allActivities.length} actividades`, color: "#00a878" },
-      { label: "Compromisos vencidos", value: overdue, detail: "Actividades abiertas fuera de fecha", color: "#e2445c" },
-      { label: "Ahorro comprobado", value: currency(realSavings), detail: "Beneficio real registrado", color: "#fdab3d" }
+      { label: "Kaizen visibles", value: visible.length, detail: `${visible.filter((project) => ["PLANIFICACION", "EN_CURSO", "EN_PAUSA"].includes(project.status)).length} activos`, color: "var(--time-soon)" },
+      { label: "Avance global", value: `${allActivities.length ? Math.round((completed / allActivities.length) * 100) : 0}%`, detail: `${completed} de ${allActivities.length} actividades`, color: "var(--time-planned)" },
+      { label: "Compromisos vencidos", value: overdue, detail: "Actividades abiertas fuera de fecha", color: "var(--time-overdue)" },
+      { label: "Ahorro comprobado", value: currency(realSavings), detail: "Beneficio real registrado", color: "var(--time-today)" }
     ]}
   />;
 }
