@@ -38,6 +38,7 @@ import {
   supervisorDecisionAction,
   validationDecisionAction
 } from "@/app/actions";
+import { SearchablePicker } from "@/components/searchable-picker";
 import { IdeaProgress } from "@/components/idea-progress";
 import { PageHeader } from "@/components/page-header";
 import { ProbocaCoin } from "@/components/proboca-coin";
@@ -60,6 +61,7 @@ import { requireUser } from "@/lib/auth";
 import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
 import { canDecideInitialIdea, canViewIdea } from "@/lib/idea-access";
 import { automaticManagerialEvaluation, automaticPointRules } from "@/lib/points";
+import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
 
 type DetailProps = {
@@ -510,7 +512,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
               <summary><span className="flex items-center gap-2"><UserRound className="h-4 w-4 text-slate-500" aria-hidden />Asignar implementación</span></summary>
               <form action={assignImplementationAction} className="grid gap-3 p-4">
                 <input name="ideaId" type="hidden" value={idea.id} />
-                <label><span className="label">Responsable</span><select className="field" name="ownerId" defaultValue={idea.implementationOwnerId ?? ""} required><option value="">Seleccionar responsable</option>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></label>
+                <SearchablePicker defaultValue={idea.implementationOwnerId ?? ""} label="Responsable" name="ownerId" options={personOptions(owners)} placeholder="Nombre o numero de empleado" required />
                 <label><span className="label">Fecha compromiso</span><input className="field" name="dueDate" type="date" defaultValue={idea.dueDate ? idea.dueDate.toISOString().slice(0, 10) : ""} required /></label>
                 <label><span className="label">Prioridad</span><select className="field" name="priority" defaultValue={idea.priority ?? "MEDIA"}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                 <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input defaultChecked={idea.requiresEvidence} name="requiresEvidence" type="checkbox" />Requiere evidencia final</label>

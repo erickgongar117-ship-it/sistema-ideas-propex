@@ -3,8 +3,10 @@ import Link from "next/link";
 import { ArrowLeft, FolderPlus, Save } from "lucide-react";
 import { createKaizenProjectAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
+import { SearchablePicker } from "@/components/searchable-picker";
 import { SectionHeading } from "@/components/section-heading";
 import { requireKaizenAccess } from "@/lib/module-access";
+import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
 
 type NewKaizenProps = { searchParams: Promise<{ error?: string }> };
@@ -30,7 +32,7 @@ export default async function NewKaizenPage({ searchParams }: NewKaizenProps) {
             <label><span className="label">Área / proceso *</span><input className="field" name="area" placeholder="Línea, departamento o proceso" required /></label>
             <label className="lg:col-span-2"><span className="label">Objetivo *</span><textarea className="field min-h-24" name="objective" placeholder="Resultado concreto que se busca alcanzar" required /></label>
             <label className="lg:col-span-2"><span className="label">Alcance</span><textarea className="field min-h-20" name="scope" placeholder="Qué incluye y qué no incluye el proyecto" /></label>
-            <label><span className="label">Líder / responsable *</span><select className="field" name="leaderId" required defaultValue=""><option value="">Seleccionar</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.email}</option>)}</select></label>
+            <SearchablePicker label="Líder / responsable *" name="leaderId" options={personOptions(users)} placeholder="Nombre o numero de empleado" required />
             <div className="grid grid-cols-2 gap-3"><label><span className="label">Inicio *</span><input className="field" defaultValue={today.toISOString().slice(0, 10)} name="startDate" type="date" required /></label><label><span className="label">Cierre esperado *</span><input className="field" defaultValue={defaultEnd.toISOString().slice(0, 10)} name="endDate" type="date" required /></label></div>
           </div>
         </div>

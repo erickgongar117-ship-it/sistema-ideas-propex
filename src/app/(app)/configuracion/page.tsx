@@ -2,12 +2,14 @@ import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { Building2, CircleCheck, Filter, KeyRound, Mail, Network, Plus, Search, SlidersHorizontal, Trash2, UserCog, UsersRound } from "lucide-react";
 import { createPointRuleAction, createUserAction, deleteInactiveUserAction, updateAreaAction, updatePointRuleAction, updateUserAction } from "@/app/actions";
+import { SearchablePicker } from "@/components/searchable-picker";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { SectionHeading } from "@/components/section-heading";
 import { requireUser } from "@/lib/auth";
 import { roleLabels } from "@/lib/domain";
 import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
+import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
 
 const configurableRoles = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"] as const;
@@ -177,7 +179,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
               <form action={updateAreaAction} className="grid gap-4 p-4 md:grid-cols-[1fr_1fr_140px_auto]">
                 <input name="areaId" type="hidden" value={area.id} />
                 <label><span className="label">Nombre del área</span><input className="field" name="name" defaultValue={area.name} required /></label>
-                <label><span className="label">Responsable de recibir ideas</span><select className="field" name="supervisorId" defaultValue={area.supervisorId ?? ""}><option value="">Sin responsable</option>{assignableUsers.map((person) => <option key={person.id} value={person.id}>{person.name} · {roleLabels[person.role]}</option>)}</select></label>
+                <SearchablePicker defaultValue={area.supervisorId ?? ""} label="Responsable de recibir ideas" name="supervisorId" options={personOptions(assignableUsers)} placeholder="Nombre o numero de empleado" />
                 <label className="flex items-center gap-2 self-end pb-3 text-sm font-bold text-slate-700"><input defaultChecked={area.active} name="active" type="checkbox" />Área activa</label>
                 <div className="flex items-end"><button className="btn btn-secondary w-full" type="submit">Guardar</button></div>
               </form>

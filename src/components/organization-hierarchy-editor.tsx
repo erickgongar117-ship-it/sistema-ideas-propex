@@ -8,9 +8,30 @@ import {
   saveEscalationRuleAction,
   saveMembershipAction
 } from "@/app/(app)/configuracion/estructura/actions";
+import { SearchablePicker, type SearchablePickerOption } from "@/components/searchable-picker";
+import { personOptions } from "@/lib/person-options";
 import type { OrganizationActionResult, OrganizationMembership, OrganizationNode, OrganizationUserOption } from "@/lib/organization-types";
 
 type MembershipOption = OrganizationMembership & { unitName: string; plantId: string; plantName: string };
+
+/**
+ * Membresias como opciones buscables. El `<select>` con optgroup obligaba a recorrer todas
+ * las membresias de ambas plantas a ojo; aqui se escribe el nombre o el numero de empleado.
+ * La planta se conserva en la descripcion para no perder el aviso de cruce entre plantas.
+ */
+function membershipOptions(options: MembershipOption[], plantId: string, excludeId?: string, activeOnly = false): SearchablePickerOption[] {
+  const available = options.filter((option) => option.id !== excludeId && (!activeOnly || option.active));
+  const ordered = [
+    ...available.filter((option) => option.plantId === plantId),
+    ...available.filter((option) => option.plantId !== plantId)
+  ];
+  return ordered.map((option) => ({
+    value: option.id,
+    label: option.user.name,
+    description: `${option.title} · ${option.unitName}${option.plantId === plantId ? "" : ` · ${option.plantName} (otra planta)`}`,
+    searchText: [option.user.email, option.unitName, option.plantName, option.title].filter(Boolean).join(" ")
+  }));
+}
 
 function MembershipOptions({ options, plantId, excludeId, activeOnly = false }: { options: MembershipOption[]; plantId: string; excludeId?: string; activeOnly?: boolean }) {
   const available = options.filter((option) => option.id !== excludeId && (!activeOnly || option.active));
@@ -100,10 +121,10 @@ export function OrganizationHierarchyEditor({
                 <input name="membershipId" type="hidden" value={membership.id} />
                 <input name="orgUnitId" type="hidden" value={node.id} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label><span className="label">Persona</span><select className="field" defaultValue={membership.userId} name="userId">{users.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.email}</option>)}</select></label>
+                  <SearchablePicker defaultValue={membership.userId} label="Persona" name="userId" options={personOptions(users)} placeholder="Nombre o numero de empleado" />
                   <label><span className="label">Puesto en esta area</span><input className="field" defaultValue={membership.title} name="title" required /></label>
                   <label><span className="label">Nivel jerarquico</span><input className="field" defaultValue={membership.level} max={99} min={0} name="level" type="number" /></label>
-                  <label><span className="label">Jefe directo</span><select className="field" defaultValue={membership.managerMembershipId ?? ""} name="managerMembershipId"><option value="">Sin jefe configurado</option><MembershipOptions excludeId={membership.id} options={allMemberships} plantId={node.plantId} /></select><span className="helper-text">Los responsables de la misma planta aparecen primero.</span></label>
+                  <label className="block"><SearchablePicker defaultValue={membership.managerMembershipId ?? ""} label="Jefe directo" name="managerMembershipId" options={membershipOptions(allMemberships, node.plantId, membership.id)} placeholder="Sin jefe configurado" /><span className="helper-text">Los responsables de la misma planta aparecen primero.</span></label>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Checkbox defaultChecked={membership.canReviewTeam} label="Puede revisar y aprobar propuestas de su equipo" name="canReviewTeam" />
@@ -129,10 +150,10 @@ export function OrganizationHierarchyEditor({
           <form className="grid gap-3 p-3" onSubmit={(event) => runAction(event, saveMembershipAction)}>
             <input name="orgUnitId" type="hidden" value={node.id} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <label><span className="label">Persona</span><select className="field" name="userId" required><option value="">Seleccionar</option>{users.filter((user) => !node.memberships.some((membership) => membership.userId === user.id)).map((user) => <option key={user.id} value={user.id}>{user.name} · {user.email}</option>)}</select></label>
+              <SearchablePicker label="Persona" name="userId" options={personOptions(users.filter((user) => !node.memberships.some((membership) => membership.userId === user.id)))} placeholder="Nombre o numero de empleado" required />
               <label><span className="label">Puesto en esta area</span><input className="field" name="title" placeholder="Ej. Supervisor, jefe de turno, gerente" required /></label>
               <label><span className="label">Nivel jerarquico</span><input className="field" defaultValue={0} max={99} min={0} name="level" type="number" /><span className="helper-text">0 operativo, 1 supervisor, 2 jefatura, 3 gerencia; puedes usar los niveles que necesites.</span></label>
-              <label><span className="label">Jefe directo</span><select className="field" name="managerMembershipId"><option value="">Sin jefe configurado</option><MembershipOptions activeOnly options={allMemberships} plantId={node.plantId} /></select><span className="helper-text">Los responsables de la misma planta aparecen primero.</span></label>
+              <label className="block"><SearchablePicker label="Jefe directo" name="managerMembershipId" options={membershipOptions(allMemberships, node.plantId, undefined, true)} placeholder="Sin jefe configurado" /><span className="helper-text">Los responsables de la misma planta aparecen primero.</span></label>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <Checkbox label="Puede revisar y aprobar propuestas de su equipo" name="canReviewTeam" />
@@ -170,7 +191,7 @@ export function OrganizationHierarchyEditor({
                   <label><span className="label">Quien presenta la idea</span><input className="field" defaultValue={rule.submitterLabel} name="submitterLabel" required /></label>
                   <label><span className="label">Circunstancia</span><input className="field" defaultValue={rule.circumstance ?? ""} name="circumstance" placeholder="Ej. turno nocturno o linea 2" /></label>
                   <label><span className="label">Nivel de quien presenta</span><input className="field" defaultValue={rule.submitterLevel} min={0} name="submitterLevel" type="number" /></label>
-                  <label className="sm:col-span-2"><span className="label">Jefe que recibe</span><select className="field" defaultValue={rule.reviewerMembershipId} name="reviewerMembershipId"><MembershipOptions options={allMemberships} plantId={node.plantId} /></select><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
+                  <label className="block sm:col-span-2"><SearchablePicker defaultValue={rule.reviewerMembershipId} label="Jefe que recibe" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId)} placeholder="Nombre o numero de empleado" /><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2"><Checkbox defaultChecked={rule.isDefault} label="Ruta principal" name="isDefault" /><Checkbox defaultChecked={rule.active} label="Ruta activa" name="active" /></div>
                 <button className="btn btn-secondary" disabled={isPending} type="submit"><GitBranch className="h-4 w-4" aria-hidden />Guardar ruta</button>
@@ -190,7 +211,7 @@ export function OrganizationHierarchyEditor({
                 <label><span className="label">Quien presenta la idea</span><input className="field" name="submitterLabel" placeholder="Ej. Operador, supervisor, tecnico" required /></label>
                 <label><span className="label">Circunstancia opcional</span><input className="field" name="circumstance" placeholder="Ej. turno, linea o tipo de proyecto" /></label>
                 <label><span className="label">Nivel de quien presenta</span><input className="field" defaultValue={0} min={0} name="submitterLevel" type="number" /></label>
-                <label className="sm:col-span-2"><span className="label">Jefe que recibe</span><select className="field" name="reviewerMembershipId" required><option value="">Seleccionar</option><MembershipOptions activeOnly options={allMemberships} plantId={node.plantId} /></select><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
+                <label className="block sm:col-span-2"><SearchablePicker label="Jefe que recibe" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId, undefined, true)} placeholder="Nombre o numero de empleado" required /><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
               </div>
               <div className="grid gap-2 sm:grid-cols-2"><Checkbox defaultChecked={node.escalationRules.length === 0} label="Ruta principal" name="isDefault" /><Checkbox defaultChecked label="Ruta activa" name="active" /></div>
               <button className="btn btn-primary" disabled={isPending} type="submit"><GitBranch className="h-4 w-4" aria-hidden />Crear ruta</button>

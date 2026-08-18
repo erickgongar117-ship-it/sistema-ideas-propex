@@ -24,6 +24,7 @@ import {
   updateGenbaActivityAction,
   updateGenbaWalkAction
 } from "@/app/actions";
+import { SearchablePicker } from "@/components/searchable-picker";
 import { GenbaStatusPill } from "@/components/module-status";
 import { PageHeader } from "@/components/page-header";
 import { ProgressMeter } from "@/components/progress-meter";
@@ -38,6 +39,7 @@ import {
   workProgress
 } from "@/lib/domain";
 import { requireGenbaAccess } from "@/lib/module-access";
+import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
 
 type GenbaDetailProps = {
@@ -145,7 +147,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
                   <input name="walkId" type="hidden" value={walk.id} />
                   <label className="sm:col-span-2"><span className="label">Problemática *</span><textarea className="field min-h-20" name="problem" placeholder="Condición o hallazgo adicional" required /></label>
                   <label className="sm:col-span-2"><span className="label">Acción propuesta</span><textarea className="field min-h-20" name="action" placeholder="Qué debe hacerse" /></label>
-                  <label><span className="label">Responsable</span><select className="field" defaultValue="" name="ownerId"><option value="">Sin asignar</option>{users.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+                  <SearchablePicker label="Responsable" name="ownerId" options={personOptions(users)} placeholder="Nombre o numero de empleado" />
                   <label><span className="label">Compromiso</span><input className="field" defaultValue={defaultActivityDueDate} name="dueDate" type="date" /></label>
                   <button className="btn btn-primary sm:col-span-2" type="submit"><Plus className="h-4 w-4" aria-hidden />Agregar al plan de acción</button>
                 </form>
@@ -188,7 +190,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
                               <input name="activityId" type="hidden" value={activity.id} />
                               <label><span className="label">Problemática</span><textarea className="field min-h-20" defaultValue={activity.problem} name="problem" required /></label>
                               <label><span className="label">Acción</span><textarea className="field min-h-20" defaultValue={activity.action ?? ""} name="action" /></label>
-                              <label><span className="label">Responsable</span><select className="field" defaultValue={activity.ownerId ?? ""} name="ownerId"><option value="">Sin asignar</option>{users.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+                              <SearchablePicker defaultValue={activity.ownerId ?? ""} label="Responsable" name="ownerId" options={personOptions(users)} placeholder="Nombre o numero de empleado" />
                               <label><span className="label">Compromiso</span><input className="field" defaultValue={activity.dueDate?.toISOString().slice(0, 10) ?? ""} name="dueDate" type="date" /></label>
                               <label><span className="label">Estado</span><select className="field" defaultValue={activity.status} name="status"><option value="PENDIENTE">Pendiente</option><option value="EN_PROCESO">En proceso</option><option value="BLOQUEADA">Bloqueada</option></select></label>
                               <button className="btn btn-secondary" type="submit"><Save className="h-4 w-4" aria-hidden />Guardar actividad</button>
@@ -217,7 +219,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
                           <input name="activityId" type="hidden" value={activity.id} />
                           <label><span className="label">Proyecto existente</span><select className="field" defaultValue="" name="targetProjectId"><option value="">Crear un nuevo Kaizen</option>{kaizenProjects.map((project) => <option key={project.id} value={project.id}>{project.folio} · {project.title}</option>)}</select></label>
                           <label><span className="label">Nombre si se crea uno nuevo</span><input className="field" defaultValue={activity.problem} name="newProjectTitle" /></label>
-                          <label><span className="label">Líder del nuevo Kaizen</span><select className="field" defaultValue={activity.ownerId ?? ""} name="leaderId"><option value="">Seleccionar</option>{users.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+                          <SearchablePicker defaultValue={activity.ownerId ?? ""} label="Líder del nuevo Kaizen" name="leaderId" options={personOptions(users)} placeholder="Nombre o numero de empleado" />
                           <button className="btn bg-amber-500 text-slate-950 hover:bg-amber-400" type="submit"><Send className="h-4 w-4" aria-hidden />Enviar a Kaizen</button>
                         </form>
                       </details>
@@ -248,7 +250,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
                 <input name="walkId" type="hidden" value={walk.id} />
                 <label><span className="label">Área</span><input className="field" defaultValue={walk.areaName} name="areaName" required /></label>
                 <label><span className="label">Fecha</span><input className="field" defaultValue={walk.visitDate.toISOString().slice(0, 10)} name="visitDate" type="date" required /></label>
-                <label><span className="label">Coordinador</span><select className="field" defaultValue={walk.coordinatorId} name="coordinatorId">{users.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+                <SearchablePicker defaultValue={walk.coordinatorId} label="Coordinador" name="coordinatorId" options={personOptions(users)} placeholder="Nombre o numero de empleado" />
                 <label><span className="label">Notas</span><textarea className="field min-h-20" defaultValue={walk.notes ?? ""} name="notes" /></label>
                 <label><span className="label">Estado</span><select className="field" defaultValue={walk.status} name="status">{Object.entries(genbaStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                 <fieldset><legend className="label">Asistencia</legend><div className="space-y-2">{genbaDepartments.map((department) => <div className="grid grid-cols-[1fr_70px_70px] items-center gap-2 rounded-lg border border-line p-2 text-xs" key={department}><span className="font-bold">{department}</span><label className="text-center"><span className="block text-[9px] uppercase text-slate-400">Esperado</span><input defaultChecked={expected.includes(department)} name="expectedDepartments" type="checkbox" value={department} /></label><label className="text-center"><span className="block text-[9px] uppercase text-slate-400">Asistió</span><input defaultChecked={attended.has(department)} name="attendedDepartments" type="checkbox" value={department} /></label></div>)}</div></fieldset>

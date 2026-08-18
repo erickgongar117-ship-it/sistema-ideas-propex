@@ -2,11 +2,13 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Footprints, Save } from "lucide-react";
 import { createGenbaWalkAction } from "@/app/actions";
+import { SearchablePicker } from "@/components/searchable-picker";
 import { GenbaActivityEntryTable } from "@/components/genba-activity-entry-table";
 import { PageHeader } from "@/components/page-header";
 import { SectionHeading } from "@/components/section-heading";
 import { genbaDepartments } from "@/lib/domain";
 import { requireGenbaAccess } from "@/lib/module-access";
+import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
 
 type NewGenbaProps = { searchParams: Promise<{ error?: string }> };
@@ -29,7 +31,7 @@ export default async function NewGenbaPage({ searchParams }: NewGenbaProps) {
           <div className="grid gap-4 lg:grid-cols-2">
             <label><span className="label">Área / zona visitada *</span><input className="field" name="areaName" placeholder="Ejemplo: P1, Embarques, Sanidad" required /></label>
             <label><span className="label">Fecha del recorrido *</span><input className="field" defaultValue={today.toISOString().slice(0, 10)} name="visitDate" type="date" required /></label>
-            <label><span className="label">Coordinador *</span><select className="field" defaultValue="" name="coordinatorId" required><option value="">Seleccionar</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label>
+            <SearchablePicker label="Coordinador *" name="coordinatorId" options={personOptions(users)} placeholder="Nombre o numero de empleado" required />
             <label><span className="label">Notas generales</span><input className="field" name="notes" placeholder="Enfoque, turno o contexto del recorrido" /></label>
           </div>
         </section>

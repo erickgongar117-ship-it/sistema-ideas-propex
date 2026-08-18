@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Clock3, Save, UserRound } from "lucide-react";
 import { assignImplementationAction, classifyIdeaAction } from "@/app/actions";
+import { SearchablePicker } from "@/components/searchable-picker";
 import { EmptyState } from "@/components/empty-state";
 import { KpiCard } from "@/components/mini-charts";
 import { PageHeader } from "@/components/page-header";
 import { SectionHeading } from "@/components/section-heading";
 import { StatusPill } from "@/components/status-pill";
 import { classificationLabels, priorityLabels } from "@/lib/domain";
+import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 
@@ -73,7 +75,7 @@ export default async function MejoraContinuaPage() {
                   <summary>2. Asignar implementación</summary>
                   <form action={assignImplementationAction} className="grid gap-3 p-4">
                     <input name="ideaId" type="hidden" value={idea.id} />
-                    <label><span className="label">Responsable</span><select className="field" name="ownerId" defaultValue={idea.implementationOwnerId ?? ""} required><option value="">Seleccionar</option>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></label>
+                    <SearchablePicker defaultValue={idea.implementationOwnerId ?? ""} label="Responsable" name="ownerId" options={personOptions(owners)} placeholder="Nombre o numero de empleado" required />
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label><span className="label">Fecha compromiso</span><input className="field" defaultValue={idea.dueDate ? idea.dueDate.toISOString().slice(0, 10) : ""} name="dueDate" type="date" required /></label>
                       <label><span className="label">Prioridad</span><select className="field" name="priority" defaultValue={idea.priority ?? "MEDIA"}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
