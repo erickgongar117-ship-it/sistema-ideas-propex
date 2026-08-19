@@ -101,8 +101,8 @@ export function OrganizationHierarchyEditor({
       <section aria-labelledby="area-people-title">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h4 className="flex items-center gap-2 text-sm font-extrabold text-ink" id="area-people-title"><UsersRound className="h-4 w-4 text-brand-600" aria-hidden />Personas y jefes directos</h4>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Una persona puede pertenecer a varias areas y tener un jefe distinto en cada una.</p>
+            <h4 className="flex items-center gap-2 text-sm font-extrabold text-ink" id="area-people-title"><UsersRound className="h-4 w-4 text-brand-600" aria-hidden />Personas de esta area</h4>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Quien trabaja aqui y a quien le reporta. Una persona puede estar en varias areas con un jefe distinto en cada una.</p>
           </div>
           <span className="rounded bg-panel px-2 py-1 text-xs font-extrabold text-slate-600">{node.memberships.length}</span>
         </div>
@@ -170,36 +170,39 @@ export function OrganizationHierarchyEditor({
       <section aria-labelledby="escalation-routes-title">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h4 className="flex items-center gap-2 text-sm font-extrabold text-ink" id="escalation-routes-title"><GitBranch className="h-4 w-4 text-emerald-700" aria-hidden />Rutas para enviar ideas</h4>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Cada opcion aparecera en el formulario QR. Puedes diferenciar puesto, turno o circunstancia.</p>
+            <h4 className="flex items-center gap-2 text-sm font-extrabold text-ink" id="escalation-routes-title"><GitBranch className="h-4 w-4 text-emerald-700" aria-hidden />Quien revisa, segun quien reporta</h4>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Cada renglon es un escalon: el operador reporta al supervisor, el supervisor al jefe de turno, el jefe al gerente. Quien captura elige su escalon en el formulario del QR, y eso decide quien le responde.</p>
           </div>
           <span className="rounded bg-panel px-2 py-1 text-xs font-extrabold text-slate-600">{node.escalationRules.length}</span>
         </div>
 
-        <div className="mt-3 space-y-2">
-          {node.escalationRules.map((rule) => (
-            <details className="details-panel" key={rule.id}>
+        {/* Ordenadas por escalon para que se lean como una escalera y no como una lista suelta. */}
+        <ol className="escalation-ladder mt-3">
+          {[...node.escalationRules].sort((a, b) => a.submitterLevel - b.submitterLevel || a.sortOrder - b.sortOrder).map((rule) => (
+            <li key={rule.id}>
+            <details className="details-panel">
               <summary>
-                <span className="min-w-0"><span className="block truncate text-sm font-extrabold text-ink">{rule.submitterLabel} → {rule.reviewerMembership.user.name}</span><span className="block truncate text-xs font-normal text-slate-500">{rule.name}{rule.circumstance ? ` · ${rule.circumstance}` : ""}</span></span>
+                <span className="escalation-step" aria-hidden>{rule.submitterLevel + 1}</span>
+                <span className="min-w-0"><span className="block truncate text-sm font-extrabold text-ink">{rule.submitterLabel} → {rule.reviewerMembership.user.name}</span><span className="block truncate text-xs font-normal text-slate-500">{`Escalon ${rule.submitterLevel + 1}`}{rule.circumstance ? ` · solo cuando ${rule.circumstance}` : ""}{rule.active ? "" : " · inactiva"}</span></span>
                 {rule.isDefault ? <span className="ml-auto mr-2 rounded bg-emerald-50 px-2 py-1 text-[10px] font-extrabold text-emerald-800">Principal</span> : null}
               </summary>
               <form className="grid gap-3 p-3" onSubmit={(event) => runAction(event, saveEscalationRuleAction)}>
                 <input name="ruleId" type="hidden" value={rule.id} />
                 <input name="orgUnitId" type="hidden" value={node.id} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label><span className="label">Nombre de la ruta</span><input className="field" defaultValue={rule.name} name="name" required /></label>
-                  <label><span className="label">Quien presenta la idea</span><input className="field" defaultValue={rule.submitterLabel} name="submitterLabel" required /></label>
-                  <label><span className="label">Circunstancia</span><input className="field" defaultValue={rule.circumstance ?? ""} name="circumstance" placeholder="Ej. turno nocturno o linea 2" /></label>
-                  <label><span className="label">Nivel de quien presenta</span><input className="field" defaultValue={rule.submitterLevel} min={0} name="submitterLevel" type="number" /></label>
-                  <label className="block sm:col-span-2"><SearchablePicker defaultValue={rule.reviewerMembershipId} label="Jefe que recibe" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId)} placeholder="Nombre o numero de empleado" /><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
+                  <label><span className="label">Quien reporta</span><input className="field" defaultValue={rule.submitterLabel} name="submitterLabel" placeholder="Ej. Operador" required /></label>
+                  <label><span className="label">Escalon</span><input className="field" defaultValue={rule.submitterLevel} min={0} name="submitterLevel" type="number" /><span className="helper-text">0 es quien esta mas abajo. Solo ordena la escalera.</span></label>
+                  <label className="block sm:col-span-2"><SearchablePicker defaultValue={rule.reviewerMembershipId} label="Quien le responde" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId)} placeholder="Nombre o numero de empleado" /><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
+                  <label className="block sm:col-span-2"><span className="label">Solo cuando (opcional)</span><input className="field" defaultValue={rule.circumstance ?? ""} name="circumstance" placeholder="Ej. turno nocturno o linea 2" /></label>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2"><Checkbox defaultChecked={rule.isDefault} label="Ruta principal" name="isDefault" /><Checkbox defaultChecked={rule.active} label="Ruta activa" name="active" /></div>
                 <button className="btn btn-secondary" disabled={isPending} type="submit"><GitBranch className="h-4 w-4" aria-hidden />Guardar ruta</button>
               </form>
               <form className="border-t border-line p-3" onSubmit={(event) => runAction(event, deleteEscalationRuleAction)}><input name="ruleId" type="hidden" value={rule.id} /><button className="btn btn-danger w-full" disabled={isPending} type="submit"><Trash2 className="h-4 w-4" aria-hidden />Eliminar ruta</button></form>
             </details>
+            </li>
           ))}
-        </div>
+        </ol>
 
         <details className="details-panel mt-3 border-dashed border-slate-400">
           <summary><span className="flex items-center gap-2 text-emerald-800"><Plus className="h-4 w-4" aria-hidden />Agregar ruta de escalamiento</span></summary>
@@ -207,11 +210,10 @@ export function OrganizationHierarchyEditor({
             <form className="grid gap-3 p-3" onSubmit={(event) => runAction(event, saveEscalationRuleAction)}>
               <input name="orgUnitId" type="hidden" value={node.id} />
               <div className="grid gap-3 sm:grid-cols-2">
-                <label><span className="label">Nombre de la ruta</span><input className="field" name="name" placeholder="Ej. Operador a supervisor" required /></label>
-                <label><span className="label">Quien presenta la idea</span><input className="field" name="submitterLabel" placeholder="Ej. Operador, supervisor, tecnico" required /></label>
-                <label><span className="label">Circunstancia opcional</span><input className="field" name="circumstance" placeholder="Ej. turno, linea o tipo de proyecto" /></label>
-                <label><span className="label">Nivel de quien presenta</span><input className="field" defaultValue={0} min={0} name="submitterLevel" type="number" /></label>
-                <label className="block sm:col-span-2"><SearchablePicker label="Jefe que recibe" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId, undefined, true)} placeholder="Nombre o numero de empleado" required /><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
+                <label><span className="label">Quien reporta</span><input className="field" name="submitterLabel" placeholder="Ej. Operador, supervisor, jefe de turno" required /></label>
+                <label><span className="label">Escalon</span><input className="field" defaultValue={node.escalationRules.length} min={0} name="submitterLevel" type="number" /><span className="helper-text">0 es quien esta mas abajo. Solo ordena la escalera.</span></label>
+                <label className="block sm:col-span-2"><SearchablePicker label="Quien le responde" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId, undefined, true)} placeholder="Nombre o numero de empleado" required /><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
+                <label className="block sm:col-span-2"><span className="label">Solo cuando (opcional)</span><input className="field" name="circumstance" placeholder="Ej. turno nocturno o linea 2" /></label>
               </div>
               <div className="grid gap-2 sm:grid-cols-2"><Checkbox defaultChecked={node.escalationRules.length === 0} label="Ruta principal" name="isDefault" /><Checkbox defaultChecked label="Ruta activa" name="active" /></div>
               <button className="btn btn-primary" disabled={isPending} type="submit"><GitBranch className="h-4 w-4" aria-hidden />Crear ruta</button>

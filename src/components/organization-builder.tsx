@@ -426,22 +426,39 @@ export function OrganizationBuilder({
               <h3 className="mt-3 break-words text-xl font-extrabold text-ink">{selected.node.name}</h3>
               <p className="mt-1 break-words text-xs leading-5 text-slate-500">{selected.path.map((node) => node.name).join(" › ")}</p>
 
+              {/*
+                El panel mostraba SEIS conceptos de persona al mismo nivel: Responsable, Jefe
+                directo, Quien recibe ideas, Personas y jefes directos, Rutas para enviar
+                ideas y Ruta principal. Pero `responsible` y `manager` son texto libre —una
+                ficha descriptiva, no configuracion— y quien recibe de verdad sale de la
+                escalera de escalamiento. Aqui arriba queda solo lo que identifica al area y
+                el QR; la ficha se pliega y la escalera pasa a ser el centro del panel.
+              */}
               <dl className="mt-5 grid gap-4">
                 <div className="border-b border-line pb-3"><dt className="text-xs font-bold text-slate-500">Planta</dt><dd className="mt-1 font-extrabold text-ink">{currentPlant.name}</dd></div>
-                <div className="border-b border-line pb-3"><dt className="flex items-center gap-2 text-xs font-bold text-slate-500"><UserRound className="h-4 w-4" aria-hidden />Responsable</dt><dd className="mt-1 break-words font-bold text-ink">{selected.node.responsible}</dd></div>
-                <div className="border-b border-line pb-3"><dt className="text-xs font-bold text-slate-500">Jefe directo o gerente</dt><dd className="mt-1 break-words font-bold text-ink">{selected.node.manager}</dd></div>
-                <div className="border-b border-line pb-3">
-                  <dt className="flex items-center gap-2 text-xs font-bold text-slate-500"><Mail className="h-4 w-4" aria-hidden />Quien recibe ideas y correos</dt>
-                  <dd className="mt-1 break-words font-bold text-ink">{selected.node.routingUser?.name ?? "Pendiente de asignar"}</dd>
-                  {selected.node.routingUser ? <dd className="mt-0.5 break-all text-xs text-slate-500">{selected.node.routingUser.email}</dd> : null}
-                </div>
-                <div className="border-b border-line pb-3"><dt className="text-xs font-bold text-slate-500">Contenido</dt><dd className="mt-1 font-bold text-ink">{selected.node.children.length ? `${selected.node.children.length} elementos dependientes` : "Sin subdivisiones registradas"}</dd></div>
-                <div>
+                <div className={selected.node.children.length ? "border-b border-line pb-3" : ""}>
                   <dt className="flex items-center gap-2 text-xs font-bold text-slate-500"><QrCode className="h-4 w-4" aria-hidden />QR de captura</dt>
                   <dd className="mt-1 font-bold text-ink">{selected.node.qrEnabled ? `Habilitado · ${selected.node.captureArea?.code ?? "en preparacion"}` : "No requerido"}</dd>
                   {selected.node.qrEnabled && selected.node.captureArea ? <a className="mt-2 inline-flex items-center gap-1 text-xs font-extrabold text-brand-700 hover:underline" href={`/captura/${selected.node.captureArea.code}`} rel="noreferrer" target="_blank">Probar formulario <ExternalLink className="h-3.5 w-3.5" aria-hidden /></a> : null}
                 </div>
+                {selected.node.children.length ? (
+                  <div><dt className="text-xs font-bold text-slate-500">Contenido</dt><dd className="mt-1 font-bold text-ink">{`${selected.node.children.length} elementos dependientes`}</dd></div>
+                ) : null}
               </dl>
+
+              <details className="details-panel mt-4">
+                <summary><span className="flex items-center gap-2"><UserRound className="h-4 w-4" aria-hidden />Ficha del area</span></summary>
+                <dl className="grid gap-3 p-4">
+                  <div><dt className="text-xs font-bold text-slate-500">Responsable o puesto</dt><dd className="mt-1 break-words font-bold text-ink">{selected.node.responsible}</dd></div>
+                  <div><dt className="text-xs font-bold text-slate-500">Jefe directo o gerente</dt><dd className="mt-1 break-words font-bold text-ink">{selected.node.manager}</dd></div>
+                  <div>
+                    <dt className="flex items-center gap-2 text-xs font-bold text-slate-500"><Mail className="h-4 w-4" aria-hidden />Correo del QR</dt>
+                    <dd className="mt-1 break-words font-bold text-ink">{selected.node.routingUser?.name ?? "Pendiente de asignar"}</dd>
+                    {selected.node.routingUser ? <dd className="mt-0.5 break-all text-xs text-slate-500">{selected.node.routingUser.email}</dd> : null}
+                  </div>
+                  <p className="text-xs leading-5 text-slate-500">Estos tres campos son descriptivos. Quien revisa de verdad se decide en la escalera de abajo.</p>
+                </dl>
+              </details>
 
               <OrganizationHierarchyEditor allMemberships={allMemberships} node={selected.node} onSaved={() => router.refresh()} users={users} />
 

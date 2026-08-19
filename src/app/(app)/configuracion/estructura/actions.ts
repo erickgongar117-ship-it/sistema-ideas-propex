@@ -47,7 +47,9 @@ const membershipSchema = z.object({
 const escalationSchema = z.object({
   ruleId: z.string().trim().optional(),
   orgUnitId: z.string().trim().min(1),
-  name: z.string().trim().min(2, "Indica un nombre para la ruta."),
+  // El nombre dejo de pedirse en pantalla: repetia lo que ya dice "quien reporta".
+  // Si llega vacio se arma solo, mas abajo, con la etiqueta y la circunstancia.
+  name: z.string().trim().optional(),
   submitterLabel: z.string().trim().min(2, "Indica quien inicia esta ruta."),
   circumstance: z.string().trim().optional(),
   submitterLevel: z.number().int().min(0).max(99),
@@ -400,7 +402,9 @@ export async function saveEscalationRuleAction(formData: FormData): Promise<Orga
     if (input.isDefault) await tx.orgEscalationRule.updateMany({ where: { orgUnitId: input.orgUnitId }, data: { isDefault: false } });
     const data = {
       orgUnitId: input.orgUnitId,
-      name: input.name,
+      name: input.name && input.name.length >= 2
+        ? input.name
+        : [input.submitterLabel, input.circumstance].filter(Boolean).join(" · "),
       submitterLabel: input.submitterLabel,
       circumstance: input.circumstance ?? null,
       submitterLevel: input.submitterLevel,
