@@ -2785,3 +2785,13 @@ html[data-theme="dark"] .alert-info { border-color: #24547c; background: #142638
   font-weight: 800;
   color: var(--muted);
 }
+
+/* Avance de una sesion de entrenamiento, en la lista de sesiones.
+   Misma gramatica visual que .workboard-progress-cell para no inventar un segundo
+   lenguaje de barras en el sistema. */
+.training-progress { display: flex; align-items: center; gap: 0.5rem; }
+.training-progress > span { height: 6px; flex: 1; min-width: 48px; overflow: hidden; border-radius: 4px; background: var(--line); }
+.training-progress i { display: block; height: 100%; border-radius: inherit; background: var(--st-cierre-fill); transition: width 260ms ease; }
+.training-progress strong { font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--foreground); }
+.training-progress em { font-size: 11px; font-style: normal; font-weight: 700; color: var(--muted); }
+.training-progress em.is-done { color: var(--supervisor); }

@@ -436,23 +436,10 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
         title="Entrenamientos"
         description="Opera sesiones, asistencia y recompensas desde un solo espacio."
         actions={
-          <>
-            <Link className="btn btn-secondary" href="/probocacoins">
-              <WalletCards className="h-4 w-4" aria-hidden />
-              Ver finanzas
-            </Link>
-            {activeView === "setup" ? (
-              <Link className="btn btn-primary" href="/entrenamientos?view=operation">
-                <ClipboardCheck className="h-4 w-4" aria-hidden />
-                Ir a operacion
-              </Link>
-            ) : (
-              <Link className="btn btn-primary" href="/entrenamientos?view=setup">
-                <Plus className="h-4 w-4" aria-hidden />
-                Preparar
-              </Link>
-            )}
-          </>
+          <Link className="btn btn-secondary" href="/probocacoins">
+            <WalletCards className="h-4 w-4" aria-hidden />
+            Ver finanzas
+          </Link>
         }
       />
 
@@ -469,6 +456,12 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
         </div>
       ) : null}
 
+      {/*
+        Una sola barra. Antes eran dos anidadas —la de arriba abria "Programas y personas"
+        y adentro aparecia otra con Programas y Personas—, asi que llegar al catalogo
+        costaba dos clics en dos niveles distintos. Subir las dos subpestanas aqui quita un
+        nivel entero de navegacion sin tocar los datos que carga cada vista.
+      */}
       <nav
         aria-label="Vistas de entrenamientos"
         className="mb-6 flex overflow-x-auto border-b border-line"
@@ -478,20 +471,27 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
           count={registeredEnrollments}
           href="/entrenamientos?view=operation"
           icon={<ClipboardCheck className="h-4 w-4" aria-hidden />}
-          label="Operacion"
+          label="Sesiones"
         />
         <WorkspaceTab
           active={activeView === "setup"}
           href="/entrenamientos?view=setup"
           icon={<Plus className="h-4 w-4" aria-hidden />}
-          label="Preparacion"
+          label="Preparar"
         />
         <WorkspaceTab
-          active={activeView === "directory"}
+          active={activeView === "directory" && activeDirectoryView === "programs"}
+          count={programs.length}
+          href="/entrenamientos?view=directory&directory=programs"
+          icon={<Award className="h-4 w-4" aria-hidden />}
+          label="Programas"
+        />
+        <WorkspaceTab
+          active={activeView === "directory" && activeDirectoryView === "people"}
           count={activeParticipantCount}
-          href="/entrenamientos?view=directory"
+          href="/entrenamientos?view=directory&directory=people"
           icon={<UsersRound className="h-4 w-4" aria-hidden />}
-          label="Programas y personas"
+          label="Personas"
         />
       </nav>
 
@@ -574,6 +574,11 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                   {sessions.map((session) => {
                     const completed = sessionStatusCounts.get(session.id + ":COMPLETED") ?? 0;
                     const pending = sessionStatusCounts.get(session.id + ":REGISTERED") ?? 0;
+                    const cancelled = sessionStatusCounts.get(session.id + ":CANCELLED") ?? 0;
+                    // Misma regla que Kaizen: lo cancelado tambien cierra, si no una sesion con
+                    // bajas jamas llegaria al 100% y la barra contradiria al rotulo.
+                    const resolved = completed + cancelled;
+                    const enrolled = resolved + pending;
                     const isSelected = selectedSession?.id === session.id;
                     const href =
                       "/entrenamientos?view=operation&session=" +
@@ -599,13 +604,19 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                             {formatDate(session.sessionDate)} - {session.plant?.code ?? "General"} -{" "}
                             {session.orgUnit?.name ?? "Todas las areas"}
                           </span>
-                          <span className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-bold text-slate-600">
-                            <span>{session._count.enrollments} inscritos</span>
-                            <span className="text-emerald-700">{completed} completos</span>
-                            <span className={pending ? "text-amber-700" : "text-slate-500"}>
-                              {pending} pendientes
+                          {/* Tres numeros sueltos no contestaban la pregunta real de la
+                              sesion: si ya se acabo. La barra la contesta de un vistazo. */}
+                          {enrolled ? (
+                            <span className="training-progress mt-2">
+                              <span>
+                                <i style={{ width: `${Math.round((resolved / enrolled) * 100)}%` }} />
+                              </span>
+                              <strong>{resolved}/{enrolled}</strong>
+                              {pending ? <em>{pending} por cerrar</em> : <em className="is-done">Completa</em>}
                             </span>
-                          </span>
+                          ) : (
+                            <span className="training-progress mt-2"><em>Sin inscritos</em></span>
+                          )}
                         </span>
                         <ChevronRight
                           className={"h-4 w-4 " + (isSelected ? "text-brand-700" : "text-slate-400")}
@@ -794,7 +805,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
       ) : null}
 
       {activeView === "setup" ? (
-        <section aria-labelledby="training-setup-title" className="mx-auto max-w-5xl">
+        <section aria-label="Preparar entrenamientos" className="mx-auto max-w-5xl">
           <SectionHeading
             title="Preparacion"
             description="Programas, sesiones y altas de participantes."
@@ -1008,31 +1019,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
       ) : null}
 
       {activeView === "directory" ? (
-        <section aria-labelledby="training-directory-title">
-          <SectionHeading
-            title="Programas y personas"
-            description="Catalogo, recompensas y directorio operativo."
-          />
-          <nav
-            aria-label="Programas y personas"
-            className="mb-6 flex overflow-x-auto border-b border-line"
-          >
-            <WorkspaceTab
-              active={activeDirectoryView === "programs"}
-              count={programs.length}
-              href="/entrenamientos?view=directory&directory=programs"
-              icon={<Award className="h-4 w-4" aria-hidden />}
-              label="Programas"
-            />
-            <WorkspaceTab
-              active={activeDirectoryView === "people"}
-              count={activeParticipantCount}
-              href="/entrenamientos?view=directory&directory=people"
-              icon={<UsersRound className="h-4 w-4" aria-hidden />}
-              label="Personas"
-            />
-          </nav>
-
+        <section aria-label="Programas y personas">
           {activeDirectoryView === "programs" ? (
             <div className="mx-auto max-w-5xl">
               <div className="hidden grid-cols-[minmax(0,1fr)_130px_130px_auto] gap-4 border-b border-line px-3 py-2 text-[11px] font-extrabold uppercase text-slate-500 md:grid">
