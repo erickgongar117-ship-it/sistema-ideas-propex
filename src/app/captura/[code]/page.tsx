@@ -266,7 +266,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                       <input className="peer sr-only" defaultChecked={route.isDefault || (!primaryRoute?.isDefault && index === 0)} name="escalationRuleId" required type="radio" value={route.id} />
                       <span className="flex min-h-20 items-start gap-3 rounded-lg border border-line bg-white p-3 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-50">
                         <GitBranch className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden />
-                        <span className="min-w-0"><span className="block text-sm font-extrabold text-ink">{route.submitterLabel}</span><span className="mt-1 block text-xs leading-4 text-slate-600">{route.circumstance || `Reporta a ${route.reviewerMembership.user.name}`}</span></span>
+                        <span className="min-w-0"><span className="block text-sm font-extrabold text-ink">{route.submitterLabel}</span><span className="mt-1 block text-xs leading-4 text-slate-600">{`Reporta a ${route.reviewerMembership.user.name}`}{route.circumstance ? ` · ${route.circumstance}` : ""}</span></span>
                       </span>
                     </label>
                   ))}

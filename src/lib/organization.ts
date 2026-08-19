@@ -188,7 +188,10 @@ async function ensureDefaultRoutingMemberships() {
           orgUnitId: unit.id,
           name: "Ruta principal",
           submitterLabel: "Personal operativo o colaborador",
-          circumstance: "Ruta inicial heredada del responsable del QR",
+          // Sin circunstancia: este campo significa "solo cuando..." y se pinta al operador
+          // en el formulario del QR. Una nota de migracion ahi le tapaba el nombre de quien
+          // le responde, que es lo unico que necesita leer para elegir su ruta.
+          circumstance: null,
           submitterLevel: 0,
           reviewerMembershipId: membership.id,
           isDefault: true,
