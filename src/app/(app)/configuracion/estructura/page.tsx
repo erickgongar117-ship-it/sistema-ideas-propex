@@ -6,6 +6,8 @@ import { requireUser } from "@/lib/auth";
 import { getOrganizationStructure } from "@/lib/organization";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Estructura organizacional" };
 export default async function OrganizationStructurePage() {
   await requireUser(["ADMIN"]);
   const [structure, users] = await Promise.all([

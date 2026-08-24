@@ -12,6 +12,8 @@ import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 
+
+export const metadata = { title: "Mejora Continua" };
 export default async function MejoraContinuaPage() {
   await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const [ideas, owners] = await Promise.all([

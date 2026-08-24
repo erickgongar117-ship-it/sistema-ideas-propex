@@ -7,6 +7,8 @@ import { requireUser } from "@/lib/auth";
 import { getOrganizationStructure } from "@/lib/organization";
 import { baseUrlFromRequest, isPrivateOrLocalUrl } from "@/lib/url";
 
+
+export const metadata = { title: "Códigos QR" };
 export default async function QrPage() {
   await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const structure = await getOrganizationStructure();

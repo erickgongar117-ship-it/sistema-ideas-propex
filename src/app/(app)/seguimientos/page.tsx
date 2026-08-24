@@ -27,6 +27,8 @@ import { userModuleAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 import { genbaStatusCategory, ideaStatusCategory, kaizenStatusCategory } from "@/lib/status-system";
 
+
+export const metadata = { title: "Seguimientos" };
 export const dynamic = "force-dynamic";
 
 type PageProps = { searchParams: Promise<{ vista?: string; modulo?: string; pagina?: string; error?: string }> };
@@ -483,7 +485,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
             key={value}
           >
             <span className="whitespace-nowrap">{label}</span>
-            {activeView === value ? <span className="flex min-w-5 items-center justify-center rounded-full bg-white/15 px-1 py-0.5 text-[9px] text-white sm:min-w-6 sm:px-1.5 sm:text-[10px]">{totalItems}</span> : null}
+            {activeView === value ? <span className="flex min-w-5 items-center justify-center rounded-full bg-white/15 px-1 py-0.5 text-[11px] text-white sm:min-w-6 sm:px-1.5 sm:text-[10px]">{totalItems}</span> : null}
           </Link>
         ))}
       </nav>

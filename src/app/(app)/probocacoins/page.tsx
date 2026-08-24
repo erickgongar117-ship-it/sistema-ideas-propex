@@ -29,6 +29,8 @@ import { getParticipantBalances } from "@/lib/coins";
 import { prisma } from "@/lib/prisma";
 import { createCoinTransactionAction, reverseDuplicateCoinTransactionAction } from "./actions";
 
+
+export const metadata = { title: "ProbocaCoins" };
 type CoinsPageProps = {
   searchParams: Promise<{
     error?: string;

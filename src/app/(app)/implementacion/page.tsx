@@ -10,6 +10,8 @@ import { requireUser } from "@/lib/auth";
 import { isOverdue } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Implementación" };
 export default async function ImplementationPage() {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR"]);
   const ideas = await prisma.idea.findMany({

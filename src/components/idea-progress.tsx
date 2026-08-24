@@ -42,7 +42,7 @@ export function IdeaProgress({ status }: { status: IdeaStatus }) {
               </span>
               {index < stages.length - 1 ? <span className={`h-px flex-1 ${index < current ? "bg-emerald-600" : "bg-slate-300"}`} /> : null}
             </div>
-            <p className={`mt-2 text-center text-[9px] font-extrabold leading-3 sm:text-xs ${complete || active ? "text-slate-800" : "text-slate-400"}`}>{stage}</p>
+            <p className={`mt-2 text-center text-[11px] font-extrabold leading-3 sm:text-xs ${complete || active ? "text-slate-800" : "text-slate-400"}`}>{stage}</p>
           </li>
         );
       })}

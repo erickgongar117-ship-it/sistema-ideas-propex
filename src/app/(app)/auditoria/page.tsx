@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Auditoría" };
 const actionLabels: Record<string, string> = {
   KAIZEN_ACTIVITY_REOPENED: "Actividad Kaizen reabierta",
   IDEA_CREATED: "Idea registrada",

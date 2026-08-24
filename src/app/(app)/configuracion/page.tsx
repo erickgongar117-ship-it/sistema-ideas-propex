@@ -12,6 +12,8 @@ import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
 import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Configuración" };
 const configurableRoles = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"] as const;
 
 type ConfigPageProps = {

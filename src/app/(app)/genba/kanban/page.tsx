@@ -8,6 +8,8 @@ import { isWorkItemOverdue, workProgress } from "@/lib/domain";
 import { requireGenbaAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Kanban GENBA" };
 const columns = [
   { key: "PENDIENTES", title: "Por iniciar", tone: "border-amber-400" },
   { key: "EN_PROCESO", title: "En seguimiento", tone: "border-blue-500" },

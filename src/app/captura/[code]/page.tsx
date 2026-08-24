@@ -73,7 +73,7 @@ function FormSectionTitle({ number, title, description, icon: Icon }: { number: 
         <Icon className="h-5 w-5" aria-hidden />
       </span>
       <div>
-        <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-emerald-700">Paso {number}</p>
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-emerald-700">Paso {number}</p>
         <h2 className="text-lg font-extrabold text-ink">{title}</h2>
         <p className="mt-0.5 text-sm leading-5 text-slate-600">{description}</p>
       </div>
@@ -159,7 +159,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                 <Image alt="Proboca" className="h-auto w-full object-contain" height={72} priority width={216} src="/brand/proboca-logo.png" />
               </span>
               <div className="min-w-0">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-brand-700">PROpEx · Captura publica</p>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-brand-700">PROpEx · Captura publica</p>
                 <h1 className="mt-0.5 text-xl font-extrabold leading-tight text-ink sm:text-2xl">Registrar idea de mejora</h1>
               </div>
             </div>
@@ -189,7 +189,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                   <StepIcon className="h-4 w-4" aria-hidden />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[9px] font-extrabold uppercase text-emerald-700">Paso {number as string}</span>
+                  <span className="block text-[11px] font-extrabold uppercase text-emerald-700">Paso {number as string}</span>
                   <span className="block text-[11px] font-extrabold leading-4 text-ink sm:text-sm">{label as string}</span>
                 </span>
               </div>

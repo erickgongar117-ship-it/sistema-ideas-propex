@@ -62,8 +62,8 @@ export function IdeaCard({ idea }: { idea: IdeaWithBasics }) {
               const ValidationIcon = status.icon;
               return (
                 <span className={`min-w-0 border border-line border-l-4 bg-white px-2 py-1.5 ${departmentBorder[approval.type] ?? "border-l-slate-400"}`} key={approval.id} title={`${validationLabels[approval.type]}: ${approvalStatusLabels[approval.status]}`}>
-                  <span className="block truncate text-[9px] font-extrabold uppercase text-slate-500">{validationLabels[approval.type]}</span>
-                  <span className={`mt-1 flex w-fit max-w-full items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-extrabold ${status.tone}`}>
+                  <span className="block truncate text-[11px] font-extrabold uppercase text-slate-500">{validationLabels[approval.type]}</span>
+                  <span className={`mt-1 flex w-fit max-w-full items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-extrabold ${status.tone}`}>
                     <ValidationIcon className="h-3 w-3 shrink-0" aria-hidden />
                     <span className="truncate">{approvalStatusLabels[approval.status]}</span>
                   </span>

@@ -8,6 +8,8 @@ import { kaizenStatusLabels } from "@/lib/domain";
 import { requireKaizenAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Repositorio Kaizen" };
 type RepositoryPageProps = { searchParams: Promise<{ page?: string; q?: string; status?: string }> };
 
 const pageSize = 30;

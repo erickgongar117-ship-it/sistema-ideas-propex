@@ -8,6 +8,8 @@ import { StatusPill } from "@/components/status-pill";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Vencidas" };
 export default async function OverduePage() {
   await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const ideas = await prisma.idea.findMany({

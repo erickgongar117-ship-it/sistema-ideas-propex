@@ -6,6 +6,8 @@ import { parseStringArray } from "@/lib/domain";
 import { requireGenbaAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Recorridos GENBA" };
 export default async function GenbaDashboardPage({
   searchParams
 }: {

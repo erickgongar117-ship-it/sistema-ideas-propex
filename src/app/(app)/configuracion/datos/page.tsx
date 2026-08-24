@@ -19,6 +19,8 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hardDeleteByFolioAction, purgeOperationalDataAction } from "./actions";
 
+
+export const metadata = { title: "Control de datos" };
 type DataControlPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };

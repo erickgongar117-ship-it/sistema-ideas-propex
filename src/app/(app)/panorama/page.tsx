@@ -12,6 +12,8 @@ import { requireUser } from "@/lib/auth";
 import { attendancePercent, workProgress } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Panorama" };
 const CLOSED_IDEA_STATUSES = new Set(["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"]);
 const CLOSED_WORK_STATUSES = new Set(["COMPLETADA", "CANCELADA", "COMBINADA"]);
 

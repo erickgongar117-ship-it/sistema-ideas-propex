@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Notificaciones" };
 type NotificationsProps = {
   searchParams: Promise<{ vista?: string; pagina?: string }>;
 };

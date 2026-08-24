@@ -7,6 +7,8 @@ import { automationPilotConfig } from "@/lib/automation-pilot";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Reportes" };
 export default async function ReportsPage() {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const automationPilot = automationPilotConfig();

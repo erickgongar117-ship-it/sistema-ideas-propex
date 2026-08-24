@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/page-header";
 import { requireKaizenAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Proyectos Kaizen" };
 export default async function KaizenDashboardPage({
   searchParams
 }: {

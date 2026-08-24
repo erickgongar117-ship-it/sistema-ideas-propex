@@ -1471,6 +1471,18 @@ summary:focus-visible {
   outline: 0;
 }
 
+/* Esta regla vive despues del bloque general de :focus-visible y tiene la misma
+   especificidad, asi que su `outline: 0` le ganaba por orden y dejaba a TODOS los campos
+   del sistema con un halo al 12% de opacidad y sin contorno. Quien navega con teclado no
+   veia donde estaba parado; medido en el formulario del QR, outline 0px none.
+   Se separa el foco de raton del de teclado: hacer clic en un campo no necesita anillo,
+   tabular hasta el si. WCAG 2.4.7. */
+.field:focus-visible {
+  outline: var(--focus-width) solid var(--role-accent);
+  outline-offset: var(--focus-offset);
+  box-shadow: 0 0 0 4px var(--surface), 0 0 0 6px color-mix(in srgb, var(--role-accent) 72%, var(--brand-black));
+}
+
 .field::placeholder {
   color: #8d8d8d;
 }

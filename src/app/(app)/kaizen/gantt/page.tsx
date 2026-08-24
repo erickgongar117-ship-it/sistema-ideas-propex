@@ -8,6 +8,8 @@ import { kaizenDelayDays, kaizenLabel, workProgress } from "@/lib/domain";
 import { requireKaizenAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Calendario Gantt" };
 type GanttProps = { searchParams: Promise<{ year?: string; error?: string }> };
 
 function isoWeek(date: Date) {
@@ -76,7 +78,7 @@ export default async function KaizenGanttPage({ searchParams }: GanttProps) {
               {weeks.map((week) => {
                 const date = mondayOfWeek(year, week);
                 const month = date.toLocaleDateString("es-MX", { month: "short", timeZone: "UTC" });
-                return <div className="border-l border-line py-2 text-center" key={week}><span className="block text-[9px] font-bold uppercase text-slate-400">{week === 1 || date.getUTCDate() <= 7 ? month : ""}</span><span className="block text-[10px] font-extrabold text-slate-600">{week}</span></div>;
+                return <div className="border-l border-line py-2 text-center" key={week}><span className="block text-[11px] font-bold uppercase text-slate-400">{week === 1 || date.getUTCDate() <= 7 ? month : ""}</span><span className="block text-[10px] font-extrabold text-slate-600">{week}</span></div>;
               })}
             </div>
             {projects.map((project) => {

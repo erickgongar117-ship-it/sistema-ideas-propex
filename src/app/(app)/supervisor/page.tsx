@@ -12,6 +12,8 @@ import { approvalStatusLabels, approvalTypeLabels, ideaCategoryLabels } from "@/
 import { buildInitialReviewWhere, getSupervisableOrgUnitIds } from "@/lib/idea-access";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Bandeja de supervisor" };
 function SupportRequestFields({
   idea,
   supportAreas

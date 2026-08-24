@@ -29,6 +29,8 @@ import { TrainingAttendanceTable } from "@/components/training-attendance-table"
 import { requireUser } from "@/lib/auth";
 import { getParticipantBalances } from "@/lib/coins";
 import { prisma } from "@/lib/prisma";
+
+export const metadata = { title: "Entrenamientos" };
 import {
   bulkEnrollParticipantsAction,
   bulkUpdateTrainingEnrollmentsAction,

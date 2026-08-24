@@ -6,6 +6,8 @@ import { requireUser } from "@/lib/auth";
 import { attendancePercent, isWorkItemOverdue, parseImpactTypes, workProgress } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
+
+export const metadata = { title: "Tablero" };
 function averageHours(rows: Array<{ idea: { createdAt: Date }; decidedAt: Date | null }>) {
   const closed = rows.filter((row) => row.decidedAt);
   if (!closed.length) return "0 h";

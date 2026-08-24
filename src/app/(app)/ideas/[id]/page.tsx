@@ -497,7 +497,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
                 <input name="ideaId" type="hidden" value={idea.id} />
                 <label><span className="label">Clasificación</span><select className="field" name="classification" defaultValue={idea.classification ?? "IDEA_RAPIDA"}>{Object.entries(classificationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                 <div className="overflow-hidden border border-line bg-panel">
-                  <div className="grid grid-cols-[90px_minmax(0,1fr)_92px] border-b border-line bg-slate-100 px-3 py-2 text-[9px] font-extrabold uppercase text-slate-500"><span>Ruta</span><span>Señal principal</span><span>Tiempo</span></div>
+                  <div className="grid grid-cols-[90px_minmax(0,1fr)_92px] border-b border-line bg-slate-100 px-3 py-2 text-[11px] font-extrabold uppercase text-slate-500"><span>Ruta</span><span>Señal principal</span><span>Tiempo</span></div>
                   {coreClassificationGuide.map((item) => <div className="grid grid-cols-[90px_minmax(0,1fr)_92px] gap-2 border-b border-line px-3 py-2.5 text-[11px] last:border-0" key={item.key}><span className="font-extrabold text-ink">{item.label}</span><span className="leading-4 text-slate-600">{item.signal}</span><span className="font-bold text-slate-700">{item.timing}</span></div>)}
                 </div>
                 <label><span className="label">Prioridad</span><select className="field" name="priority" defaultValue={idea.priority ?? "MEDIA"}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
