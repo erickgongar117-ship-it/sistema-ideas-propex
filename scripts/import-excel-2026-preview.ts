@@ -626,27 +626,40 @@ async function main() {
   const options = args();
   const kaizenPath = options.get("kaizen");
   const genbaPath = options.get("genba");
-  if (!kaizenPath || !genbaPath) throw new Error("Uso: tsx scripts/import-excel-2026-preview.ts --kaizen <xlsx> --genba <xlsm> [--reset]");
+  // Los dos libros dejaron de actualizarse a la par: el de Kaizen se revisa cada mes y el
+  // de GENBA no. Exigir ambos obligaba a volver a pasar un libro que no cambio, asi que
+  // cada uno entra por su cuenta y lo que no se pasa simplemente no se toca.
+  if (!kaizenPath && !genbaPath) {
+    throw new Error("Uso: tsx scripts/import-excel-2026-preview.ts [--kaizen <xlsx>] [--genba <xlsm>] [--reset]");
+  }
   const admin = await prisma.user.findFirst({ where: { role: "ADMIN", active: true }, orderBy: { createdAt: "asc" } });
   if (!admin) throw new Error("Se necesita una cuenta ADMIN activa para registrar la importacion.");
   if (options.get("reset") === "true") await resetPreviewData();
   const passwordHash = await bcrypt.hash(`import-preview-${Date.now()}`, 10);
-  const kaizen = await importKaizen(kaizenPath, admin.id, passwordHash);
-  const genba = await importGenba(genbaPath, admin.id, passwordHash);
+  const previo = await prisma.setting.findUnique({ where: { key: "import2026PreviewReport" } });
+  const anterior = previo?.value ? JSON.parse(previo.value) : null;
+  // Lo que no se vuelve a pasar conserva el resultado de la corrida anterior, para que el
+  // reporte de conciliacion siga completo en vez de vaciarse a la mitad.
+  const kaizen = kaizenPath ? await importKaizen(kaizenPath, admin.id, passwordHash) : anterior?.kaizen ?? null;
+  const genba = genbaPath ? await importGenba(genbaPath, admin.id, passwordHash) : anterior?.genba ?? null;
   const whiteBelt = await importWhiteBelt(admin.id);
   const report = {
     generatedAt: new Date().toISOString(),
     mode: "LOCAL_PREVIEW",
-    sources: { kaizen: kaizenPath, genba: genbaPath, whiteBelt: "Listado proporcionado en la conversacion" },
+    sources: {
+      kaizen: kaizenPath ?? anterior?.sources?.kaizen ?? null,
+      genba: genbaPath ?? anterior?.sources?.genba ?? null,
+      whiteBelt: "Listado proporcionado en la conversacion"
+    },
     kaizen,
     genba,
     whiteBelt,
     pending: [
-      { key: "KAIZEN_CONFLICT", count: kaizen.conflicts.length, message: "El Kaizen #034 tiene nombres competidores en el calendario; se conserva la opcion mejor respaldada, pendiente de confirmacion." },
+      { key: "KAIZEN_CONFLICT", count: kaizen?.conflicts.length ?? 0, message: "El Kaizen #034 tiene nombres competidores en el calendario; se conserva la opcion mejor respaldada, pendiente de confirmacion." },
       { key: "TWI", count: 48, message: "Evaluaciones TWI detectadas; requieren un modelo de evaluacion por entregable antes de importar." },
-      { key: "EVIDENCE", count: genba.evidenceReferences, message: "Referencias de evidencia detectadas; los archivos incrustados deben conciliarse antes de publicarse." },
-      { key: "GENBA_OWNER", count: genba.unassignedResponsibilities, message: "Acciones GENBA sin un responsable personal unico; deben conciliarse antes de activar recordatorios." },
-      { key: "GENBA_DATE", count: genba.missingDueDates, message: "Acciones GENBA sin fecha compromiso; no se marcan como vencidas hasta completar la conciliacion." },
+      { key: "EVIDENCE", count: genba?.evidenceReferences ?? 0, message: "Referencias de evidencia detectadas; los archivos incrustados deben conciliarse antes de publicarse." },
+      { key: "GENBA_OWNER", count: genba?.unassignedResponsibilities ?? 0, message: "Acciones GENBA sin un responsable personal unico; deben conciliarse antes de activar recordatorios." },
+      { key: "GENBA_DATE", count: genba?.missingDueDates ?? 0, message: "Acciones GENBA sin fecha compromiso; no se marcan como vencidas hasta completar la conciliacion." },
       { key: "GENBA_GAPS", count: 2, message: "Los numeros GENBA 025 y 035 aparecen en el plan visual, pero no tienen hallazgos en la hoja Base." },
       { key: "IDENTITY", count: whiteBelt.participantCount, message: "Participantes White Belt pendientes de numero de empleado y correo." },
       { key: "COINS", count: whiteBelt.coinsSuggested, message: "ProbocaCoins sugeridas, sin otorgar hasta confirmar certificacion." },
