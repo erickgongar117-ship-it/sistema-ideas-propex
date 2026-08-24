@@ -3,7 +3,7 @@
 import type { KaizenStatus, WorkItemStatus } from "@prisma/client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { changeKaizenStageAction } from "@/app/actions";
+import { addKaizenActivityAction, changeKaizenStageAction, closeKaizenActivityAction, reopenKaizenActivityAction } from "@/app/actions";
 import {
   OperationsWorkboard,
   type WorkboardGroupDefinition,
@@ -139,9 +139,14 @@ export function KaizenCommandCenter({
           owner: activity.ownerName ?? "Sin asignar",
           dueDate: activity.dueDate,
           statusCategory: activityStatus.category,
-          statusReference: activityStatus.reference
+          statusReference: activityStatus.reference,
+          closed: ["COMPLETADA", "CANCELADA"].includes(activity.status),
+          // El servidor vuelve a validar quien puede mover cada actividad; esto solo evita
+          // ofrecer un boton que iba a rebotar.
+          actionable: canManage && project.status !== "COMPLETADO" && project.status !== "CANCELADO"
         };
-      })
+      }),
+      canAddChild: canManage && project.status !== "COMPLETADO" && project.status !== "CANCELADO"
     };
   });
 
@@ -178,6 +183,8 @@ export function KaizenCommandCenter({
   };
 
   return <OperationsWorkboard
+    childActions={{ close: closeKaizenActivityAction, create: addKaizenActivityAction, reopen: reopenKaizenActivityAction }}
+    childLabel="Actividades"
     groupDefinitions={KAIZEN_GROUPS}
     items={items}
     locationLabel="Planta"

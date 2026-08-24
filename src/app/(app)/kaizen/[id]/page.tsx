@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, Archive, ArrowLeft, CalendarDays, CheckCircle2, Coins, FileText, FolderOpen, GitMerge, MessageSquare, Paperclip, Plus, Save, Target, Trash2, Upload, UserPlus, UsersRound, XCircle } from "lucide-react";
+import { AlertTriangle, Archive, ArrowLeft, CalendarDays, CheckCircle2, Coins, FileText, FolderOpen, GitMerge, MessageSquare, Paperclip, Plus, Save, Target, Trash2, Upload, UserPlus, UsersRound, XCircle, RotateCcw } from "lucide-react";
 import {
   addKaizenActivityAction,
   addKaizenTeamMemberAction,
@@ -13,8 +13,7 @@ import {
   updateKaizenProjectAction,
   updateKaizenClosureNoteAction,
   updateKaizenRewardsAction,
-  uploadKaizenCharterAction
-} from "@/app/actions";
+  uploadKaizenCharterAction, reopenKaizenActivityAction } from "@/app/actions";
 import { SearchablePicker } from "@/components/searchable-picker";
 import { KaizenStatusPill } from "@/components/module-status";
 import { PageHeader } from "@/components/page-header";
@@ -90,7 +89,9 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
   }
   const totalCoins = coinTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
   const celebrationAmount = Math.max(0, Number.parseInt(query.coins ?? "", 10) || 0);
-  const detailedErrorMessage = query.error === "evidencia" ? "Para completar una actividad debes adjuntar evidencia."
+  const detailedErrorMessage = query.error === "motivo_reapertura" ? "Escribe el motivo de la reapertura; queda en la bitacora y no puede ir vacio."
+    : query.error === "no_cerrada" ? "Esa actividad no esta cerrada, asi que no hay nada que reabrir."
+    : query.error === "evidencia" ? "Para completar una actividad debes adjuntar evidencia."
     : query.error === "justificacion" ? "Escribe el motivo por el que la actividad no se realizara."
     : query.error === "charter" || query.error === "cierre_charter" ? "Carga el Project Charter antes de completar el Kaizen."
     : query.error === "cierre_actividades" ? "Resuelve todas las actividades antes de completar el proyecto."
@@ -208,6 +209,26 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
                         {canManage ? <details className="details-panel"><summary>Editar actividad</summary><form action={updateKaizenActivityAction} className="grid gap-3 p-4"><input name="activityId" type="hidden" value={activity.id} /><label><span className="label">Problemática</span><textarea className="field min-h-20" defaultValue={activity.problem ?? ""} name="problem" /></label><label><span className="label">Acción</span><textarea className="field min-h-20" defaultValue={activity.action} name="action" required /></label><SearchablePicker defaultValue={activity.ownerId ?? ""} label="Responsable" name="ownerId" options={personOptions(users)} placeholder="Nombre o numero de empleado" /><div className="grid grid-cols-2 gap-2"><label><span className="label">Inicio</span><input className="field" defaultValue={activity.startDate?.toISOString().slice(0, 10) ?? ""} name="startDate" type="date" /></label><label><span className="label">Compromiso</span><input className="field" defaultValue={activity.dueDate?.toISOString().slice(0, 10) ?? ""} name="dueDate" type="date" /></label></div><label><span className="label">Estado</span><select className="field" defaultValue={activity.status} name="status"><option value="PENDIENTE">Pendiente</option><option value="EN_PROCESO">En proceso</option><option value="BLOQUEADA">Bloqueada</option></select></label><button className="btn btn-secondary" type="submit"><Save className="h-4 w-4" aria-hidden />Guardar actividad</button></form></details> : null}
                         {canClose ? <details className="details-panel"><summary>Cerrar actividad</summary><form action={closeKaizenActivityAction} className="grid gap-3 p-4"><input name="activityId" type="hidden" value={activity.id} /><p className="text-xs leading-5 text-slate-600">Para completar, adjunta evidencia. Si no se hará, escribe la justificación.</p><label><span className="label">Evidencia</span><input className="field" name="evidence" type="file" accept="image/*,.pdf,.doc,.docx" /></label><label><span className="label">Resultado o justificación</span><textarea className="field min-h-20" name="note" placeholder="Qué se realizó o por qué no se realizará" /></label><div className="grid gap-2 sm:grid-cols-2"><button className="btn btn-success" name="outcome" type="submit" value="COMPLETADA"><CheckCircle2 className="h-4 w-4" aria-hidden />Completar</button><button className="btn btn-danger" name="outcome" type="submit" value="CANCELADA"><XCircle className="h-4 w-4" aria-hidden />Cerrar sin ejecutar</button></div></form></details> : null}
                       </div> : null}
+
+                      {/* Reabrir vive fuera del bloque de arriba porque su condicion es la
+                          contraria: aparece justo cuando la actividad ya esta cerrada.
+                          COMBINADA queda fuera a proposito: deshacer una combinacion es
+                          otra operacion, con su propio flujo. */}
+                      {!projectClosed && canClose && ["COMPLETADA", "CANCELADA"].includes(activity.status) ? (
+                        <details className="details-panel mt-4">
+                          <summary><span className="flex items-center gap-2"><RotateCcw className="h-4 w-4" aria-hidden />Reabrir actividad</span></summary>
+                          <form action={reopenKaizenActivityAction} className="grid gap-3 p-4">
+                            <input name="activityId" type="hidden" value={activity.id} />
+                            <p className="text-xs leading-5 text-slate-600">Vuelve al plan como <strong>en proceso</strong> y el avance del proyecto baja. Si el Kaizen ya estaba cerrado, se reabre también.</p>
+                            <label>
+                              <span className="label">Motivo de la reapertura</span>
+                              <textarea className="field min-h-20" name="reason" placeholder="Por qué hay que volver a trabajarla" required />
+                              <span className="helper-text">Queda en la bitácora y en la auditoría. Se explícito.</span>
+                            </label>
+                            <button className="btn btn-secondary" type="submit"><RotateCcw className="h-4 w-4" aria-hidden />Reabrir</button>
+                          </form>
+                        </details>
+                      ) : null}
                   </WorkItemDisclosure>
                 );
               })}

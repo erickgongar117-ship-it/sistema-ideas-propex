@@ -1340,6 +1340,10 @@ summary:focus-visible {
 .workboard-drawer-subitems > div:last-child { border-bottom: 0; padding-bottom: 0; }
 .workboard-drawer-subitems strong { min-width: 0; color: var(--foreground); font-size: 13px; line-height: 1.4; }
 .workboard-drawer-subitems small { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+/* Acciones por actividad dentro del panel: ocupan el ancho completo debajo del renglon y
+   van plegadas, para que la lista siga leyendose de un vistazo cuando no se va a tocar. */
+.workboard-drawer-childactions { grid-column: 1 / -1; margin-top: 0.35rem; }
+.workboard-drawer-childactions .details-panel summary { min-height: 2rem; padding: 0.25rem 0.5rem; font-size: 12px; }
 .workboard-drawer > footer { border-top: 1px solid var(--line); background: var(--surface-subtle); padding: 0.8rem 1rem; }
 
 .workboard-pagination {

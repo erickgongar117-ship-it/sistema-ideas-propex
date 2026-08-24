@@ -2051,6 +2051,70 @@ export async function closeKaizenActivityAction(formData: FormData) {
   redirect(`/kaizen/${activity.projectId}`);
 }
 
+/**
+ * Devuelve al plan una actividad que ya se habia cerrado, dejando dicho por que.
+ *
+ * Por que existe: cerrar era un camino de una sola direccion. Una actividad completada por
+ * error, o cerrada sin ejecutar y que despues resulto necesaria, solo se podia arreglar
+ * creando otra actividad nueva; el proyecto quedaba con un duplicado y la bitacora sin
+ * explicacion. Peor: al cerrarse la ultima actividad el proyecto se cierra solo, asi que un
+ * clic equivocado congelaba el expediente completo.
+ *
+ * El motivo es obligatorio a proposito. Reabrir mueve el avance del proyecto hacia atras y
+ * eso hay que poder explicarlo despues; sin motivo, la bitacora solo mostraria un
+ * porcentaje que bajo sin razon aparente.
+ */
+export async function reopenKaizenActivityAction(formData: FormData) {
+  const user = await requireUser();
+  const activityId = text(formData, "activityId");
+  const reason = text(formData, "reason");
+  const activity = await prisma.kaizenActivity.findUniqueOrThrow({ where: { id: activityId }, include: { project: true } });
+  const back = `/kaizen/${activity.projectId}`;
+  // Quien puede cerrar puede reabrir: el responsable de la actividad, el lider del
+  // proyecto y Mejora Continua. Mismo criterio que closeKaizenActivityAction.
+  if (!isImprovementManager(user.role) && activity.ownerId !== user.id && activity.project.leaderId !== user.id) redirect(back);
+  if (!["COMPLETADA", "CANCELADA"].includes(activity.status)) redirect(`${back}?error=no_cerrada`);
+  if (reason.trim().length < 5) redirect(`${back}?error=motivo_reapertura`);
+
+  await serializableTransaction(async (tx) => {
+    const current = await tx.kaizenActivity.findUniqueOrThrow({
+      where: { id: activityId },
+      include: { project: { select: { status: true, leaderId: true } } }
+    });
+    if (!["COMPLETADA", "CANCELADA"].includes(current.status)) throw new KaizenAlreadyClosedError();
+    await tx.kaizenActivity.update({
+      where: { id: activityId },
+      data: {
+        status: "EN_PROCESO",
+        // Se borran las notas de cierre porque ya no describen el estado real, pero el
+        // texto anterior queda en la bitacora de abajo, que es donde se audita.
+        completionNote: null,
+        cancellationReason: null,
+        closedAt: null
+      }
+    });
+    // Un proyecto que se habia cerrado solo vuelve a estar en curso: si no, quedaria
+    // cerrado con una actividad viva dentro.
+    if (current.project.status === "COMPLETADO") {
+      await tx.kaizenProject.update({ where: { id: current.projectId }, data: { status: "EN_CURSO", closedAt: null, closedById: null } });
+    }
+    const previo = activity.status === "COMPLETADA" ? "completada" : "cerrada sin ejecutar";
+    await tx.kaizenUpdate.create({
+      data: { projectId: current.projectId, activityId, userId: user.id, comment: `Actividad #${current.number} reabierta (estaba ${previo}). Motivo: ${reason}` }
+    });
+    await tx.auditLog.create({
+      data: { entity: "KaizenActivity", entityId: activityId, action: "KAIZEN_ACTIVITY_REOPENED", userId: user.id, details: JSON.stringify({ from: activity.status, reason }) }
+    });
+  });
+
+  await refreshKaizenProject(activity.projectId, user.id);
+  revalidatePath("/kaizen");
+  revalidatePath("/kaizen/kanban");
+  revalidatePath("/kaizen/gantt");
+  revalidatePath(back);
+  redirect(back);
+}
+
 export async function mergeKaizenActivitiesAction(formData: FormData) {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const sourceId = text(formData, "sourceId");

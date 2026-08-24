@@ -32,6 +32,8 @@ import {
   LayoutList,
   LoaderCircle,
   MoreHorizontal,
+  Plus,
+  RotateCcw,
   Rows3,
   Search,
   ShieldCheck,
@@ -53,6 +55,25 @@ export type WorkboardChild = {
   dueDate: string | null;
   statusCategory: StatusCategory;
   statusReference?: boolean;
+  /** Ya se cerro: en el panel ofrece reabrir en lugar de completar. */
+  closed?: boolean;
+  /** Quien mira puede moverla. Sin esto el panel la deja en solo lectura. */
+  actionable?: boolean;
+};
+
+/**
+ * Acciones que el panel lateral puede ofrecer sobre los subelementos.
+ *
+ * Son acciones de servidor y se montan como formularios de verdad, no como llamadas desde
+ * el cliente: asi el adjunto de evidencia viaja sin plomeria extra y la redireccion la
+ * resuelve el propio framework. El tablero sigue siendo generico —lo usan Kaizen, GENBA e
+ * Ideas—, asi que quien lo llama decide que acciones existen; sin estas props el panel se
+ * comporta como siempre, de solo lectura.
+ */
+export type WorkboardChildActions = {
+  close?: (formData: FormData) => void | Promise<void>;
+  reopen?: (formData: FormData) => void | Promise<void>;
+  create?: (formData: FormData) => void | Promise<void>;
 };
 
 export type WorkboardItem = {
@@ -78,6 +99,8 @@ export type WorkboardItem = {
   riskLabel?: string;
   tags?: string[];
   children?: WorkboardChild[];
+  /** Permite dar de alta un subelemento nuevo desde el panel. */
+  canAddChild?: boolean;
   allowedGroups?: string[];
   bulkEntityId?: string;
   bulkActions?: WorkboardBulkAction[];
@@ -262,6 +285,8 @@ export function OperationsWorkboard({
   groupDefinitions,
   onMoveItem,
   onBulkAction,
+  childActions,
+  childLabel = "Subelementos",
   clientPagination = true
 }: {
   items: WorkboardItem[];
@@ -272,6 +297,8 @@ export function OperationsWorkboard({
   groupDefinitions?: WorkboardGroupDefinition[];
   onMoveItem?: (input: WorkboardMoveInput) => Promise<WorkboardMoveResult>;
   onBulkAction?: (input: WorkboardBulkInput) => Promise<WorkboardBulkResult>;
+  childActions?: WorkboardChildActions;
+  childLabel?: string;
   clientPagination?: boolean;
 }) {
   const router = useRouter();
@@ -967,7 +994,70 @@ export function OperationsWorkboard({
               </dl>
               {focusedItem.riskLabel ? <section className="is-alert"><span>Atencion</span><p>{focusedItem.riskLabel}</p></section> : null}
               {focusedItem.tags?.length ? <section><span>Etiquetas</span><div className="workboard-drawer-tags">{focusedItem.tags.map((tag) => <i key={tag}>{tag}</i>)}</div></section> : null}
-              {focusedItem.children?.length ? <section><span>Subelementos</span><div className="workboard-drawer-subitems">{focusedItem.children.map((child) => <div key={child.id}><strong>{child.label}</strong><WorkStatus category={child.statusCategory} label={child.statusLabel} reference={child.statusReference} /><small>{child.owner} · {dueLabel(child.dueDate)}</small></div>)}</div></section> : null}
+              {focusedItem.children?.length ? (
+                <section>
+                  <span>{childLabel}</span>
+                  <div className="workboard-drawer-subitems">
+                    {focusedItem.children.map((child) => (
+                      <div key={child.id}>
+                        <strong>{child.label}</strong>
+                        <WorkStatus category={child.statusCategory} label={child.statusLabel} reference={child.statusReference} />
+                        <small>{child.owner} · {dueLabel(child.dueDate)}</small>
+                        {child.actionable && childActions ? (
+                          <div className="workboard-drawer-childactions">
+                            {!child.closed && childActions.close ? (
+                              <details className="details-panel">
+                                <summary><span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" aria-hidden />Cerrar</span></summary>
+                                <form action={childActions.close} className="grid gap-2 p-3">
+                                  <input name="activityId" type="hidden" value={child.id} />
+                                  <label><span className="label">Evidencia</span><input accept="image/*,.pdf,.doc,.docx" className="field" name="evidence" type="file" /></label>
+                                  <label><span className="label">Resultado o justificacion</span><textarea className="field min-h-16" name="note" placeholder="Que se hizo, o por que no se hara" /></label>
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <button className="btn btn-success" name="outcome" type="submit" value="COMPLETADA"><CheckCircle2 className="h-4 w-4" aria-hidden />Completar</button>
+                                    <button className="btn btn-danger" name="outcome" type="submit" value="CANCELADA">Sin ejecutar</button>
+                                  </div>
+                                </form>
+                              </details>
+                            ) : null}
+                            {child.closed && childActions.reopen ? (
+                              <details className="details-panel">
+                                <summary><span className="flex items-center gap-2"><RotateCcw className="h-4 w-4" aria-hidden />Reabrir</span></summary>
+                                <form action={childActions.reopen} className="grid gap-2 p-3">
+                                  <input name="activityId" type="hidden" value={child.id} />
+                                  <label>
+                                    <span className="label">Motivo de la reapertura</span>
+                                    <textarea className="field min-h-16" name="reason" placeholder="Por que hay que volver a trabajarla" required />
+                                    <span className="helper-text">Queda en la bitacora y en la auditoria.</span>
+                                  </label>
+                                  <button className="btn btn-secondary" type="submit"><RotateCcw className="h-4 w-4" aria-hidden />Reabrir</button>
+                                </form>
+                              </details>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {focusedItem.canAddChild && childActions?.create ? (
+                <section>
+                  <details className="details-panel">
+                    <summary><span className="flex items-center gap-2"><Plus className="h-4 w-4" aria-hidden />Agregar actividad</span></summary>
+                    <form action={childActions.create} className="grid gap-2 p-3">
+                      <input name="projectId" type="hidden" value={focusedItem.id} />
+                      <label><span className="label">Accion</span><textarea className="field min-h-16" name="action" placeholder="Que hay que hacer" required /></label>
+                      <label><span className="label">Problematica</span><textarea className="field min-h-16" name="problem" placeholder="Opcional" /></label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label><span className="label">Inicio</span><input className="field" name="startDate" type="date" /></label>
+                        <label><span className="label">Compromiso</span><input className="field" name="dueDate" type="date" /></label>
+                      </div>
+                      <button className="btn btn-primary" type="submit"><Plus className="h-4 w-4" aria-hidden />Agregar</button>
+                    </form>
+                  </details>
+                </section>
+              ) : null}
             </div>
             <footer><Link className="btn btn-primary w-full" href={focusedItem.href}>Abrir expediente completo<ArrowRight className="h-4 w-4" aria-hidden /></Link></footer>
           </aside>
