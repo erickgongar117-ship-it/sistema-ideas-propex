@@ -22,6 +22,7 @@ type KaizenRow = {
   direction: string;
   startDate: Date | null;
   endDate: Date | null;
+  originalEndDate: Date | null;
   sourceSheet: string;
 };
 
@@ -192,22 +193,57 @@ function isoWeekDate(year: number, week: number, end = false) {
   return monday;
 }
 
-function ganttDates(sheet: ExcelJS.Worksheet, rowNumber: number) {
+/**
+ * Color con el que el Excel pinta cada tramo de la barra.
+ *
+ * La fila 1 del Gantt es una leyenda: la celda 14 lleva el color de "Original" y la 15 el
+ * de "Reagenda". Leerla en vez de codificar los colores a mano evita que el importador se
+ * rompa si alguien cambia la paleta del libro.
+ */
+function ganttLegend(sheet: ExcelJS.Worksheet) {
+  const tone = (column: number) => {
+    const fill = sheet.getRow(1).getCell(column).fill as ExcelJS.FillPattern | undefined;
+    if (fill?.type !== "pattern" || !fill.fgColor) return null;
+    return String(fill.fgColor.theme ?? fill.fgColor.argb ?? "");
+  };
+  return { original: tone(14), rescheduled: tone(15) };
+}
+
+/**
+ * Fechas de la barra, separando el plan original del corrimiento.
+ *
+ * Antes se tomaba el tramo completo de una sola pieza, asi que un proyecto reagendado se
+ * veia identico a uno que siempre duro mas: la fecha nueva borraba la evidencia de que
+ * hubo un cambio. Ahora el tramo en color "Original" da el cierre comprometido y el tramo
+ * en color "Reagenda" el cierre real, y la diferencia entre ambos es el retraso.
+ */
+function ganttDates(sheet: ExcelJS.Worksheet, rowNumber: number, legend: { original: string | null; rescheduled: string | null }) {
   const weeks: number[] = [];
+  const originalWeeks: number[] = [];
   for (let column = 16; column <= 54; column += 1) {
     const cell = sheet.getRow(rowNumber).getCell(column);
     const fill = cell.fill as ExcelJS.FillPattern | undefined;
-    if (fill?.type === "pattern" && fill.pattern !== "none" && fill.fgColor) {
-      const week = numberValue(sheet.getRow(2).getCell(column).value as Scalar);
-      if (week != null) weeks.push(week);
-    }
+    if (fill?.type !== "pattern" || fill.pattern === "none" || !fill.fgColor) continue;
+    const week = numberValue(sheet.getRow(2).getCell(column).value as Scalar);
+    if (week == null) continue;
+    weeks.push(week);
+    const tone = String(fill.fgColor.theme ?? fill.fgColor.argb ?? "");
+    if (legend.original && tone === legend.original) originalWeeks.push(week);
   }
-  return weeks.length ? { startDate: isoWeekDate(2026, Math.min(...weeks)), endDate: isoWeekDate(2026, Math.max(...weeks), true) } : { startDate: null, endDate: null };
+  if (!weeks.length) return { startDate: null, endDate: null, originalEndDate: null };
+  const startDate = isoWeekDate(2026, Math.min(...weeks));
+  const endDate = isoWeekDate(2026, Math.max(...weeks), true);
+  // Sin tramo "Original" identificable no hay con que comparar: se deja nulo en vez de
+  // inventar un compromiso que el libro nunca declaro.
+  const originalEnd = originalWeeks.length ? isoWeekDate(2026, Math.max(...originalWeeks), true) : null;
+  const originalEndDate = originalEnd && originalEnd.getTime() < endDate.getTime() ? originalEnd : null;
+  return { startDate, endDate, originalEndDate };
 }
 
 function parseGantt(workbook: ExcelJS.Workbook) {
   const candidates: KaizenRow[] = [];
   for (const sheet of workbook.worksheets.filter((item) => normalize(item.name).startsWith("gantt kaizen"))) {
+    const legend = ganttLegend(sheet);
     let plant = "";
     for (let rowNumber = 3; rowNumber <= sheet.rowCount; rowNumber += 1) {
       const row = sheet.getRow(rowNumber);
@@ -215,7 +251,7 @@ function parseGantt(workbook: ExcelJS.Workbook) {
       const projectNumber = numberValue(row.getCell(2).value as Scalar);
       const title = text(row.getCell(3).value as Scalar);
       if (projectNumber == null || !title) continue;
-      const dates = ganttDates(sheet, rowNumber);
+      const dates = ganttDates(sheet, rowNumber, legend);
       candidates.push({
         row: rowNumber,
         number: Math.trunc(projectNumber),
@@ -234,6 +270,7 @@ function parseGantt(workbook: ExcelJS.Workbook) {
         direction: text(row.getCell(15).value as Scalar),
         startDate: dates.startDate,
         endDate: dates.endDate,
+        originalEndDate: dates.originalEndDate,
         sourceSheet: sheet.name,
       });
     }
@@ -368,8 +405,18 @@ function kaizenStatus(statusText: string, progress: number): KaizenStatus {
   return "PLANIFICACION";
 }
 
+/**
+ * Justificacion de las acciones que el Excel dejo sin estatus.
+ *
+ * No es un hueco de captura: son las que el equipo decidio no seguir porque no aportaban
+ * al proceso. Antes caian en PENDIENTE por descarte, asi que arrastraban el avance hacia
+ * abajo y aparecian como vencidas. El #21 marcaba 71% cuando en realidad estaba terminado.
+ */
+export const SIN_SEGUIMIENTO = "Sin seguimiento: no aporta al proceso, cerrada sin ejecutar.";
+
 function workStatus(statusText: string): WorkItemStatus {
   const status = normalize(statusText);
+  if (!status) return "CANCELADA";
   if (/cerrado|complet/.test(status)) return "COMPLETADA";
   if (/proceso/.test(status)) return "EN_PROCESO";
   if (/bloque/.test(status)) return "BLOQUEADA";
@@ -434,7 +481,9 @@ async function importKaizen(sourcePath: string, adminId: string, passwordHash: s
     const status = kaizenStatus(gantt?.statusText ?? "", gantt?.progress ?? plan?.progress ?? 0);
     const project = await prisma.kaizenProject.upsert({
       where: { folio: `XLS-KZN-${String(number).padStart(3, "0")}` },
-      update: {},
+      // El compromiso original solo vive en el Excel, nadie lo edita en la aplicacion, asi
+      // que se refresca en cada corrida sin miedo a pisar trabajo de alguien.
+      update: { originalEndDate: gantt?.originalEndDate ?? null },
       create: {
         number,
         folio: `XLS-KZN-${String(number).padStart(3, "0")}`,
@@ -457,6 +506,7 @@ async function importKaizen(sourcePath: string, adminId: string, passwordHash: s
         status,
         startDate,
         endDate: endDate < startDate ? startDate : endDate,
+        originalEndDate: gantt?.originalEndDate ?? null,
         closedAt: status === "COMPLETADO" ? endDate : null,
         closureNote: status === "COMPLETADO" ? "Cierre historico importado del Excel; evidencia digital pendiente de conciliacion." : null,
         closedById: status === "COMPLETADO" ? adminId : null,
@@ -482,7 +532,7 @@ async function importKaizen(sourcePath: string, adminId: string, passwordHash: s
           dueDate: action.dueDate,
           status: itemStatus,
           completionNote: itemStatus === "COMPLETADA" ? [action.comments, `Responsable Excel: ${action.responsible || "Sin asignar"}.`].filter(Boolean).join(" ") : null,
-          cancellationReason: itemStatus === "CANCELADA" ? [action.statusText, action.comments].filter(Boolean).join(" - ") : null,
+          cancellationReason: itemStatus === "CANCELADA" ? [action.statusText || SIN_SEGUIMIENTO, action.comments].filter(Boolean).join(" - ") : null,
           closedAt: itemStatus === "COMPLETADA" ? action.dueDate ?? endDate : null,
         },
       });
