@@ -1090,14 +1090,17 @@ summary:focus-visible {
 .workboard-grid-head,
 .workboard-grid-row {
   display: grid;
-  min-width: 1090px;
+  /* Las ocho columnas suman 1101px en su minimo (42+290+148+170+132+126+145+48). El
+     min-width declaraba 1090 y la rejilla se desbordaba 11px en cada fila, en cualquier
+     ancho de pantalla. Sin seleccion son 1059, no 1048. */
+  min-width: 1101px;
   grid-template-columns: 42px minmax(290px, 2fr) 148px minmax(170px, 1fr) 132px 126px 145px 48px;
   align-items: stretch;
 }
 /* Tableros donde la seleccion no tiene acciones detras: no se dibuja la columna. */
 .workboard.has-no-selection .workboard-grid-head,
 .workboard.has-no-selection .workboard-grid-row {
-  min-width: 1048px;
+  min-width: 1059px;
   grid-template-columns: minmax(290px, 2fr) 148px minmax(170px, 1fr) 132px 126px 145px 48px;
   align-items: stretch;
 }

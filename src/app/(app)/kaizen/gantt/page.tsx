@@ -4,7 +4,7 @@ import { updateKaizenDatesAction } from "@/app/actions";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { ProgressMeter } from "@/components/progress-meter";
-import { workProgress } from "@/lib/domain";
+import { kaizenDelayDays, kaizenLabel, workProgress } from "@/lib/domain";
 import { requireKaizenAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
@@ -88,19 +88,23 @@ export default async function KaizenGanttPage({ searchParams }: GanttProps) {
               return (
                 <div className="gantt-grid gantt-project-row" style={gridStyle} key={project.id}>
                   <div className="gantt-sticky-cell border-t border-line bg-white p-3">
-                    <div className="flex items-start justify-between gap-2"><Link className="min-w-0 text-sm font-extrabold text-ink hover:text-amber-700" href={`/kaizen/${project.id}`}>#{String(project.number).padStart(3, "0")} · {project.title}</Link><span className="shrink-0 text-[10px] font-bold text-slate-500">{project.leader.name}</span></div>
+                    <div className="flex items-start justify-between gap-2"><Link className="min-w-0 text-sm font-extrabold text-ink hover:text-amber-700" href={`/kaizen/${project.id}`}>{kaizenLabel(project)} · {project.title}</Link><span className="shrink-0 text-[11px] font-bold text-slate-500">{project.leader.name}</span></div>
+                    {/* El retraso vive aqui porque esta es la vista de planeacion: es donde
+                        alguien decide si mueve fechas, y necesita ver de entrada cuales ya
+                        se recorrieron una vez. */}
+                    {kaizenDelayDays(project) ? <p className="mt-1 text-[11px] font-extrabold text-brand-700">{kaizenDelayDays(project)} días de retraso sobre el compromiso</p> : null}
                     {canManage ? (
                       <form action={updateKaizenDatesAction} className="mt-2 grid grid-cols-[1fr_1fr_34px] gap-1.5">
                         <input name="projectId" type="hidden" value={project.id} />
-                        <input aria-label={`Inicio de ${project.folio}`} className="field min-h-8 px-1.5 py-1 text-[10px]" defaultValue={project.startDate.toISOString().slice(0, 10)} name="startDate" type="date" />
-                        <input aria-label={`Cierre de ${project.folio}`} className="field min-h-8 px-1.5 py-1 text-[10px]" defaultValue={project.endDate.toISOString().slice(0, 10)} name="endDate" type="date" />
-                        <button aria-label={`Guardar fechas de ${project.folio}`} className="icon-button h-8 min-h-8 w-8 min-w-8" type="submit"><Save className="h-3.5 w-3.5" aria-hidden /></button>
+                        <input aria-label={`Inicio de ${kaizenLabel(project)}`} className="field min-h-8 px-1.5 py-1 text-[10px]" defaultValue={project.startDate.toISOString().slice(0, 10)} name="startDate" type="date" />
+                        <input aria-label={`Cierre de ${kaizenLabel(project)}`} className="field min-h-8 px-1.5 py-1 text-[10px]" defaultValue={project.endDate.toISOString().slice(0, 10)} name="endDate" type="date" />
+                        <button aria-label={`Guardar fechas de ${kaizenLabel(project)}`} className="icon-button h-8 min-h-8 w-8 min-w-8" type="submit"><Save className="h-3.5 w-3.5" aria-hidden /></button>
                       </form>
                     ) : <p className="mt-2 text-[10px] font-bold text-slate-500">{project.startDate.toLocaleDateString("es-MX")} → {project.endDate.toLocaleDateString("es-MX")}</p>}
                     <div className="mt-2"><ProgressMeter label={`${progress.closed}/${progress.total} actividades`} percent={progress.percent} /></div>
                   </div>
                   {weeks.map((week) => <div className={`border-l border-t border-line ${week % 4 === 0 ? "bg-slate-50" : "bg-white"}`} key={week} />)}
-                  <Link className={`gantt-bar ${barTone[project.status]}`} href={`/kaizen/${project.id}`} style={{ gridColumn: `${start + 1} / ${Math.max(start + 2, end + 2)}`, gridRow: 1 }} title={`${project.folio}: ${project.startDate.toLocaleDateString("es-MX")} - ${project.endDate.toLocaleDateString("es-MX")}`}><span>{progress.percent}%</span></Link>
+                  <Link className={`gantt-bar ${barTone[project.status]}`} href={`/kaizen/${project.id}`} style={{ gridColumn: `${start + 1} / ${Math.max(start + 2, end + 2)}`, gridRow: 1 }} title={`${kaizenLabel(project)}: ${project.startDate.toLocaleDateString("es-MX")} - ${project.endDate.toLocaleDateString("es-MX")}`}><span>{progress.percent}%</span></Link>
                 </div>
               );
             })}

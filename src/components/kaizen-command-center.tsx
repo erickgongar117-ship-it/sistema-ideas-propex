@@ -12,7 +12,7 @@ import {
   type WorkboardMoveResult
 } from "@/components/operations-workboard";
 import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
-import { kaizenStatusLabels, workItemStatusLabels } from "@/lib/domain";
+import { kaizenDelayDays, kaizenLabel, kaizenStatusLabels, workItemStatusLabels } from "@/lib/domain";
 import { KAIZEN_STAGE_ORDER, kaizenAllowedStageTargets } from "@/lib/kaizen-transitions";
 import { kaizenStatusCategory, statusCategoryFill, workItemStatusRender } from "@/lib/status-system";
 
@@ -41,6 +41,8 @@ export type KaizenDashboardProject = {
   status: KaizenStatus;
   startDate: string;
   endDate: string;
+  /** Cierre comprometido antes de reagendar; nulo si el proyecto nunca se recorrio. */
+  originalEndDate: string | null;
   createdAt: string;
   updatedAt: string;
   leaderName: string;
@@ -106,12 +108,21 @@ export function KaizenCommandCenter({
     const blocked = project.activities.filter((activity) => activity.status === "BLOQUEADA").length;
     const charterPending = !project.hasCharter || project.status === "PENDIENTE_CHARTER";
     const alerts = [charterPending ? "Charter pendiente" : "", overdue ? `${overdue} vencidas` : "", blocked ? `${blocked} bloqueadas` : ""].filter(Boolean);
+    const activityCount = project.activities.filter((activity) => activity.status !== "COMBINADA").length;
+    const delayDays = kaizenDelayDays(project);
     return {
       id: project.id,
       href: `/kaizen/${project.id}`,
-      code: `K-${String(project.number).padStart(3, "0")}`,
+      code: kaizenLabel(project),
       title: project.title,
-      subtitle: project.objective,
+      // El objetivo ocupaba este renglon y en los proyectos importados repetia el titulo
+      // palabra por palabra: "Dar seguimiento al proyecto <titulo>". Cuarenta filas
+      // diciendo dos veces lo mismo, y cortadas por no caber. Aqui va lo que la fila no
+      // muestra en ninguna otra columna: cuanto trabajo tiene y si viene tarde.
+      subtitle: [
+        `${activityCount} ${activityCount === 1 ? "actividad" : "actividades"}`,
+        delayDays ? `${delayDays} días de retraso` : null
+      ].filter(Boolean).join(" · "),
       group: project.status,
       groupLabel: kaizenStatusLabels[project.status],
       groupColor: statusCategoryFill(statusCategory),

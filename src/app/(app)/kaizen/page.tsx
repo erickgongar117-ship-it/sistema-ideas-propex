@@ -42,6 +42,7 @@ export default async function KaizenDashboardPage({
     status: project.status,
     startDate: project.startDate.toISOString(),
     endDate: project.endDate.toISOString(),
+    originalEndDate: project.originalEndDate?.toISOString() ?? null,
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
     leaderName: project.leader.name,

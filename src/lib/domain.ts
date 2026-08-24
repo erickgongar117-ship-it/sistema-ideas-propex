@@ -262,3 +262,31 @@ export const kanbanColumns: Array<{ title: string; statuses: IdeaStatus[] }> = [
   { title: "Cerrada", statuses: ["CERRADA"] },
   { title: "Rechazada / Cancelada", statuses: ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION", "CANCELADA", "VENCIDA"] }
 ];
+
+/**
+ * Como se nombra un Kaizen en pantalla.
+ *
+ * El mismo proyecto se llamaba de tres formas: "K-023" en el tablero, que se inventaba a
+ * partir del numero e ignoraba el folio guardado; "XLS-KZN-023" en el Kanban y el Gantt,
+ * que imprimian el folio crudo; y "KZN-023" en CLAUDE.md, que es como deberia leerse. Con
+ * datos importados el prefijo XLS- salta a la vista y delata de donde salio el registro,
+ * que no es asunto de quien lo consulta.
+ *
+ * El folio de la base no se toca: los prefijos DEMO-, QA/E2E- y XLS- son la llave con la
+ * que el importador reconoce lo que ya cargo, y renombrarlos romperia esa idempotencia.
+ * Lo que se unifica es la etiqueta.
+ */
+export function kaizenLabel(project: { number: number }) {
+  return `KZN-${String(project.number).padStart(3, "0")}`;
+}
+
+/**
+ * Dias que un Kaizen se recorrio respecto del cierre que se habia comprometido.
+ * Cero cuando nunca se reagendo.
+ */
+export function kaizenDelayDays(project: { endDate: Date | string; originalEndDate: Date | string | null }) {
+  if (!project.originalEndDate) return 0;
+  const fin = new Date(project.endDate).getTime();
+  const comprometido = new Date(project.originalEndDate).getTime();
+  return Math.max(0, Math.round((fin - comprometido) / 86_400_000));
+}
