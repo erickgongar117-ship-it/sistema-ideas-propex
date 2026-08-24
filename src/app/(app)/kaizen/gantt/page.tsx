@@ -41,8 +41,12 @@ export default async function KaizenGanttPage({ searchParams }: GanttProps) {
   const currentYear = new Date().getFullYear();
   const parsedYear = Number(query.year || currentYear);
   const year = Number.isInteger(parsedYear) && parsedYear >= 2020 && parsedYear <= 2100 ? parsedYear : currentYear;
-  const yearStart = new Date(`${year}-01-01T00:00:00`);
-  const yearEnd = new Date(`${year}-12-31T23:59:59`);
+  // La ventana va en UTC a proposito. Con `new Date("2026-01-01T00:00:00")` el navegador y
+  // el servidor la leen como hora local: en Mexico eso son las 06:00Z, y un proyecto que
+  // cierra el 1 de enero a las 00:00Z quedaba fuera del ano por seis horas. Le pasaba al
+  // Kaizen #010, que desaparecia del calendario sin ningun aviso.
+  const yearStart = new Date(Date.UTC(year, 0, 1, 0, 0, 0));
+  const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
   const projects = await prisma.kaizenProject.findMany({
     where: {
       startDate: { lte: yearEnd },
@@ -77,8 +81,10 @@ export default async function KaizenGanttPage({ searchParams }: GanttProps) {
             </div>
             {projects.map((project) => {
               const progress = workProgress(project.activities);
-              const start = project.startDate.getFullYear() < year ? 1 : Math.max(1, isoWeek(project.startDate));
-              const end = project.endDate.getFullYear() > year ? 53 : Math.min(53, isoWeek(project.endDate));
+              // Mismo criterio UTC que la ventana: getFullYear() es local y en Mexico
+              // devuelve 2025 para una fecha que en UTC ya es 2026.
+              const start = project.startDate.getUTCFullYear() < year ? 1 : Math.max(1, isoWeek(project.startDate));
+              const end = project.endDate.getUTCFullYear() > year ? 53 : Math.min(53, isoWeek(project.endDate));
               return (
                 <div className="gantt-grid gantt-project-row" style={gridStyle} key={project.id}>
                   <div className="gantt-sticky-cell border-t border-line bg-white p-3">
