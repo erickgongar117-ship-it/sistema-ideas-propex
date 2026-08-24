@@ -611,6 +611,11 @@ model KaizenProject {
   status           KaizenStatus       @default(PENDIENTE_CHARTER)
   startDate        DateTime
   endDate          DateTime
+  /// Cierre comprometido antes de reagendar. El Excel lo dibuja como el tramo "Original"
+  /// de la barra; lo que sigue en color "Reagenda" es el corrimiento. Guardarlo aparte es
+  /// lo unico que permite decir cuantos dias se recorrio un Kaizen, porque endDate ya trae
+  /// la fecha nueva y por si sola no delata que hubo un cambio.
+  originalEndDate  DateTime?
   closedAt         DateTime?
   closureNote      String?
   closedById       String?

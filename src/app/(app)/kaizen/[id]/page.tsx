@@ -22,6 +22,7 @@ import { ProbocaCoin } from "@/components/proboca-coin";
 import { ProbocaCoinsCelebration } from "@/components/proboca-coins-celebration";
 import { ProgressMeter } from "@/components/progress-meter";
 import { SectionHeading } from "@/components/section-heading";
+import { KaizenProjectGantt } from "@/components/kaizen-project-gantt";
 import { WorkItemDisclosure } from "@/components/work-item-disclosure";
 import { isWorkItemOverdue, workItemStatusLabels, workProgress } from "@/lib/domain";
 import { kaizenClosureReadiness } from "@/lib/kaizen-closure";
@@ -131,6 +132,16 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
             <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="border-l-4 border-amber-500 pl-3"><dt className="text-[10px] font-extrabold uppercase text-slate-500">Líder</dt><dd className="mt-1 text-sm font-extrabold text-ink">{project.leader.name}</dd></div>
               <div className="border-l-4 border-slate-300 pl-3"><dt className="text-[10px] font-extrabold uppercase text-slate-500">Periodo</dt><dd className="mt-1 text-sm font-extrabold text-ink">{project.startDate.toLocaleDateString("es-MX")} – {project.endDate.toLocaleDateString("es-MX")}</dd></div>
+              {/* El retraso solo se muestra cuando el Excel declaro un cierre comprometido
+                  distinto al real. Sin reagenda no hay nada que reportar y una casilla en
+                  cero solo restaria atencion a las tres que si dicen algo. */}
+              {project.originalEndDate ? (
+                <div className="border-l-4 border-brand-500 pl-3">
+                  <dt className="text-[10px] font-extrabold uppercase text-slate-500">Retraso sobre el compromiso</dt>
+                  <dd className="mt-1 text-sm font-extrabold text-ink">{Math.round((project.endDate.getTime() - project.originalEndDate.getTime()) / 86_400_000)} días</dd>
+                  <dd className="mt-0.5 text-[11px] text-slate-500">Comprometido {project.originalEndDate.toLocaleDateString("es-MX")}</dd>
+                </div>
+              ) : null}
               <div className="border-l-4 border-slate-300 pl-3"><dt className="text-[10px] font-extrabold uppercase text-slate-500">Actual → Meta → Real</dt><dd className="mt-1 text-sm font-extrabold text-ink">{project.baselineValue ?? "–"} → {project.targetValue ?? "–"} → {project.currentValue ?? "–"} {project.unit ?? ""}</dd></div>
               <div className="border-l-4 border-emerald-500 pl-3"><dt className="text-[10px] font-extrabold uppercase text-slate-500">Ahorro estimado / real</dt><dd className="mt-1 text-sm font-extrabold text-ink">${(project.estimatedSavings ?? 0).toLocaleString("es-MX")} / ${(project.realSavings ?? 0).toLocaleString("es-MX")}</dd></div>
             </dl>
@@ -161,6 +172,19 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
                 </form>
               </details>
             ) : null}
+          </article>
+
+          <article className="surface rounded-lg p-5">
+            <SectionHeading
+              description={project.originalEndDate ? "El tramo rojo es lo que se recorrió respecto del cierre comprometido." : "Calendario del proyecto y de sus actividades sobre la misma línea de tiempo."}
+              title="Calendario del proyecto"
+            />
+            <KaizenProjectGantt
+              activities={project.activities}
+              endDate={project.endDate}
+              originalEndDate={project.originalEndDate}
+              startDate={project.startDate}
+            />
           </article>
 
           <section>

@@ -2795,3 +2795,108 @@ html[data-theme="dark"] .alert-info { border-color: #24547c; background: #142638
 .training-progress strong { font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--foreground); }
 .training-progress em { font-size: 11px; font-style: normal; font-weight: 700; color: var(--muted); }
 .training-progress em.is-done { color: var(--supervisor); }
+
+/* Gantt del proyecto Kaizen (detalle).
+   Se posiciona por porcentaje de la ventana del propio proyecto, no por semanas del ano,
+   asi que sirve igual para un Kaizen de dos semanas que para uno de ocho meses. Todo el
+   color sale de tokens: el bloque de modo oscuro pisa .bg-white y .border-line con
+   !important, y una clase de utilidad aqui quedaria neutralizada sin aviso. */
+.kgantt { margin-top: 0.75rem; }
+/* Un Kaizen con 65 actividades alargaba la pagina de 9600 a 11300 px solo con el Gantt.
+   Acotarlo deja el calendario navegable sin empujar la bitacora fuera de alcance. */
+.kgantt-scroll { max-height: 24rem; overflow: auto; padding-bottom: 0.25rem; }
+.kgantt-canvas { min-width: 34rem; }
+
+.kgantt-months {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: var(--surface);
+  height: 1.25rem;
+  margin-left: 13rem;
+  border-bottom: 1px solid var(--line);
+}
+.kgantt-months span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kgantt-row { display: grid; grid-template-columns: 13rem minmax(0, 1fr); align-items: center; min-height: 2rem; }
+.kgantt-row + .kgantt-row { border-top: 1px solid var(--line); }
+.kgantt-row.is-project { border-bottom: 2px solid var(--line-strong); }
+
+.kgantt-label {
+  overflow: hidden;
+  padding-right: 0.75rem;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kgantt-row.is-project .kgantt-label { font-weight: 800; }
+
+.kgantt-track { position: relative; height: 1.75rem; }
+.kgantt-row.is-project .kgantt-track { height: 2.25rem; }
+
+.kgantt-bar {
+  position: absolute;
+  top: 50%;
+  height: 0.9rem;
+  min-width: 3px;
+  transform: translateY(-50%);
+  border-radius: 3px;
+  background: var(--brand-gray);
+}
+.kgantt-row.is-project .kgantt-bar { height: 1.35rem; }
+.kgantt-bar span {
+  display: block;
+  overflow: hidden;
+  padding: 0 0.4rem;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35rem;
+  color: var(--surface);
+  white-space: nowrap;
+}
+
+.kgantt-bar.is-plan { background: var(--brand-black); }
+/* El tramo recorrido usa el rojo de marca: es lo unico de esta vista que pide una decision. */
+.kgantt-bar.is-reagenda { background: var(--brand-red); border-radius: 0 3px 3px 0; }
+.kgantt-bar.is-completada { background: var(--supervisor); }
+.kgantt-bar.is-proceso { background: var(--maintenance); }
+.kgantt-bar.is-bloqueada { background: var(--quality); }
+.kgantt-bar.is-pendiente { background: var(--brand-gray); }
+/* Cerrada sin ejecutar: hueca en vez de rellena. Un gris tenue medido daba 1.86 de
+   contraste en tema oscuro, por debajo del 3 que pide WCAG 1.4.11 para un grafico, y en
+   el #21 son 19 de 65 actividades: habrian desaparecido justo donde mas se miran. */
+.kgantt-bar.is-cancelada { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+
+.kgantt-dot {
+  position: absolute;
+  top: 50%;
+  width: 0.6rem;
+  height: 0.6rem;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-radius: 2px;
+  background: var(--brand-gray);
+}
+.kgantt-dot.is-completada { background: var(--supervisor); }
+.kgantt-dot.is-proceso { background: var(--maintenance); }
+.kgantt-dot.is-bloqueada { background: var(--quality); }
+.kgantt-dot.is-cancelada { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+
+.kgantt-today { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--brand-red); opacity: 0.45; }
+
+.kgantt-nota { margin-top: 0.6rem; font-size: 12px; line-height: 1.5; color: var(--muted); }
+
+@media (max-width: 40rem) {
+  .kgantt-row { grid-template-columns: 7.5rem minmax(0, 1fr); }
+  .kgantt-months { margin-left: 7.5rem; }
+}
