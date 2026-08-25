@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-25 -- codex (codex/hierarchy-training-coins) -- Publique main 520ceec en GitHub y desplegue directamente a Vercel produccion. Deployment dpl_4qM9UE1Eb6PFRk6C2sLDnDYPkkTT READY, alias sistema-ideas-propex.vercel.app activo; login, captura P1 y QR PNG responden 200.
+
+Siguiente paso dejado: Abrir https://sistema-ideas-propex.vercel.app y hacer validacion funcional autenticada por rol; el codigo de produccion corresponde a 520ceec y no requiere otro despliegue.
+
+---
+
 ## 2026-08-25 -- codex (codex/hierarchy-training-coins) -- Localice y verifique el rango exacto mostrado en la captura: c940803..0ee581a produce 166 archivos, 43681 inserciones, 2286 eliminaciones y 86 commits. El commit final sigue en HEAD, main y origin/main.
 
 Siguiente paso dejado: Continuar desde la rama vigente. Para auditar ese lote usar git diff c940803..0ee581a; no restaurar ni copiar archivos porque desde 0ee581a no hubo eliminaciones del sistema.
