@@ -54,6 +54,8 @@ type GenbaSourceRow = {
   day: string;
   area: string;
   problem: string;
+  /** Solo cuando el libro trae Hallazgo y Actividad por separado. */
+  action: string;
   responsible: string;
   dueDate: Date | null;
   dueDateText: string;
@@ -321,6 +323,25 @@ function parsePlan(workbook: ExcelJS.Workbook) {
   return { sheet, plans };
 }
 
+type GenbaMinuteFinding = {
+  problem: string;
+  action: string;
+  responsible: string;
+  dueDate: Date | null;
+  dueDateText: string;
+};
+
+type GenbaMinute = {
+  sheet: string;
+  convocante: string;
+  lugar: string;
+  tema: string;
+  visitDate: Date;
+  attendees: string[];
+  absentees: string[];
+  findings: GenbaMinuteFinding[];
+};
+
 function parseGenba(workbook: ExcelJS.Workbook) {
   const base = workbook.getWorksheet("Base");
   const plan = workbook.getWorksheet("Plan Accion Genba") ?? workbook.worksheets.find((sheet) => normalize(sheet.name) === "plan accion genba");
@@ -346,33 +367,139 @@ function parseGenba(workbook: ExcelJS.Workbook) {
       });
     }
   }
+  // Las columnas se resuelven por el nombre del encabezado, no por posicion.
+  //
+  // La version anterior leia la problematica de la columna 5 y el resto a partir de ahi.
+  // El libro de Apodaca tiene una columna "Actividad" que la version vieja no contemplaba,
+  // asi que todo el mapeo quedaba corrido un lugar: la columna 5 ("Hallazgo") esta vacia en
+  // sus 227 renglones y el importador habria traido cero filas sin decir por que. Leer el
+  // encabezado deja que el archivo declare su propia forma y sobrevive a que le agreguen o
+  // muevan columnas.
+  const columna = new Map<string, number>();
+  base.getRow(1).eachCell({ includeEmpty: false }, (cell, index) => {
+    const nombre = normalize(text(cell.value as Scalar));
+    if (nombre && !columna.has(nombre)) columna.set(nombre, index);
+  });
+  const leer = (row: ExcelJS.Row, ...nombres: string[]) => {
+    for (const nombre of nombres) {
+      const index = columna.get(nombre);
+      if (index) {
+        const valor = text(row.getCell(index).value as Scalar);
+        if (valor) return valor;
+      }
+    }
+    return "";
+  };
+  const leerCrudo = (row: ExcelJS.Row, ...nombres: string[]) => {
+    for (const nombre of nombres) {
+      const index = columna.get(nombre);
+      if (index) {
+        const valor = row.getCell(index).value as Scalar;
+        if (valor != null && text(valor)) return valor;
+      }
+    }
+    return null;
+  };
+  if (!columna.has("genba")) throw new Error(`La hoja Base no tiene una columna "Genba". Encabezados leidos: ${[...columna.keys()].join(", ")}`);
+
   const rows: GenbaSourceRow[] = [];
   for (let rowNumber = 2; rowNumber <= base.rowCount; rowNumber += 1) {
     const row = base.getRow(rowNumber);
-    const numberMatch = text(row.getCell(1).value as Scalar).match(/#\s*0*(\d+)/);
-    const problem = text(row.getCell(5).value as Scalar);
-    const visitDate = dateValue(row.getCell(2).value as Scalar);
+    const numberMatch = leer(row, "genba").match(/#\s*0*(\d+)/);
+    // "Hallazgo" primero y "Actividad" como respaldo: en el libro de Apodaca solo esta la
+    // segunda, y en libros anteriores solo la primera. Cualquiera de las dos sirve de
+    // problematica; si estan ambas, la accion se guarda aparte.
+    const problem = leer(row, "hallazgo", "actividad");
+    const visitDate = dateValue(leerCrudo(row, "fecha") as Scalar);
     if (!numberMatch || !problem || !visitDate) continue;
     const number = Number(numberMatch[1]);
     const current = latest.get(`${number}:${normalize(problem)}`);
-    const dueRaw = row.getCell(7).value as Scalar;
+    const dueRaw = leerCrudo(row, "fecha compromiso") as Scalar;
+    const hallazgo = leer(row, "hallazgo");
     rows.push({
       row: rowNumber,
       number,
       date: visitDate,
-      day: text(row.getCell(3).value as Scalar),
-      area: text(row.getCell(4).value as Scalar) || "Sin area especificada",
+      day: leer(row, "dia"),
+      area: leer(row, "zona", "area") || "Sin area especificada",
       problem,
-      responsible: current?.responsible || text(row.getCell(6).value as Scalar),
+      action: hallazgo ? leer(row, "actividad") : "",
+      responsible: current?.responsible || leer(row, "responsables", "responsable"),
       dueDate: current?.dueDate ?? dateValue(dueRaw),
       dueDateText: current?.dueDateText || text(dueRaw),
-      statusText: current?.statusText || text(row.getCell(8).value as Scalar),
-      comments: current?.comments || text(row.getCell(9).value as Scalar),
-      department: text(row.getCell(10).value as Scalar),
+      statusText: current?.statusText || leer(row, "estatus"),
+      comments: current?.comments || leer(row, "comentarios"),
+      department: leer(row, "departamento"),
       evidence: current?.evidence || "",
     });
   }
   return rows;
+}
+
+/**
+ * Minutas de recorrido, el formato nuevo (Formatos.xlsx, una hoja por fecha).
+ *
+ * Traen lo que a la hoja Base le falta: hallazgo y accion por separado, responsable
+ * personal y fecha compromiso real. Base tiene 225 de 227 renglones sin fecha compromiso;
+ * estas la traen en cada linea, asi que son la fuente de mejor calidad de las dos.
+ *
+ * Se reconocen por el titulo de la primera fila, no por el nombre de la hoja, para que
+ * agregar la minuta de otro dia no exija tocar el importador.
+ */
+function parseGenbaMinutes(book: ExcelJS.Workbook) {
+  const minutas: GenbaMinute[] = [];
+  for (const sheet of book.worksheets) {
+    if (!/minuta de recorrido/i.test(text(sheet.getRow(1).getCell(1).value as Scalar))) continue;
+    const etiqueta = (fila: number) => normalize(text(sheet.getRow(fila).getCell(1).value as Scalar));
+    let convocante = "";
+    let lugar = "";
+    let tema = "";
+    let visitDate: Date | null = null;
+    for (let fila = 2; fila <= 8; fila += 1) {
+      const clave = etiqueta(fila);
+      if (clave === "convocante") {
+        convocante = text(sheet.getRow(fila).getCell(2).value as Scalar);
+        visitDate = visitDate ?? dateValue(sheet.getRow(fila).getCell(5).value as Scalar);
+      }
+      if (clave === "lugar") lugar = text(sheet.getRow(fila).getCell(2).value as Scalar);
+      if (clave === "tema") tema = text(sheet.getRow(fila).getCell(2).value as Scalar);
+    }
+    // Asistentes en la primera columna, ausentes en la tercera, hasta el renglon vacio.
+    let filaAsistencia = 0;
+    for (let fila = 2; fila <= 20; fila += 1) if (etiqueta(fila) === "asistentes") { filaAsistencia = fila; break; }
+    const attendees: string[] = [];
+    const absentees: string[] = [];
+    if (filaAsistencia) {
+      for (let fila = filaAsistencia + 1; fila <= sheet.rowCount; fila += 1) {
+        const presente = text(sheet.getRow(fila).getCell(1).value as Scalar);
+        const ausente = text(sheet.getRow(fila).getCell(3).value as Scalar);
+        if (!presente && !ausente) break;
+        if (presente) attendees.push(presente);
+        if (ausente) absentees.push(ausente);
+      }
+    }
+    // La tabla de hallazgos empieza en el renglon cuyo primer valor dice "Hallazgo".
+    let filaTabla = 0;
+    for (let fila = filaAsistencia + 1; fila <= sheet.rowCount; fila += 1) if (etiqueta(fila) === "hallazgo") { filaTabla = fila; break; }
+    const findings: GenbaMinuteFinding[] = [];
+    if (filaTabla) {
+      for (let fila = filaTabla + 1; fila <= sheet.rowCount; fila += 1) {
+        const problem = text(sheet.getRow(fila).getCell(1).value as Scalar);
+        if (!problem || normalize(problem) === "elaboro") break;
+        const dueRaw = sheet.getRow(fila).getCell(5).value as Scalar;
+        findings.push({
+          problem,
+          action: text(sheet.getRow(fila).getCell(3).value as Scalar),
+          responsible: text(sheet.getRow(fila).getCell(4).value as Scalar),
+          dueDate: dateValue(dueRaw),
+          dueDateText: text(dueRaw),
+        });
+      }
+    }
+    if (!visitDate || !findings.length) continue;
+    minutas.push({ sheet: sheet.name, convocante, lugar: lugar || "Sin area especificada", tema, visitDate, attendees, absentees, findings });
+  }
+  return minutas;
 }
 
 function titleSimilarity(a: string, b: string) {
@@ -555,7 +682,7 @@ async function importKaizen(sourcePath: string, adminId: string, passwordHash: s
   return { projectCount: numbers.length, actionCount, conflicts };
 }
 
-async function importGenba(sourcePath: string, adminId: string, passwordHash: string) {
+async function importGenba(sourcePath: string, adminId: string, passwordHash: string, coordinatorId: string, minutesPath?: string) {
   const book = await workbook(sourcePath);
   const rows = parseGenba(book);
   const groups = new Map<number, GenbaSourceRow[]>();
@@ -578,7 +705,10 @@ async function importGenba(sourcePath: string, adminId: string, passwordHash: st
         folio: `XLS-GENBA-${String(number).padStart(3, "0")}`,
         areaName: first.area,
         visitDate: first.date,
-        expectedDepartments: JSON.stringify([]),
+        // Los departamentos responsables de los hallazgos son la mejor aproximacion a
+        // quien se esperaba en el recorrido; la asistencia real no existe en este libro y
+        // se deja vacia en vez de inventarla.
+        expectedDepartments: JSON.stringify(departments),
         attendedDepartments: JSON.stringify([]),
         notes: [
           `Importado de Plan_Accion_Genba_Apodaca.xlsm (${first.day}).`,
@@ -586,7 +716,7 @@ async function importGenba(sourcePath: string, adminId: string, passwordHash: st
           departments.length ? `Departamentos responsables: ${departments.join(", ")}.` : "",
         ].filter(Boolean).join(" "),
         status,
-        coordinatorId: adminId,
+        coordinatorId,
         createdById: adminId,
         closedAt: status === "CERRADO" ? first.date : null,
       },
@@ -627,7 +757,74 @@ async function importGenba(sourcePath: string, adminId: string, passwordHash: st
     const existingAudit = await prisma.auditLog.findFirst({ where: { entity: "GenbaWalk", entityId: walk.id, action: "IMPORT_EXCEL_2026_GENBA", details: auditDetails } });
     if (!existingAudit) await prisma.auditLog.create({ data: { entity: "GenbaWalk", entityId: walk.id, action: "IMPORT_EXCEL_2026_GENBA", userId: adminId, details: auditDetails } });
   }
-  return { walkCount: groups.size, actionCount, evidenceReferences, unassignedResponsibilities, missingDueDates };
+  // Las minutas del formato nuevo entran como recorridos propios. Su folio se ancla al
+  // nombre de la hoja para que volver a correr el importador no las duplique, y su numero
+  // continua la serie de la hoja Base.
+  let minuteCount = 0;
+  let minuteFindings = 0;
+  if (minutesPath) {
+    const minuteBook = await workbook(minutesPath);
+    const minutas = parseGenbaMinutes(minuteBook);
+    let siguiente = Math.max(0, ...[...groups.keys()]);
+    for (const minuta of minutas.sort((left, right) => left.visitDate.getTime() - right.visitDate.getTime())) {
+      const folio = `XLS-GENBA-MIN-${minuta.sheet}`;
+      const existente = await prisma.genbaWalk.findUnique({ where: { folio }, select: { id: true, number: true } });
+      siguiente = existente ? existente.number : siguiente + 1;
+      const walk = await prisma.genbaWalk.upsert({
+        where: { folio },
+        update: {
+          // La asistencia solo vive aqui, asi que se refresca en cada corrida: si alguien
+          // corrige la minuta, el recorrido se entera.
+          attendedDepartments: JSON.stringify(minuta.attendees),
+          expectedDepartments: JSON.stringify([...minuta.attendees, ...minuta.absentees])
+        },
+        create: {
+          number: siguiente,
+          folio,
+          areaName: minuta.lugar,
+          visitDate: minuta.visitDate,
+          expectedDepartments: JSON.stringify([...minuta.attendees, ...minuta.absentees]),
+          attendedDepartments: JSON.stringify(minuta.attendees),
+          notes: [
+            `Importado de la minuta ${minuta.sheet} de Formatos.xlsx.`,
+            minuta.tema ? `Tema: ${minuta.tema}.` : "",
+            minuta.convocante ? `Convocante: ${minuta.convocante}.` : "",
+            minuta.absentees.length ? `Ausentes: ${minuta.absentees.join(", ")}.` : ""
+          ].filter(Boolean).join(" "),
+          // Los hallazgos de una minuta nacen pendientes, asi que el recorrido nace abierto.
+          status: "ABIERTO",
+          coordinatorId,
+          createdById: adminId
+        }
+      });
+      minuteCount += 1;
+      for (const [index, finding] of minuta.findings.entries()) {
+        const owner = isPersonalResponsible(finding.responsible) ? await importedUser(finding.responsible, passwordHash) : null;
+        if (!owner) unassignedResponsibilities += 1;
+        if (!finding.dueDate) missingDueDates += 1;
+        await prisma.genbaActivity.upsert({
+          where: { walkId_number: { walkId: walk.id, number: index + 1 } },
+          update: {},
+          create: {
+            walkId: walk.id,
+            number: index + 1,
+            problem: finding.problem,
+            action: finding.action || null,
+            ownerId: owner?.id ?? null,
+            dueDate: finding.dueDate,
+            status: "PENDIENTE"
+          }
+        });
+        minuteFindings += 1;
+        actionCount += 1;
+      }
+      await prisma.auditLog.create({
+        data: { entity: "GenbaWalk", entityId: walk.id, action: "IMPORT_EXCEL_2026_GENBA_MINUTA", userId: adminId, details: JSON.stringify({ hoja: minuta.sheet, hallazgos: minuta.findings.length, asistentes: minuta.attendees.length }) }
+      });
+    }
+  }
+
+  return { minuteCount, minuteFindings, walkCount: groups.size, actionCount, evidenceReferences, unassignedResponsibilities, missingDueDates };
 }
 
 async function findOrgUnit(plantName: string, jobTitle: string) {
@@ -676,6 +873,7 @@ async function main() {
   const options = args();
   const kaizenPath = options.get("kaizen");
   const genbaPath = options.get("genba");
+  const minutesPath = options.get("minutas");
   // Los dos libros dejaron de actualizarse a la par: el de Kaizen se revisa cada mes y el
   // de GENBA no. Exigir ambos obligaba a volver a pasar un libro que no cambio, asi que
   // cada uno entra por su cuenta y lo que no se pasa simplemente no se toca.
@@ -691,7 +889,10 @@ async function main() {
   // Lo que no se vuelve a pasar conserva el resultado de la corrida anterior, para que el
   // reporte de conciliacion siga completo en vez de vaciarse a la mitad.
   const kaizen = kaizenPath ? await importKaizen(kaizenPath, admin.id, passwordHash) : anterior?.kaizen ?? null;
-  const genba = genbaPath ? await importGenba(genbaPath, admin.id, passwordHash) : anterior?.genba ?? null;
+  // El coordinador sale de Mejora Continua, que es el convocante que declaran las minutas.
+  // Si esa cuenta no existe, el administrador queda como respaldo antes que fallar.
+  const mejoraContinua = await prisma.user.findFirst({ where: { role: "MEJORA_CONTINUA", active: true }, orderBy: { createdAt: "asc" } });
+  const genba = genbaPath ? await importGenba(genbaPath, admin.id, passwordHash, mejoraContinua?.id ?? admin.id, minutesPath) : anterior?.genba ?? null;
   const whiteBelt = await importWhiteBelt(admin.id);
   const report = {
     generatedAt: new Date().toISOString(),
