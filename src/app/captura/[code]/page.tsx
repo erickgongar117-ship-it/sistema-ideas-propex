@@ -264,9 +264,9 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                   {escalationRoutes.map((route, index) => (
                     <label className="capture-choice cursor-pointer" key={route.id}>
                       <input className="peer sr-only" defaultChecked={route.isDefault || (!primaryRoute?.isDefault && index === 0)} name="escalationRuleId" required type="radio" value={route.id} />
-                      <span className="flex min-h-20 items-start gap-3 rounded-lg border border-line bg-white p-3 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-50">
+                      <span className="capture-choice-box min-h-20">
                         <GitBranch className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden />
-                        <span className="min-w-0"><span className="block text-sm font-extrabold text-ink">{route.submitterLabel}</span><span className="mt-1 block text-xs leading-4 text-slate-600">{`Reporta a ${route.reviewerMembership.user.name}`}{route.circumstance ? ` · ${route.circumstance}` : ""}</span></span>
+                        <span className="min-w-0"><span className="capture-choice-title block text-sm">{route.submitterLabel}</span><small className="mt-1 block text-xs leading-4">{`Reporta a ${route.reviewerMembership.user.name}`}{route.circumstance ? ` · ${route.circumstance}` : ""}</small></span>
                       </span>
                     </label>
                   ))}
@@ -312,7 +312,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                   return (
                     <label className="capture-choice cursor-pointer" key={impact}>
                       <input className="peer sr-only" name="impactTypes" type="checkbox" value={impact} />
-                      <span className="flex min-h-14 items-center gap-3 rounded-lg border border-line bg-white p-3 text-sm font-bold text-slate-700 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-50 peer-checked:text-emerald-900">
+                      <span className="capture-choice-box min-h-14 items-center text-sm font-bold">
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-panel text-slate-600">
                           <ImpactIcon className="h-4 w-4" aria-hidden />
                         </span>

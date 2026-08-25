@@ -335,6 +335,53 @@ html[data-theme="dark"] {
   opacity: 1;
 }
 
+/*
+ * Tarjeta de opcion del formulario publico.
+ *
+ * Estaba armada con utilidades —bg-white, border-line, peer-checked:bg-emerald-50— y en
+ * tema oscuro no funcionaba: el bloque de anulaciones pinta .bg-white y .border-line con
+ * !important, y le gana a peer-checked. Medido a 375px: la tarjeta marcada y la no marcada
+ * compartian fondo rgb(32,36,43) y borde rgb(43,49,58), o sea que el operador no podia ver
+ * cual habia elegido. Y como el radio real es sr-only, tampoco habia indicador nativo de
+ * respaldo. Encima peer-checked:text-emerald-900 SI aplicaba, dejando el titulo de la
+ * categoria elegida en contraste 1.03: texto oscuro sobre fondo oscuro.
+ *
+ * Con clases propias y tokens el problema desaparece de raiz, sin tocar las anulaciones
+ * globales de las que dependen otras pantallas.
+ */
+.capture-choice-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0.75rem;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.capture-choice > input:checked + .capture-choice-box {
+  border-color: var(--role-accent);
+  background: var(--role-soft);
+  /* Segundo borde interior: el color por si solo no basta para quien no lo distingue, y
+     WCAG 1.4.1 pide que el estado no dependa unicamente del color. */
+  box-shadow: inset 0 0 0 1px var(--role-accent);
+}
+
+.capture-choice > input:focus-visible + .capture-choice-box {
+  outline: var(--focus-width) solid var(--role-accent);
+  outline-offset: var(--focus-offset);
+}
+
+/* El titulo hereda del contenedor en vez de fijar un tono que solo sirve en tema claro. */
+.capture-choice-box strong,
+.capture-choice-box .capture-choice-title { color: var(--foreground); font-weight: 800; }
+.capture-choice-box small { color: var(--muted); }
+
+html[data-theme="dark"] .capture-choice > input:checked + .capture-choice-box {
+  background: color-mix(in srgb, var(--role-accent) 22%, var(--surface));
+}
+
 * {
   box-sizing: border-box;
 }

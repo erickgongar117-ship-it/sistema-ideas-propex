@@ -56,7 +56,7 @@ export function CaptureClassification({ initialCategory = "A", supportAreas }: {
                 type="radio"
                 value={item.value}
               />
-              <span className="flex min-h-32 items-start gap-3 rounded-lg border border-line bg-white p-4 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-50 peer-checked:text-emerald-950">
+              <span className="capture-choice-box min-h-32 p-4">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel text-slate-600 peer-checked:text-emerald-700">
                   {item.value === "A" ? <UsersRound className="h-5 w-5" aria-hidden /> : item.value === "B" ? <Building2 className="h-5 w-5" aria-hidden /> : <Wrench className="h-5 w-5" aria-hidden />}
                 </span>
@@ -85,7 +85,7 @@ export function CaptureClassification({ initialCategory = "A", supportAreas }: {
               return (
                 <label className="capture-choice cursor-pointer" key={area.id}>
                   <input className="peer sr-only" name="supportUnitIds" type="checkbox" value={area.id} />
-                  <span className={`flex min-h-20 items-start gap-3 rounded-lg border border-line bg-white p-3 transition ${presentation.tone}`}>
+                  <span className={`capture-choice-box min-h-20 ${presentation.tone}`}>
                     <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
                     <span>
                       <span className="block text-sm font-extrabold">{area.name}</span>
