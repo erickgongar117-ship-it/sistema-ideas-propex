@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-25 -- codex (codex/hierarchy-training-coins) -- Localice y verifique el rango exacto mostrado en la captura: c940803..0ee581a produce 166 archivos, 43681 inserciones, 2286 eliminaciones y 86 commits. El commit final sigue en HEAD, main y origin/main.
+
+Siguiente paso dejado: Continuar desde la rama vigente. Para auditar ese lote usar git diff c940803..0ee581a; no restaurar ni copiar archivos porque desde 0ee581a no hubo eliminaciones del sistema.
+
+---
+
 ## 2026-08-25 -- codex (main) -- Audite la supuesta desaparicion de 43000 lineas: main y origin/main coinciden en eb8ccc6, el arbol esta limpio y git confirma 42948 inserciones frente a claude/al-dia; no hay codigo perdido.
 
 Siguiente paso dejado: Continuar desde main eb8ccc6. No restaurar claude/al-dia ni copias antiguas: es una referencia divergente; medir cambios con git diff claude/al-dia..main si vuelve a surgir la duda.
