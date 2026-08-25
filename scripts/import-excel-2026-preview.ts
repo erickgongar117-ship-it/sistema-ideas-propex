@@ -65,60 +65,8 @@ type GenbaSourceRow = {
   evidence: string;
 };
 
-type CertificationPerson = {
-  name: string;
-  jobTitle: string;
-  plant: "Apodaca" | "El Carmen";
-  basis: "Proyecto" | "Coach / mentor";
-};
-
 const prisma = new PrismaClient();
 
-const certificationPeople: CertificationPerson[] = [
-  ["Alfredo Alvarado Lara", "Supervisor P2 / P6", "Apodaca", "Proyecto"],
-  ["Maria del Pilar Morato Orosco", "P2", "Apodaca", "Proyecto"],
-  ["Brandon Azael Arredondo Miranda", "Supervisor P9", "Apodaca", "Proyecto"],
-  ["Johnatan Avalos", "Supervisor P8", "Apodaca", "Proyecto"],
-  ["Dulce Karely Segura Guerrero", "SGCI / Oficinas", "Apodaca", "Proyecto"],
-  ["Luwer Garcia Morales", "Oficinas", "Apodaca", "Proyecto"],
-  ["Kevin Abisai Cruz Ibarra", "Coordinador / Oficina P1", "Apodaca", "Proyecto"],
-  ["Azaret Molina Vargas", "Coordinador / Oficina P1", "Apodaca", "Proyecto"],
-  ["Guadalupe Gonzalez Santa Maria", "Oficinas", "Apodaca", "Proyecto"],
-  ["Diana Paola Cirilo Bautista", "Auxiliar de Supervisor", "Apodaca", "Proyecto"],
-  ["Jonathan Valente Vinalay", "Jefe de Calidad", "El Carmen", "Proyecto"],
-  ["Sabrina Jamilette Nicacio Hernandez", "Supervisor de Calidad", "El Carmen", "Proyecto"],
-  ["Mayra Enriqueta Martinez Alanis", "Jefe de Capacitacion", "El Carmen", "Proyecto"],
-  ["Jennifer Garcia Guajardo", "Area por confirmar", "El Carmen", "Proyecto"],
-  ["Luis Angel Lopez Molina", "Supervisor SGCI", "El Carmen", "Proyecto"],
-  ["Ingrid Yaaressi Ugarte Rubio", "Supervisor de SGCI", "El Carmen", "Proyecto"],
-  ["Paola Michael Marquez Lopez", "Auxiliar Contable", "El Carmen", "Proyecto"],
-  ["Brandon Ulises Guevara Vargas", "Planeacion", "El Carmen", "Proyecto"],
-  ["Mariana Yasbeck Galindo Vielma", "Auxiliar de Sacrificio", "El Carmen", "Proyecto"],
-  ["Noe Gaytan Martinez", "Supervisor de Sacrificio", "El Carmen", "Proyecto"],
-  ["Jose Ernesto Cordova Medina", "Jefe de Sacrificio", "El Carmen", "Proyecto"],
-  ["Griselda Cerda", "Reclutamiento", "El Carmen", "Proyecto"],
-  ["Maria Hernandez G", "Supervisor de Sanidad", "El Carmen", "Proyecto"],
-  ["Angeles Guajardo Gonzalez", "Auxiliar Administrativo / Embarques", "El Carmen", "Proyecto"],
-  ["Oralia Carmona Ibarra", "Auxiliar Administrativo / Embarques", "El Carmen", "Proyecto"],
-  ["Damaris Vanessa Herrera Villarreal", "Capturista / Molidas", "El Carmen", "Proyecto"],
-  ["Osiel Edmundo Ibarra Flores", "Jefe de Deshuese", "El Carmen", "Proyecto"],
-  ["Jesus Alberto Hernandez Rojas", "Jefe de Molidas", "El Carmen", "Proyecto"],
-  ["J. Misael Santiago Medina", "Inspector de Tecnicas / Deshuese", "El Carmen", "Proyecto"],
-  ["Felipe de Jesus Ibarra Carranza", "Supervisor de Deshuese", "El Carmen", "Proyecto"],
-  ["Edgar Eduardo Juarez Rivera", "Supervisor de Almacen Frio", "El Carmen", "Proyecto"],
-  ["Jose Francisco Segura Fuentes", "Supervisor de Pieles", "El Carmen", "Proyecto"],
-  ["Diana Elizabeth Montantes Rodriguez", "Operadora de Selladora", "El Carmen", "Proyecto"],
-  ["Ana Karina Martinez Perez", "Operadora de Selladora", "El Carmen", "Proyecto"],
-  ["Rolando Rodriguez Garcia", "Supervisor de Empaque", "El Carmen", "Proyecto"],
-  ["Flor Yasmin Ton Ixba", "Matancero / Sacrificio", "El Carmen", "Proyecto"],
-  ["Deborah Rubi Aranda Barrios", "Supervisor de Molidas", "El Carmen", "Proyecto"],
-  ["Arely Mildred Leos Flores", "Capturista / Embarques", "El Carmen", "Proyecto"],
-  ["Julio Olvera Espinoza", "Coordinador DNP", "El Carmen", "Proyecto"],
-  ["Lucero Jazmin Aguilar Gamez", "Ingeniero DNP", "El Carmen", "Proyecto"],
-  ["Monica Lizeth Cavazos Espericueta", "Coach / mentor", "Apodaca", "Coach / mentor"],
-  ["Melany Michael Hernandez Gallegos", "Coach / mentor", "El Carmen", "Coach / mentor"],
-  ["Erick Osvaldo Gongora Garza", "Coach / mentor", "Apodaca", "Coach / mentor"],
-].map(([name, jobTitle, plant, basis]) => ({ name, jobTitle, plant, basis })) as CertificationPerson[];
 
 function args() {
   const values = new Map<string, string>();
@@ -836,39 +784,6 @@ async function findOrgUnit(plantName: string, jobTitle: string) {
   return ranked[0]?.score ? ranked[0].unit : plantUnits.find((unit) => unit.type === "MACROPROCESO") ?? plantUnits[0] ?? null;
 }
 
-async function importWhiteBelt(adminId: string) {
-  const program = await prisma.trainingProgram.upsert({
-    where: { name: "White Belt 2026" },
-    update: { description: "Certificacion 2026 por participacion y cumplimiento en proyectos. ProbocaCoins sugeridas; no otorgadas hasta confirmar la certificacion.", coinValue: 100, active: true },
-    create: { name: "White Belt 2026", description: "Certificacion 2026 por participacion y cumplimiento en proyectos. ProbocaCoins sugeridas; no otorgadas hasta confirmar la certificacion.", coinValue: 100, createdById: adminId },
-  });
-  const plants = await prisma.plant.findMany({ where: { active: true } });
-  const sessionByBasis = new Map<string, string>();
-  for (const basis of ["Proyecto", "Coach / mentor"] as const) {
-    const marker = `[IMPORT-2026:WHITE-BELT:${basis}]`;
-    const existing = await prisma.trainingSession.findFirst({ where: { programId: program.id, notes: { contains: marker } } });
-    const session = existing ?? await prisma.trainingSession.create({ data: { programId: program.id, sessionDate: new Date(Date.UTC(2026, 7, 11, 12)), trainerName: "Mejora Continua", notes: `${marker} Candidatos pendientes de emision de certificado y vinculacion de numero de empleado.`, createdById: adminId } });
-    sessionByBasis.set(basis, session.id);
-  }
-  const existing = await prisma.participant.findMany();
-  let linked = 0;
-  for (const person of certificationPeople) {
-    const matches = existing.filter((participant) => normalize(participant.name) === normalize(person.name));
-    const orgUnit = await findOrgUnit(person.plant, person.jobTitle);
-    const participant = matches.length === 1
-      ? await prisma.participant.update({ where: { id: matches[0].id }, data: { jobTitle: person.jobTitle, orgUnitId: orgUnit?.id ?? matches[0].orgUnitId, active: true } })
-      : await prisma.participant.create({ data: { name: person.name, jobTitle: person.jobTitle, orgUnitId: orgUnit?.id ?? null, active: true } });
-    existing.push(participant);
-    await prisma.trainingEnrollment.upsert({
-      where: { sessionId_participantId: { sessionId: sessionByBasis.get(person.basis)!, participantId: participant.id } },
-      update: { status: "REGISTERED", coinsAwarded: 0, completedAt: null },
-      create: { sessionId: sessionByBasis.get(person.basis)!, participantId: participant.id, status: "REGISTERED", coinsAwarded: 0 },
-    });
-    linked += 1;
-  }
-  return { participantCount: linked, projectCandidates: certificationPeople.filter((person) => person.basis === "Proyecto").length, coachCandidates: certificationPeople.filter((person) => person.basis === "Coach / mentor").length, coinsSuggested: certificationPeople.length * program.coinValue, coinsAwarded: 0 };
-}
-
 async function main() {
   const options = args();
   const kaizenPath = options.get("kaizen");
@@ -893,18 +808,15 @@ async function main() {
   // Si esa cuenta no existe, el administrador queda como respaldo antes que fallar.
   const mejoraContinua = await prisma.user.findFirst({ where: { role: "MEJORA_CONTINUA", active: true }, orderBy: { createdAt: "asc" } });
   const genba = genbaPath ? await importGenba(genbaPath, admin.id, passwordHash, mejoraContinua?.id ?? admin.id, minutesPath) : anterior?.genba ?? null;
-  const whiteBelt = await importWhiteBelt(admin.id);
   const report = {
     generatedAt: new Date().toISOString(),
     mode: "LOCAL_PREVIEW",
     sources: {
       kaizen: kaizenPath ?? anterior?.sources?.kaizen ?? null,
       genba: genbaPath ?? anterior?.sources?.genba ?? null,
-      whiteBelt: "Listado proporcionado en la conversacion"
     },
     kaizen,
     genba,
-    whiteBelt,
     pending: [
       { key: "KAIZEN_CONFLICT", count: kaizen?.conflicts.length ?? 0, message: "El Kaizen #034 tiene nombres competidores en el calendario; se conserva la opcion mejor respaldada, pendiente de confirmacion." },
       { key: "TWI", count: 48, message: "Evaluaciones TWI detectadas; requieren un modelo de evaluacion por entregable antes de importar." },
@@ -912,8 +824,6 @@ async function main() {
       { key: "GENBA_OWNER", count: genba?.unassignedResponsibilities ?? 0, message: "Acciones GENBA sin un responsable personal unico; deben conciliarse antes de activar recordatorios." },
       { key: "GENBA_DATE", count: genba?.missingDueDates ?? 0, message: "Acciones GENBA sin fecha compromiso; no se marcan como vencidas hasta completar la conciliacion." },
       { key: "GENBA_GAPS", count: 2, message: "Los numeros GENBA 025 y 035 aparecen en el plan visual, pero no tienen hallazgos en la hoja Base." },
-      { key: "IDENTITY", count: whiteBelt.participantCount, message: "Participantes White Belt pendientes de numero de empleado y correo." },
-      { key: "COINS", count: whiteBelt.coinsSuggested, message: "ProbocaCoins sugeridas, sin otorgar hasta confirmar certificacion." },
     ],
   };
   await prisma.setting.upsert({ where: { key: "import2026PreviewReport" }, update: { value: JSON.stringify(report) }, create: { key: "import2026PreviewReport", value: JSON.stringify(report) } });
