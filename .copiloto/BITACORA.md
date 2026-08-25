@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-25 -- codex (main) -- Audite la supuesta desaparicion de 43000 lineas: main y origin/main coinciden en eb8ccc6, el arbol esta limpio y git confirma 42948 inserciones frente a claude/al-dia; no hay codigo perdido.
+
+Siguiente paso dejado: Continuar desde main eb8ccc6. No restaurar claude/al-dia ni copias antiguas: es una referencia divergente; medir cambios con git diff claude/al-dia..main si vuelve a surgir la duda.
+
+---
+
 ## 2026-08-18 -- claude (codex/hierarchy-training-coins) -- Puse buscador en los doce selectores de persona que eran select planos con toda la plantilla dentro: lider y equipo Kaizen, coordinador y acciones GENBA, responsable en Ideas y en Mejora Continua, responsable de recibir ideas en Configuracion, y persona, jefe directo y jefe que recibe en el editor de jerarquia. Cree src/lib/person-options.ts que mete numero de empleado y correo en el texto buscable. Verificado: escribir Administrador reduce de 22 opciones a 2. Commit abb5655.
 
 Siguiente paso dejado: Dos cosas que salieron de esta sesion y quedan abiertas. PRIMERA, de datos y explica por que buscar por numero de empleado no funciona en Kaizen, GENBA e Ideas: esos selectores eligen User, y hay 29 usuarios activos con CERO numeros de empleado mientras Participant tiene 1051 de 1052; ademas solo 2 de 1053 participantes estan ligados a un User. El campo User.employeeNumber existe y es unico en prisma/schema.prisma linea 177 pero nadie lo llena. La busqueda ya esta lista y funcionara sola en cuanto se pueble. SEGUNDA, de diseno y ya diagnosticada: el panel derecho de configuracion/estructura muestra seis conceptos de persona a la vez porque tres campos de base de datos designan lo mismo, OrgUnit.routingUserId, Area.supervisorId y OrgEscalationRule.reviewerMembership, sincronizados a mano en trece puntos. Simplificarlo exige elegir una sola fuente de verdad para quien recibe las ideas.
