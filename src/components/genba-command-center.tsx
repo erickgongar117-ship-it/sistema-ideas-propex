@@ -2,6 +2,7 @@
 
 import type { GenbaStatus, WorkItemStatus } from "@prisma/client";
 import { useEffect, useMemo, useState } from "react";
+import { addGenbaActivityAction, closeGenbaActivityAction, reopenGenbaActivityAction } from "@/app/actions";
 import { OperationsWorkboard, type WorkboardGroupDefinition, type WorkboardItem } from "@/components/operations-workboard";
 import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
 import { genbaStatusLabels, workItemStatusLabels } from "@/lib/domain";
@@ -47,7 +48,7 @@ function activityProgress(activities: GenbaDashboardActivity[]) {
   return { total: relevant.length, closed, percent: relevant.length ? Math.round((closed / relevant.length) * 100) : 0 };
 }
 
-export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboardWalk[]; generatedAt: string }) {
+export function GenbaCommandCenter({ walks, generatedAt, canManage = false }: { walks: GenbaDashboardWalk[]; generatedAt: string; canManage?: boolean }) {
   const [period, setPeriod] = useState<WorkspacePeriod>("90");
   useEffect(() => {
     const stored = window.localStorage.getItem(WORKSPACE_PERIOD_STORAGE);
@@ -99,9 +100,13 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
           owner: activity.ownerName ?? "Sin asignar",
           dueDate: activity.dueDate,
           statusCategory: activityStatus.category,
-          statusReference: activityStatus.reference
+          statusReference: activityStatus.reference,
+          closed: ["COMPLETADA", "CANCELADA"].includes(activity.status),
+          // El servidor revalida permisos; esto solo evita ofrecer un boton que rebotaria.
+          actionable: canManage && walk.status === "ABIERTO"
         };
-      })
+      }),
+      canAddChild: canManage && walk.status === "ABIERTO"
     };
   });
   const activities = visible.flatMap((walk) => walk.activities).filter((activity) => activity.status !== "COMBINADA");
@@ -111,6 +116,20 @@ export function GenbaCommandCenter({ walks, generatedAt }: { walks: GenbaDashboa
   const attendance = attendanceRows.length ? Math.min(100, Math.round(attendanceRows.reduce((sum, walk) => sum + Math.min(1, walk.attendedDepartments / walk.expectedDepartments) * 100, 0) / attendanceRows.length)) : 0;
 
   return <OperationsWorkboard
+    childActions={{
+      close: closeGenbaActivityAction,
+      create: addGenbaActivityAction,
+      reopen: reopenGenbaActivityAction,
+      // GENBA nombra distinto lo mismo: el padre es walkId y el campo obligatorio es la
+      // problematica observada, no la accion.
+      createParentField: "walkId",
+      createPrimaryField: "problem",
+      createPrimaryLabel: "Que se observo",
+      createPrimaryPlaceholder: "Hallazgo del recorrido",
+      createSecondaryField: "action",
+      createSecondaryLabel: "Accion propuesta"
+    }}
+    childLabel="Actividades"
     groupDefinitions={GENBA_GROUPS}
     items={items}
     locationLabel="Area visitada"

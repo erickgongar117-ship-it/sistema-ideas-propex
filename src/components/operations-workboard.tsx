@@ -70,10 +70,42 @@ export type WorkboardChild = {
  * Ideas—, asi que quien lo llama decide que acciones existen; sin estas props el panel se
  * comporta como siempre, de solo lectura.
  */
+/**
+ * Decision que se puede tomar sobre el registro mismo desde el panel lateral.
+ *
+ * Las actividades de Kaizen y GENBA son subelementos y se resuelven con `childActions`.
+ * Una idea no tiene subelementos: lo que se hace con ella es decidirla. Sin esto, el panel
+ * de una idea solo servia para mirar y el unico camino era abrir el expediente, aunque la
+ * decision fuera de un vistazo.
+ */
+export type WorkboardItemAction = {
+  action: (formData: FormData) => void | Promise<void>;
+  /** Nombre del campo oculto que lleva el id del registro, p. ej. "ideaId". */
+  idField: string;
+  /** Campo de texto que acompana la decision. */
+  noteField: string;
+  noteLabel: string;
+  notePlaceholder?: string;
+  summary: string;
+  /** Un boton por opcion; `name`/`value` son lo que espera la accion de servidor. */
+  options: Array<{ name: string; value: string; label: string; tone: "primary" | "secondary" | "danger" | "success" }>;
+};
+
 export type WorkboardChildActions = {
   close?: (formData: FormData) => void | Promise<void>;
   reopen?: (formData: FormData) => void | Promise<void>;
   create?: (formData: FormData) => void | Promise<void>;
+  /**
+   * Nombres de campo del alta, porque cada modulo llama distinto a lo mismo: Kaizen espera
+   * projectId y `action`, GENBA espera walkId y `problem`. Sin esto el formulario mandaria
+   * siempre los nombres de Kaizen y GENBA rechazaria el alta sin decir por que.
+   */
+  createParentField?: string;
+  createPrimaryField?: string;
+  createPrimaryLabel?: string;
+  createPrimaryPlaceholder?: string;
+  createSecondaryField?: string;
+  createSecondaryLabel?: string;
 };
 
 export type WorkboardItem = {
@@ -101,6 +133,8 @@ export type WorkboardItem = {
   children?: WorkboardChild[];
   /** Permite dar de alta un subelemento nuevo desde el panel. */
   canAddChild?: boolean;
+  /** Este registro admite la decision del panel; el servidor la revalida igual. */
+  canDecide?: boolean;
   allowedGroups?: string[];
   bulkEntityId?: string;
   bulkActions?: WorkboardBulkAction[];
@@ -286,6 +320,7 @@ export function OperationsWorkboard({
   onMoveItem,
   onBulkAction,
   childActions,
+  itemAction,
   childLabel = "Subelementos",
   clientPagination = true
 }: {
@@ -298,6 +333,7 @@ export function OperationsWorkboard({
   onMoveItem?: (input: WorkboardMoveInput) => Promise<WorkboardMoveResult>;
   onBulkAction?: (input: WorkboardBulkInput) => Promise<WorkboardBulkResult>;
   childActions?: WorkboardChildActions;
+  itemAction?: WorkboardItemAction;
   childLabel?: string;
   clientPagination?: boolean;
 }) {
@@ -1046,9 +1082,9 @@ export function OperationsWorkboard({
                   <details className="details-panel">
                     <summary><span className="flex items-center gap-2"><Plus className="h-4 w-4" aria-hidden />Agregar actividad</span></summary>
                     <form action={childActions.create} className="grid gap-2 p-3">
-                      <input name="projectId" type="hidden" value={focusedItem.id} />
-                      <label><span className="label">Accion</span><textarea className="field min-h-16" name="action" placeholder="Que hay que hacer" required /></label>
-                      <label><span className="label">Problematica</span><textarea className="field min-h-16" name="problem" placeholder="Opcional" /></label>
+                      <input name={childActions.createParentField ?? "projectId"} type="hidden" value={focusedItem.id} />
+                      <label><span className="label">{childActions.createPrimaryLabel ?? "Accion"}</span><textarea className="field min-h-16" name={childActions.createPrimaryField ?? "action"} placeholder={childActions.createPrimaryPlaceholder ?? "Que hay que hacer"} required /></label>
+                      <label><span className="label">{childActions.createSecondaryLabel ?? "Problematica"}</span><textarea className="field min-h-16" name={childActions.createSecondaryField ?? "problem"} placeholder="Opcional" /></label>
                       <div className="grid grid-cols-2 gap-2">
                         <label><span className="label">Inicio</span><input className="field" name="startDate" type="date" /></label>
                         <label><span className="label">Compromiso</span><input className="field" name="dueDate" type="date" /></label>
@@ -1059,6 +1095,25 @@ export function OperationsWorkboard({
                 </section>
               ) : null}
             </div>
+            {focusedItem.canDecide && itemAction ? (
+              <div className="workboard-drawer-decision">
+                <details className="details-panel">
+                  <summary><span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" aria-hidden />{itemAction.summary}</span></summary>
+                  <form action={itemAction.action} className="grid gap-2 p-3">
+                    <input name={itemAction.idField} type="hidden" value={focusedItem.id} />
+                    <label>
+                      <span className="label">{itemAction.noteLabel}</span>
+                      <textarea className="field min-h-16" name={itemAction.noteField} placeholder={itemAction.notePlaceholder} />
+                    </label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {itemAction.options.map((option) => (
+                        <button className={`btn btn-${option.tone}`} key={option.value} name={option.name} type="submit" value={option.value}>{option.label}</button>
+                      ))}
+                    </div>
+                  </form>
+                </details>
+              </div>
+            ) : null}
             <footer><Link className="btn btn-primary w-full" href={focusedItem.href}>Abrir expediente completo<ArrowRight className="h-4 w-4" aria-hidden /></Link></footer>
           </aside>
         </div>

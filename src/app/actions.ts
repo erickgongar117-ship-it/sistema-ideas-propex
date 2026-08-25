@@ -2623,6 +2623,57 @@ export async function addGenbaUpdateAction(formData: FormData) {
   redirect(`/genba/${walkId}`);
 }
 
+/**
+ * Devuelve al plan una actividad GENBA ya cerrada, dejando dicho por que.
+ *
+ * Mismo hueco que tenia Kaizen: cerrar era de una sola direccion. Y aqui pega mas fuerte,
+ * porque al resolverse la ultima actividad el recorrido se cierra solo; un clic equivocado
+ * congelaba el recorrido entero sin forma de corregirlo.
+ *
+ * No hace falta reabrir el recorrido a mano: refreshGenbaWalk ya lo devuelve a ABIERTO en
+ * cuanto una actividad deja de estar resuelta.
+ */
+export async function reopenGenbaActivityAction(formData: FormData) {
+  const user = await requireUser();
+  const activityId = text(formData, "activityId");
+  const reason = text(formData, "reason");
+  const activity = await prisma.genbaActivity.findUniqueOrThrow({ where: { id: activityId }, include: { walk: true } });
+  const back = `/genba/${activity.walkId}`;
+  // Mismo criterio que cerrar: responsable de la actividad, coordinador del recorrido o
+  // Mejora Continua.
+  if (!isImprovementManager(user.role) && activity.ownerId !== user.id && activity.walk.coordinatorId !== user.id) redirect(back);
+  if (activity.walk.status === "CANCELADO") redirect(`${back}?error=cerrado`);
+  if (!["COMPLETADA", "CANCELADA"].includes(activity.status)) redirect(`${back}?error=no_cerrada`);
+  if (reason.trim().length < 5) redirect(`${back}?error=motivo_reapertura`);
+
+  const previo = activity.status === "COMPLETADA" ? "completada" : "cerrada sin ejecutar";
+  await prisma.$transaction(async (tx) => {
+    await tx.genbaActivity.update({
+      where: { id: activityId },
+      data: {
+        status: "EN_PROCESO",
+        // Las notas de cierre ya no describen el estado real; su texto queda en la
+        // bitacora del recorrido, que es donde se audita.
+        completionNote: null,
+        cancellationReason: null,
+        closedAt: null
+      }
+    });
+    await tx.genbaUpdate.create({
+      data: { walkId: activity.walkId, activityId, userId: user.id, comment: `Actividad #${activity.number} reabierta (estaba ${previo}). Motivo: ${reason}` }
+    });
+    await tx.auditLog.create({
+      data: { entity: "GenbaActivity", entityId: activityId, action: "GENBA_ACTIVITY_REOPENED", userId: user.id, details: JSON.stringify({ from: activity.status, reason }) }
+    });
+  });
+
+  await refreshGenbaWalk(activity.walkId);
+  revalidatePath("/genba");
+  revalidatePath("/genba/kanban");
+  revalidatePath(back);
+  redirect(back);
+}
+
 export async function promoteGenbaActivityToKaizenAction(formData: FormData) {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const activityId = text(formData, "activityId");

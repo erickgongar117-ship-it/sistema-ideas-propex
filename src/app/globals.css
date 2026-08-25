@@ -1393,6 +1393,9 @@ summary:focus-visible {
 /* Acciones por actividad dentro del panel: ocupan el ancho completo debajo del renglon y
    van plegadas, para que la lista siga leyendose de un vistazo cuando no se va a tocar. */
 .workboard-drawer-childactions { grid-column: 1 / -1; margin-top: 0.35rem; }
+/* La decision se separa del pie con su propio borde: no es navegacion, es una accion que
+   cambia el estado del registro y conviene que no se confunda con "abrir expediente". */
+.workboard-drawer-decision { border-top: 1px solid var(--line); padding: 0.75rem 1rem 0; }
 .workboard-drawer-childactions .details-panel summary { min-height: 2rem; padding: 0.25rem 0.5rem; font-size: 12px; }
 .workboard-drawer > footer { border-top: 1px solid var(--line); background: var(--surface-subtle); padding: 0.8rem 1rem; }
 

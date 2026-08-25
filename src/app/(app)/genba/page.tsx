@@ -76,7 +76,7 @@ export default async function GenbaDashboardPage({
         }
       />
       {errorMessage ? <div className="alert alert-danger mb-5" role="alert"><TriangleAlert className="h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
-      <GenbaCommandCenter generatedAt={new Date().toISOString()} walks={dashboardWalks} />
+      <GenbaCommandCenter canManage={canManage} generatedAt={new Date().toISOString()} walks={dashboardWalks} />
     </>
   );
 }

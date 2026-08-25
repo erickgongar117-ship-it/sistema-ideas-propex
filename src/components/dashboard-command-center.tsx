@@ -2,6 +2,7 @@
 
 import type { IdeaCategory, IdeaStatus } from "@prisma/client";
 import { useEffect, useMemo, useState } from "react";
+import { supervisorDecisionAction } from "@/app/actions";
 import { OperationsWorkboard, type WorkboardGroupDefinition, type WorkboardItem } from "@/components/operations-workboard";
 import { WORKSPACE_PERIOD_EVENT, WORKSPACE_PERIOD_STORAGE, type WorkspacePeriod } from "@/components/workspace-controls";
 import { statusLabels } from "@/lib/domain";
@@ -105,7 +106,10 @@ export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }
       progressLabel: `Etapa: ${statusLabels[idea.status]}`,
       risk: overdue || !idea.supervisorName,
       riskLabel: overdue ? "Compromiso vencido" : !idea.supervisorName ? "Responsable pendiente" : undefined,
-      tags: [`Categoria ${idea.category}`, ...idea.impactTypes, ...support, idea.pointsAssigned ? `${idea.pointsAssigned} ProbocaCoins` : ""].filter(Boolean)
+      tags: [`Categoria ${idea.category}`, ...idea.impactTypes, ...support, idea.pointsAssigned ? `${idea.pointsAssigned} ProbocaCoins` : ""].filter(Boolean),
+      // Solo mientras la idea espera la primera revision. El servidor revalida quien puede
+      // decidir y en que estado; esto solo evita ofrecer un boton que iba a rebotar.
+      canDecide: idea.status === "EN_REVISION_SUPERVISOR"
     };
   });
 
@@ -115,6 +119,19 @@ export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }
   const coins = visible.reduce((sum, idea) => sum + idea.pointsAssigned, 0);
 
   return <OperationsWorkboard
+    itemAction={{
+      action: supervisorDecisionAction,
+      idField: "ideaId",
+      noteField: "comments",
+      noteLabel: "Comentario para quien la propuso",
+      notePlaceholder: "Obligatorio si rechazas o pides mas informacion",
+      summary: "Decidir esta idea",
+      options: [
+        { name: "decision", value: "APROBAR", label: "Aprobar", tone: "success" },
+        { name: "decision", value: "SOLICITAR_INFORMACION", label: "Pedir informacion", tone: "secondary" },
+        { name: "decision", value: "RECHAZAR", label: "Rechazar", tone: "danger" }
+      ]
+    }}
     groupDefinitions={IDEA_GROUPS}
     items={items}
     locationLabel="Area"

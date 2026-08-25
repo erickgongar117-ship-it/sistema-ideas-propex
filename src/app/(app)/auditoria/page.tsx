@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 export const metadata = { title: "Auditoría" };
 const actionLabels: Record<string, string> = {
   KAIZEN_ACTIVITY_REOPENED: "Actividad Kaizen reabierta",
+  GENBA_ACTIVITY_REOPENED: "Actividad GENBA reabierta",
   IDEA_CREATED: "Idea registrada",
   SUPERVISOR_APPROVED: "Supervisor aprobo",
   SUPERVISOR_REJECTED: "Supervisor rechazo",
