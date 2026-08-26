@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-26 -- codex (codex/hierarchy-training-coins) -- Cree y publique roles DIRECCION/GERENTE de solo lectura, importe 185 personas en 59 unidades con 250 rutas desde Outlook y organigrama, mantuve las 8 cuentas urgentes con admin123, cargue 8 ideas Forms y valide Neon/Vercel.
+
+Siguiente paso dejado: Revisar en Configuracion > Estructura las dos rutas manuales de un solo peldano (APO-LOG-REC y APO-LOG-TAR) y definir credenciales solo para las cuentas adicionales que realmente deban iniciar sesion; el resto ya funciona como directorio y responsables.
+
+---
+
 ## 2026-08-25 -- codex (codex/hierarchy-training-coins) -- Consulte en solo lectura las cuentas aprobadoras activas de produccion: 20 cuentas y 20 hashes bcrypt unicos. No expuse hashes ni secretos; las contrasenas actuales no son recuperables.
 
 Siguiente paso dejado: Definir un flujo administrativo de restablecimiento temporal con cambio obligatorio; no intentar recuperar ni mostrar hashes bcrypt.
