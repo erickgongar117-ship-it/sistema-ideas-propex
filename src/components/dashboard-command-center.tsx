@@ -36,11 +36,11 @@ export type DashboardPortfolio = {
 };
 
 type DashboardCommandCenterProps = {
+  canOperate: boolean;
   ideas: DashboardIdea[];
   areas: string[];
   generatedAt: string;
   portfolio: DashboardPortfolio;
-  viewerRole: "ADMIN" | "MEJORA_CONTINUA";
   timing: { supervisor: string; validation: string; implementation: string };
 };
 
@@ -68,7 +68,7 @@ function groupFor(status: IdeaStatus) {
   };
 }
 
-export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }: DashboardCommandCenterProps) {
+export function DashboardCommandCenter({ canOperate, ideas, generatedAt, portfolio, timing }: DashboardCommandCenterProps) {
   const [period, setPeriod] = useState<WorkspacePeriod>("90");
   useEffect(() => {
     const stored = window.localStorage.getItem(WORKSPACE_PERIOD_STORAGE);
@@ -109,7 +109,7 @@ export function DashboardCommandCenter({ ideas, generatedAt, portfolio, timing }
       tags: [`Categoria ${idea.category}`, ...idea.impactTypes, ...support, idea.pointsAssigned ? `${idea.pointsAssigned} ProbocaCoins` : ""].filter(Boolean),
       // Solo mientras la idea espera la primera revision. El servidor revalida quien puede
       // decidir y en que estado; esto solo evita ofrecer un boton que iba a rebotar.
-      canDecide: idea.status === "EN_REVISION_SUPERVISOR"
+      canDecide: canOperate && idea.status === "EN_REVISION_SUPERVISOR"
     };
   });
 

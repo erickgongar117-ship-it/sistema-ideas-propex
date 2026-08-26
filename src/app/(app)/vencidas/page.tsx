@@ -6,12 +6,14 @@ import { PageHeader } from "@/components/page-header";
 import { SectionHeading } from "@/components/section-heading";
 import { StatusPill } from "@/components/status-pill";
 import { requireUser } from "@/lib/auth";
+import { executiveViewerRoles } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 
 export const metadata = { title: "Vencidas" };
 export default async function OverduePage() {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(executiveViewerRoles);
+  const canRunAutomation = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
   const ideas = await prisma.idea.findMany({
     where: { OR: [{ status: "VENCIDA" }, { dueDate: { lt: new Date() }, status: { notIn: ["CERRADA", "CANCELADA", "RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"] } }] },
     include: { area: true, supervisor: true, implementationOwner: true },
@@ -24,7 +26,7 @@ export default async function OverduePage() {
         eyebrow="Mejora Continua · Semaforo de compromisos"
         title="Compromisos vencidos"
         description="Acciones cuya fecha compromiso ya terminó y todavía no tienen cierre."
-        actions={<form action={runRemindersAction}><button className="btn btn-primary" type="submit"><Play className="h-4 w-4" aria-hidden />Actualizar y notificar</button></form>}
+        actions={canRunAutomation ? <form action={runRemindersAction}><button className="btn btn-primary" type="submit"><Play className="h-4 w-4" aria-hidden />Actualizar y notificar</button></form> : undefined}
       />
       <div className="alert alert-danger mb-6"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span><strong>{ideas.length} {ideas.length === 1 ? "compromiso requiere" : "compromisos requieren"} atención.</strong> Abre el detalle para registrar avance o ajustar la asignación.</span></div>
       <SectionHeading count={ideas.length} title="Lista de atención" tone="red" />

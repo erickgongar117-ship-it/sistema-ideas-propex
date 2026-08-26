@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ApprovalType, Prisma, User } from "@prisma/client";
+import { hasExecutiveVisibility } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 export type IdeaAccessUser = Pick<User, "id" | "role">;
@@ -17,7 +18,7 @@ export type SupervisableOrgUnit = {
 };
 
 export function hasGlobalIdeaAccess(user: Pick<User, "role">) {
-  return user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
+  return hasExecutiveVisibility(user);
 }
 
 type OrgScopeCapability = "canReviewTeam" | "canManageActivities";

@@ -48,7 +48,7 @@ type GenbaDetailProps = {
 };
 
 export default async function GenbaDetailPage({ params, searchParams }: GenbaDetailProps) {
-  const { user, canManage: hasManagePermission } = await requireGenbaAccess();
+  const { user, canManage: hasManagePermission, canViewAll } = await requireGenbaAccess();
   const { id } = await params;
   const query = await searchParams;
   const [walk, users, kaizenProjects] = await Promise.all([
@@ -73,7 +73,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
   ]);
 
   if (!walk) notFound();
-  if (!hasManagePermission && walk.coordinatorId !== user.id && !walk.activities.some((activity) => activity.ownerId === user.id)) notFound();
+  if (!canViewAll && walk.coordinatorId !== user.id && !walk.activities.some((activity) => activity.ownerId === user.id)) notFound();
 
   const walkClosed = walk.status === "CERRADO" || walk.status === "CANCELADO";
   const canManage = hasManagePermission && !walkClosed;

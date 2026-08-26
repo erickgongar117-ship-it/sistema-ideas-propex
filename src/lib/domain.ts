@@ -53,6 +53,8 @@ export const genbaDepartments = [
 
 export const roleLabels: Record<Role, string> = {
   ADMIN: "Administrador",
+  DIRECCION: "Dirección",
+  GERENTE: "Gerencia",
   MEJORA_CONTINUA: "Mejora Continua",
   SUPERVISOR: "Supervisor",
   CALIDAD: "Calidad/Inocuidad",
@@ -60,6 +62,12 @@ export const roleLabels: Record<Role, string> = {
   MANTENIMIENTO: "Mantenimiento",
   COLABORADOR: "Colaborador"
 };
+
+export const executiveViewerRoles: Role[] = ["ADMIN", "DIRECCION", "GERENTE", "MEJORA_CONTINUA"];
+
+export function hasExecutiveVisibility(user: Pick<{ role: Role }, "role">) {
+  return executiveViewerRoles.includes(user.role);
+}
 
 export const statusLabels: Record<IdeaStatus, string> = {
   REGISTRADA: "Registrada",
@@ -237,7 +245,7 @@ export function approvalTypeForRole(role: Role): ApprovalType | null {
 }
 
 export function roleHomePath(role: Role): string {
-  if (role === "MEJORA_CONTINUA" || role === "ADMIN") return "/dashboard";
+  if (executiveViewerRoles.includes(role)) return "/dashboard";
   return "/seguimientos";
 }
 

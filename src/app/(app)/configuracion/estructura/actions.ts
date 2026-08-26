@@ -289,7 +289,7 @@ export async function saveMembershipAction(formData: FormData): Promise<Organiza
   if (manager && (!manager.active || !manager.user.active || !manager.orgUnit.active || !manager.orgUnit.plant.active)) {
     return { ok: false, message: "El jefe directo seleccionado esta inactivo. Activa su usuario, planta, area y membresia antes de asignarlo." };
   }
-  if (manager && manager.orgUnit.plantId !== unit.plantId) {
+  if (manager && manager.orgUnit.plantId !== unit.plantId && manager.user.role !== "DIRECCION") {
     return { ok: false, message: `El jefe directo pertenece a ${manager.orgUnit.plant.name}; selecciona una jefatura de ${unit.plant.name}.` };
   }
   if (manager && manager.userId === input.userId) {

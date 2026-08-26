@@ -39,7 +39,7 @@ const kaizenStatusLabels = {
 } as const;
 
 export default async function KaizenDetailPage({ params, searchParams }: KaizenDetailProps) {
-  const { user, canManage: hasManagePermission } = await requireKaizenAccess();
+  const { user, canManage: hasManagePermission, canViewAll } = await requireKaizenAccess();
   const { id } = await params;
   const query = await searchParams;
   const [project, users, coinTransactions] = await Promise.all([
@@ -64,7 +64,7 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
     })
   ]);
   if (!project) notFound();
-  if (!hasManagePermission && project.leaderId !== user.id && !project.teamMembers.some((member) => member.userId === user.id) && !project.activities.some((activity) => activity.ownerId === user.id)) notFound();
+  if (!canViewAll && project.leaderId !== user.id && !project.teamMembers.some((member) => member.userId === user.id) && !project.activities.some((activity) => activity.ownerId === user.id)) notFound();
   const progress = workProgress(project.activities);
   const charterFiles = project.attachments.filter((attachment) => attachment.type === "CHARTER");
   const activeActivities = project.activities.filter((activity) => !["COMPLETADA", "CANCELADA", "COMBINADA"].includes(activity.status));

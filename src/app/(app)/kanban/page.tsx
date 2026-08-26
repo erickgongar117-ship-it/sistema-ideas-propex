@@ -3,7 +3,7 @@ import { List } from "lucide-react";
 import { IdeaCard } from "@/components/idea-card";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
-import { kanbanColumns } from "@/lib/domain";
+import { executiveViewerRoles, kanbanColumns } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 
@@ -11,7 +11,7 @@ export const metadata = { title: "Kanban de ideas" };
 const columnColors = ["bg-amber-500", "bg-red-500", "bg-emerald-600", "bg-blue-600", "bg-violet-600", "bg-slate-950", "bg-slate-500"];
 
 export default async function KanbanPage() {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  await requireUser(executiveViewerRoles);
   const ideas = await prisma.idea.findMany({
     include: { area: true, supervisor: true, implementationOwner: true, approvals: true },
     orderBy: { updatedAt: "desc" }

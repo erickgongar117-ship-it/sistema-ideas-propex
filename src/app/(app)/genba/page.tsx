@@ -13,7 +13,7 @@ export default async function GenbaDashboardPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { user, canManage } = await requireGenbaAccess();
+  const { user, canManage, canViewAll } = await requireGenbaAccess();
   const query = (await searchParams) ?? {};
   const errorCode = typeof query.error === "string" ? query.error : null;
   const errorMessage = errorCode === "combinacion"
@@ -23,7 +23,7 @@ export default async function GenbaDashboardPage({
       : null;
   const walks = await prisma.genbaWalk.findMany({
     where: {
-      ...(!canManage ? { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } : {})
+      ...(!canViewAll ? { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } : {})
     },
     include: {
       coordinator: true,

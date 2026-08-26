@@ -25,9 +25,10 @@ import { ProbocaCoin } from "@/components/proboca-coin";
 import { SearchablePicker, type SearchablePickerOption } from "@/components/searchable-picker";
 import { SectionHeading } from "@/components/section-heading";
 import { requireUser } from "@/lib/auth";
+import { executiveViewerRoles } from "@/lib/domain";
 import { getParticipantBalances } from "@/lib/coins";
 import { prisma } from "@/lib/prisma";
-import { createCoinTransactionAction, reverseDuplicateCoinTransactionAction } from "./actions";
+import { reverseDuplicateCoinTransactionAction } from "./actions";
 
 
 export const metadata = { title: "ProbocaCoins" };
@@ -161,7 +162,8 @@ function participantOption(participant: { id: string; name: string; employeeNumb
 }
 
 export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps) {
-  const currentUser = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const currentUser = await requireUser(executiveViewerRoles);
+  const canManage = currentUser.role === "ADMIN" || currentUser.role === "MEJORA_CONTINUA";
   const query = await searchParams;
   const currentPage = positivePage(query.page);
   const ledgerPage = positivePage(query.ledgerPage);
@@ -302,7 +304,7 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
 
   return (
     <>
-      <PageHeader eyebrow="ProbocaCoins - Control financiero" title="Finanzas de ProbocaCoins" description="Busca personas en segundos y consulta o registra movimientos con trazabilidad completa." actions={<Link className="btn btn-secondary" href="/entrenamientos"><GraduationCap className="h-4 w-4" aria-hidden />Entrenamientos</Link>} />
+      <PageHeader eyebrow="ProbocaCoins - Control financiero" title="Finanzas de ProbocaCoins" description={canManage ? "Busca personas en segundos y consulta o registra movimientos con trazabilidad completa." : "Consulta saldos, origenes y movimientos con trazabilidad completa."} actions={<Link className="btn btn-secondary" href="/entrenamientos"><GraduationCap className="h-4 w-4" aria-hidden />Entrenamientos</Link>} />
       {errorMessage ? <div className="alert alert-danger mb-5"><X className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
       {successMessage ? <div className="alert alert-success mb-5"><CircleDollarSign className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{successMessage}</span></div> : null}
 
@@ -637,7 +639,7 @@ export default async function ProbocaCoinsPage({ searchParams }: CoinsPageProps)
           adjustments={totalFor(CoinTransactionType.ADJUSTMENT)}
           awarded={totalFor(CoinTransactionType.AWARD)}
           balance={selectedBalance ?? 0}
-          canManage
+          canManage={canManage}
           closeHref={coinsHref({ q: search || undefined, peopleStatus: peopleStatus === "active" ? undefined : peopleStatus, page: currentPage })}
           movements={accountMovements.map((movement) => ({
             id: movement.id,

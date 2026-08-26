@@ -19,14 +19,14 @@ function positivePage(value?: string) {
 }
 
 export default async function GenbaRepositoryPage({ searchParams }: RepositoryPageProps) {
-  const { user, canManage } = await requireGenbaAccess();
+  const { user, canViewAll } = await requireGenbaAccess();
   const query = await searchParams;
   const page = positivePage(query.page);
   const search = query.q?.trim() ?? "";
   const status = terminalStatuses.find((item) => item === query.status);
   const where: Prisma.GenbaWalkWhereInput = {
     status: status ?? { in: terminalStatuses },
-    ...(!canManage ? { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } : {}),
+    ...(!canViewAll ? { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } : {}),
     ...(search ? { AND: [{ OR: [
       { folio: { contains: search } },
       { areaName: { contains: search } },

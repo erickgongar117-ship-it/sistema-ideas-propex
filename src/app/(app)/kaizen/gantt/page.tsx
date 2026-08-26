@@ -38,7 +38,7 @@ const barTone = {
 };
 
 export default async function KaizenGanttPage({ searchParams }: GanttProps) {
-  const { user, canManage } = await requireKaizenAccess();
+  const { user, canManage, canViewAll } = await requireKaizenAccess();
   const query = await searchParams;
   const currentYear = new Date().getFullYear();
   const parsedYear = Number(query.year || currentYear);
@@ -53,7 +53,7 @@ export default async function KaizenGanttPage({ searchParams }: GanttProps) {
     where: {
       startDate: { lte: yearEnd },
       endDate: { gte: yearStart },
-      ...(!canManage ? { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } : {})
+      ...(!canViewAll ? { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } : {})
     },
     include: { leader: true, activities: true },
     orderBy: [{ startDate: "asc" }, { number: "asc" }]

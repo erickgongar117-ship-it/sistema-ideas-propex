@@ -32,11 +32,11 @@ function projectColumn(project: {
 }
 
 export default async function KaizenKanbanPage() {
-  const { user, canManage } = await requireKaizenAccess();
+  const { user, canViewAll } = await requireKaizenAccess();
   const projects = await prisma.kaizenProject.findMany({
     where: {
       status: { notIn: ["COMPLETADO", "CANCELADO"] },
-      ...(!canManage ? { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } : {})
+      ...(!canViewAll ? { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } : {})
     },
     include: {
       leader: true,

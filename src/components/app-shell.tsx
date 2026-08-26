@@ -10,6 +10,7 @@ import {
   BarChart3,
   Archive,
   Bell,
+  Building2,
   CalendarRange,
   ChevronDown,
   ClipboardCheck,
@@ -49,6 +50,8 @@ type ShellUser = {
   role: Role;
   kaizenAccess: boolean;
   genbaAccess: boolean;
+  jobTitle: string | null;
+  responsibilities: string[];
 };
 
 type NavItem = {
@@ -64,28 +67,29 @@ type NavItem = {
 
 type NavGroup = NavItem["group"];
 
-const allRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"];
+const allRoles: Role[] = ["ADMIN", "DIRECCION", "GERENTE", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"];
+const executiveRoles: Role[] = ["ADMIN", "DIRECCION", "GERENTE", "MEJORA_CONTINUA"];
 
 const ideaNav: NavItem[] = [
-  { href: "/panorama", label: "Panorama PROpEx", shortLabel: "Panorama", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
-  { href: "/dashboard", label: "Hoy", shortLabel: "Hoy", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
-  { href: "/seguimientos", label: "Mis seguimientos", shortLabel: "Pendientes", icon: ListChecks, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "work" },
+  { href: "/panorama", label: "Panorama PROpEx", shortLabel: "Panorama", icon: LayoutDashboard, roles: executiveRoles, group: "work" },
+  { href: "/dashboard", label: "Hoy", shortLabel: "Hoy", icon: LayoutDashboard, roles: executiveRoles, group: "work" },
+  { href: "/seguimientos", label: "Mis seguimientos", shortLabel: "Pendientes", icon: ListChecks, roles: allRoles, group: "work" },
   { href: "/supervisor", label: "Bandeja de aprobaciones", shortLabel: "Aprobar", icon: UserCheck, roles: allRoles, requiresReviewAccess: true, group: "work" },
   { href: "/validaciones/calidad", label: "Calidad e inocuidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "work" },
   { href: "/validaciones/seguridad", label: "Seguridad industrial", shortLabel: "Seguridad", icon: ClipboardCheck, roles: ["ADMIN", "SEGURIDAD"], group: "work" },
   { href: "/validaciones/mantenimiento", label: "Mantenimiento", icon: Wrench, roles: ["ADMIN", "MANTENIMIENTO"], group: "work" },
   { href: "/mejora", label: "Mejora Continua", shortLabel: "Mejora", icon: Gauge, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
   { href: "/implementacion", label: "Implementación", shortLabel: "Avances", icon: ListChecks, roles: ["ADMIN", "MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR"], group: "work" },
-  { href: "/ideas", label: "Todas las ideas", shortLabel: "Ideas", icon: ClipboardList, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
-  { href: "/ideas/repositorio", label: "Repositorio de ideas", shortLabel: "Historico", icon: Archive, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
-  { href: "/kanban", label: "Flujo Kanban", shortLabel: "Kanban", icon: KanbanSquare, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
-  { href: "/vencidas", label: "Compromisos vencidos", shortLabel: "Vencidas", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
-  { href: "/qr", label: "QR por planta", shortLabel: "QR", icon: QrCode, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
-  { href: "/reportes", label: "Reportes", icon: Download, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
-  { href: "/entrenamientos", label: "Entrenamientos", shortLabel: "Cursos", icon: GraduationCap, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
-  { href: "/probocacoins", label: "Finanzas ProbocaCoins", shortLabel: "Coins", icon: Coins, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
-  { href: "/notificaciones", label: "Notificaciones", shortLabel: "Avisos", icon: Bell, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "system" },
-  { href: "/auditoria", label: "Auditoría", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
+  { href: "/ideas", label: "Todas las ideas", shortLabel: "Ideas", icon: ClipboardList, roles: executiveRoles, group: "control" },
+  { href: "/ideas/repositorio", label: "Repositorio de ideas", shortLabel: "Historico", icon: Archive, roles: executiveRoles, group: "control" },
+  { href: "/kanban", label: "Flujo Kanban", shortLabel: "Kanban", icon: KanbanSquare, roles: executiveRoles, group: "control" },
+  { href: "/vencidas", label: "Compromisos vencidos", shortLabel: "Vencidas", icon: BarChart3, roles: executiveRoles, group: "control" },
+  { href: "/qr", label: "QR por planta", shortLabel: "QR", icon: QrCode, roles: executiveRoles, group: "system" },
+  { href: "/reportes", label: "Reportes", icon: Download, roles: executiveRoles, group: "system" },
+  { href: "/entrenamientos", label: "Entrenamientos", shortLabel: "Cursos", icon: GraduationCap, roles: executiveRoles, group: "system" },
+  { href: "/probocacoins", label: "Finanzas ProbocaCoins", shortLabel: "Coins", icon: Coins, roles: executiveRoles, group: "system" },
+  { href: "/notificaciones", label: "Notificaciones", shortLabel: "Avisos", icon: Bell, roles: allRoles, group: "system" },
+  { href: "/auditoria", label: "Auditoría", icon: BarChart3, roles: executiveRoles, group: "system" },
   { href: "/configuracion/estructura", label: "Estructura organizacional", shortLabel: "Estructura", icon: Network, roles: ["ADMIN"], group: "system" },
   { href: "/configuracion/datos", label: "Control de datos", shortLabel: "Datos", icon: Database, roles: ["ADMIN"], group: "system" },
   { href: "/configuracion/migracion-2026", label: "Migracion Excel 2026", shortLabel: "Migracion", icon: FileSpreadsheet, roles: ["ADMIN"], group: "system" },
@@ -93,28 +97,28 @@ const ideaNav: NavItem[] = [
 ];
 
 const kaizenNav: NavItem[] = [
-  { href: "/kaizen", label: "Panel de proyectos", shortLabel: "Kaizen", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "work" },
-  { href: "/kaizen/repositorio", label: "Repositorio Kaizen", shortLabel: "Historico", icon: Archive, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" },
+  { href: "/kaizen", label: "Panel de proyectos", shortLabel: "Kaizen", icon: LayoutDashboard, roles: allRoles, group: "work" },
+  { href: "/kaizen/repositorio", label: "Repositorio Kaizen", shortLabel: "Historico", icon: Archive, roles: allRoles, group: "control" },
   { href: "/kaizen/nuevo", label: "Nuevo proyecto", shortLabel: "Nuevo", icon: Plus, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
-  { href: "/kaizen/gantt", label: "Calendario Gantt", shortLabel: "Gantt", icon: CalendarRange, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" },
-  { href: "/kaizen/kanban", label: "Kanban por proyecto", shortLabel: "Kanban", icon: FolderKanban, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" }
+  { href: "/kaizen/gantt", label: "Calendario Gantt", shortLabel: "Gantt", icon: CalendarRange, roles: allRoles, group: "control" },
+  { href: "/kaizen/kanban", label: "Kanban por proyecto", shortLabel: "Kanban", icon: FolderKanban, roles: allRoles, group: "control" }
 ];
 
 const genbaNav: NavItem[] = [
-  { href: "/genba", label: "Panel de recorridos", shortLabel: "GENBA", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "work" },
-  { href: "/genba/repositorio", label: "Repositorio GENBA", shortLabel: "Historico", icon: Archive, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" },
+  { href: "/genba", label: "Panel de recorridos", shortLabel: "GENBA", icon: LayoutDashboard, roles: allRoles, group: "work" },
+  { href: "/genba/repositorio", label: "Repositorio GENBA", shortLabel: "Historico", icon: Archive, roles: allRoles, group: "control" },
   { href: "/genba/nuevo", label: "Nuevo recorrido", shortLabel: "Nuevo", icon: Plus, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
-  { href: "/genba/kanban", label: "Kanban por recorrido", shortLabel: "Kanban", icon: FolderKanban, roles: ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"], group: "control" }
+  { href: "/genba/kanban", label: "Kanban por recorrido", shortLabel: "Kanban", icon: FolderKanban, roles: allRoles, group: "control" }
 ];
 
 const unifiedNav: NavItem[] = [
-  { href: "/dashboard", label: "Ideas de mejora", shortLabel: "Ideas", icon: ClipboardList, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/dashboard", label: "Ideas de mejora", shortLabel: "Ideas", icon: ClipboardList, roles: executiveRoles, group: "work" },
   { href: "/seguimientos", label: "Mi trabajo", shortLabel: "Mi trabajo", icon: ListChecks, roles: allRoles, group: "work" },
   { href: "/kaizen", label: "Proyectos Kaizen", shortLabel: "Kaizen", icon: FolderKanban, roles: allRoles, requiresModule: "kaizen", group: "work" },
   { href: "/genba", label: "Recorridos GENBA", shortLabel: "GENBA", icon: Footprints, roles: allRoles, requiresModule: "genba", group: "work" },
-  { href: "/entrenamientos", label: "Entrenamientos", shortLabel: "Cursos", icon: GraduationCap, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
-  { href: "/probocacoins", label: "ProbocaCoins", shortLabel: "Coins", icon: Coins, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
-  { href: "/panorama", label: "Panel ejecutivo", shortLabel: "Panel", icon: LayoutDashboard, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "work" },
+  { href: "/entrenamientos", label: "Entrenamientos", shortLabel: "Cursos", icon: GraduationCap, roles: executiveRoles, group: "work" },
+  { href: "/probocacoins", label: "ProbocaCoins", shortLabel: "Coins", icon: Coins, roles: executiveRoles, group: "work" },
+  { href: "/panorama", label: "Panel ejecutivo", shortLabel: "Panel", icon: LayoutDashboard, roles: executiveRoles, group: "work" },
 
   { href: "/supervisor", label: "Aprobaciones", shortLabel: "Aprobar", icon: UserCheck, roles: allRoles, requiresReviewAccess: true, group: "control" },
   { href: "/validaciones/calidad", label: "Validaciones de calidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "control" },
@@ -122,11 +126,11 @@ const unifiedNav: NavItem[] = [
   { href: "/validaciones/mantenimiento", label: "Validaciones tecnicas", icon: Wrench, roles: ["ADMIN", "MANTENIMIENTO"], group: "control" },
   { href: "/mejora", label: "Clasificar y cerrar ideas", shortLabel: "Mejora", icon: Gauge, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
   { href: "/implementacion", label: "Implementacion de ideas", shortLabel: "Avances", icon: ListChecks, roles: ["ADMIN", "MEJORA_CONTINUA", "MANTENIMIENTO", "SUPERVISOR"], group: "control" },
-  { href: "/vencidas", label: "Compromisos vencidos", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
-  { href: "/reportes", label: "Reportes y Excel", icon: Download, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "control" },
+  { href: "/vencidas", label: "Compromisos vencidos", icon: BarChart3, roles: executiveRoles, group: "control" },
+  { href: "/reportes", label: "Reportes y Excel", icon: Download, roles: executiveRoles, group: "control" },
 
-  { href: "/qr", label: "Codigos QR", shortLabel: "QR", icon: QrCode, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
-  { href: "/auditoria", label: "Auditoria", icon: BarChart3, roles: ["ADMIN", "MEJORA_CONTINUA"], group: "system" },
+  { href: "/qr", label: "Codigos QR", shortLabel: "QR", icon: QrCode, roles: executiveRoles, group: "system" },
+  { href: "/auditoria", label: "Auditoria", icon: BarChart3, roles: executiveRoles, group: "system" },
   { href: "/configuracion/estructura", label: "Organizacion y personas", shortLabel: "Estructura", icon: Network, roles: ["ADMIN"], group: "system" },
   { href: "/configuracion/datos", label: "Control de datos", shortLabel: "Datos", icon: Database, roles: ["ADMIN"], group: "system" },
   { href: "/configuracion/migracion-2026", label: "Migracion Excel 2026", shortLabel: "Migracion", icon: FileSpreadsheet, roles: ["ADMIN"], group: "system" },
@@ -139,6 +143,8 @@ const unifiedNav: NavItem[] = [
 // se resuelve igual y ademas sigue al tema.
 const roleTheme: Record<Role, { accent: string; soft: string; home: string; context: string }> = {
   ADMIN: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/dashboard", context: "Control del sistema" },
+  DIRECCION: { accent: "var(--brand-red)", soft: "var(--brand-red-soft)", home: "/panorama", context: "Visión ejecutiva" },
+  GERENTE: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/dashboard", context: "Portafolio gerencial" },
   MEJORA_CONTINUA: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/dashboard", context: "Seguimiento global" },
   SUPERVISOR: { accent: "var(--supervisor)", soft: "var(--supervisor-soft)", home: "/seguimientos", context: "Seguimiento de tu área" },
   CALIDAD: { accent: "var(--quality)", soft: "var(--quality-soft)", home: "/seguimientos", context: "Calidad e inocuidad" },
@@ -433,7 +439,8 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
             <span className="user-avatar">{user.name.charAt(0).toUpperCase()}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-extrabold text-slate-950">{user.name}</span>
-              <span className="block truncate text-xs text-slate-500">{roleLabels[user.role]}</span>
+              <span className="block truncate text-xs text-slate-500">{user.jobTitle ?? roleLabels[user.role]}</span>
+              {user.responsibilities[0] ? <span className="mt-0.5 block truncate text-[10px] font-bold text-slate-400">{user.responsibilities[0]}</span> : null}
             </span>
             <Bell className="h-4 w-4 text-slate-500" aria-hidden />
           </Link>
@@ -471,14 +478,22 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
                 <span className="user-avatar">{user.name.charAt(0).toUpperCase()}</span>
                 <span className="workspace-profile-copy">
                   <span className="block max-w-36 truncate text-xs font-extrabold text-ink">{user.name}</span>
-                  <span className="mt-0.5 block text-[10px] text-slate-500">{roleLabels[user.role]}</span>
+                  <span className="mt-0.5 block max-w-36 truncate text-[10px] text-slate-500">{user.jobTitle ?? roleLabels[user.role]}</span>
                 </span>
                 <ChevronDown className="h-4 w-4 text-slate-400" aria-hidden />
               </summary>
               <div className="workspace-profile-menu">
                 <p className="truncate text-sm font-extrabold text-ink">{user.name}</p>
                 <p className="mt-1 truncate text-xs text-slate-500">{user.email}</p>
-                <p className="mt-3 border-t border-line pt-3 text-[11px] font-bold text-slate-500">{theme.context}</p>
+                <p className="mt-3 border-t border-line pt-3 text-[11px] font-extrabold text-ink">{roleLabels[user.role]}</p>
+                {user.responsibilities.length ? (
+                  <div className="mt-3 border-t border-line pt-3">
+                    <p className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase text-slate-500"><Building2 className="h-3.5 w-3.5" aria-hidden />Responsable de</p>
+                    <ul className="mt-2 space-y-1.5 text-xs font-bold text-ink">
+                      {user.responsibilities.slice(0, 6).map((responsibility) => <li className="leading-4" key={responsibility}>{responsibility}</li>)}
+                    </ul>
+                  </div>
+                ) : <p className="mt-3 border-t border-line pt-3 text-[11px] font-bold text-slate-500">{theme.context}</p>}
                 <form action={logoutAction} className="mt-3">
                   <button className="btn btn-secondary w-full" type="submit"><LogOut className="h-4 w-4" aria-hidden />Cerrar sesión</button>
                 </form>
@@ -537,7 +552,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
             </div>
             <div className="border-b border-slate-200 p-4">
               <p className="text-sm font-extrabold text-slate-950">{user.name}</p>
-              <p className="mt-0.5 text-xs text-slate-500">{roleLabels[user.role]} · {theme.context}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{user.jobTitle ?? roleLabels[user.role]} · {user.responsibilities[0] ?? theme.context}</p>
               <Link className="btn btn-primary mt-3 w-full" href="/#areas" onClick={() => setMenuOpen(false)}><Plus className="h-4 w-4" aria-hidden />Nueva idea</Link>
               <div className="mobile-workspace-preferences">
                 <WorkspaceSearch fullWidth items={searchItems} />

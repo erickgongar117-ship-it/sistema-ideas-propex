@@ -9,6 +9,8 @@ datasource db {
 
 enum Role {
   ADMIN
+  DIRECCION
+  GERENTE
   MEJORA_CONTINUA
   SUPERVISOR
   CALIDAD

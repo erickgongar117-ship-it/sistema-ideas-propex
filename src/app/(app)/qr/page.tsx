@@ -4,13 +4,14 @@ import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { QrExplorer } from "@/components/qr-explorer";
 import { requireUser } from "@/lib/auth";
+import { executiveViewerRoles } from "@/lib/domain";
 import { getOrganizationStructure } from "@/lib/organization";
 import { baseUrlFromRequest, isPrivateOrLocalUrl } from "@/lib/url";
 
 
 export const metadata = { title: "Códigos QR" };
 export default async function QrPage() {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  await requireUser(executiveViewerRoles);
   const structure = await getOrganizationStructure();
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");

@@ -12,7 +12,7 @@ export default async function KaizenDashboardPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { user, canManage } = await requireKaizenAccess();
+  const { user, canManage, canViewAll } = await requireKaizenAccess();
   const query = (await searchParams) ?? {};
   const errorCode = typeof query.error === "string" ? query.error : null;
   const errorMessage = errorCode === "combinacion"
@@ -22,7 +22,7 @@ export default async function KaizenDashboardPage({
       : null;
   const projects = await prisma.kaizenProject.findMany({
     where: {
-      ...(!canManage ? { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } : {})
+      ...(!canViewAll ? { OR: [{ leaderId: user.id }, { teamMembers: { some: { userId: user.id } } }, { activities: { some: { ownerId: user.id } } }] } : {})
     },
     include: {
       leader: true,

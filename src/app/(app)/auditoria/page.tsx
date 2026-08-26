@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Clock3, FileSearch, UserRound } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
+import { executiveViewerRoles } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 
@@ -34,7 +35,7 @@ function readableAction(action: string) {
 }
 
 export default async function AuditPage() {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  await requireUser(executiveViewerRoles);
   const logs = await prisma.auditLog.findMany({ include: { user: true }, orderBy: { createdAt: "desc" }, take: 120 });
 
   return (

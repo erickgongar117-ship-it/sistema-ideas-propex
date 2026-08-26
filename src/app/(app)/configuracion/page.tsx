@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 
 
 export const metadata = { title: "Configuración" };
-const configurableRoles = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"] as const;
+const configurableRoles = ["ADMIN", "DIRECCION", "GERENTE", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"] as const;
 
 type ConfigPageProps = {
   searchParams: Promise<{ error?: string; page?: string; q?: string; status?: string; success?: string; user?: string }>;
@@ -29,6 +29,8 @@ function positivePage(value?: string) {
 
 const roleTone = {
   ADMIN: "bg-slate-950 text-white",
+  DIRECCION: "bg-red-50 text-red-800",
+  GERENTE: "bg-slate-800 text-white",
   MEJORA_CONTINUA: "bg-slate-800 text-white",
   SUPERVISOR: "bg-emerald-50 text-emerald-800",
   CALIDAD: "bg-red-50 text-red-800",

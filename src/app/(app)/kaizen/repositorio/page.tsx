@@ -21,14 +21,14 @@ function positivePage(value?: string) {
 }
 
 export default async function KaizenRepositoryPage({ searchParams }: RepositoryPageProps) {
-  const { user, canManage } = await requireKaizenAccess();
+  const { user, canViewAll } = await requireKaizenAccess();
   const query = await searchParams;
   const page = positivePage(query.page);
   const search = query.q?.trim() ?? "";
   const status = terminalStatuses.find((item) => item === query.status);
   const where: Prisma.KaizenProjectWhereInput = {
     status: status ?? { in: terminalStatuses },
-    ...(!canManage ? { OR: [
+    ...(!canViewAll ? { OR: [
       { leaderId: user.id },
       { teamMembers: { some: { userId: user.id } } },
       { activities: { some: { ownerId: user.id } } }

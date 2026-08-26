@@ -3,7 +3,7 @@ import { Download, Plus, QrCode } from "lucide-react";
 import { DashboardCommandCenter, type DashboardIdea } from "@/components/dashboard-command-center";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
-import { attendancePercent, isWorkItemOverdue, parseImpactTypes, workProgress } from "@/lib/domain";
+import { attendancePercent, executiveViewerRoles, isWorkItemOverdue, parseImpactTypes, workProgress } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 
@@ -16,7 +16,7 @@ function averageHours(rows: Array<{ idea: { createdAt: Date }; decidedAt: Date |
 }
 
 export default async function DashboardPage() {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(executiveViewerRoles);
   const [ideas, areas, supervisorApprovals, validationApprovals, kaizenProjects, genbaWalks] = await Promise.all([
     prisma.idea.findMany({
       include: { area: true, supervisor: true },
@@ -87,9 +87,9 @@ export default async function DashboardPage() {
 
       <DashboardCommandCenter
         areas={areas.map((area) => area.code)}
+        canOperate={user.role === "ADMIN" || user.role === "MEJORA_CONTINUA"}
         generatedAt={new Date().toISOString()}
         ideas={dashboardIdeas}
-        viewerRole={user.role === "ADMIN" ? "ADMIN" : "MEJORA_CONTINUA"}
         portfolio={{
           kaizen: {
             total: kaizenProjects.length,

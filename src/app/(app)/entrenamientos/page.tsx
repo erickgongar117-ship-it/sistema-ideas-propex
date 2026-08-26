@@ -27,6 +27,7 @@ import { SearchablePicker } from "@/components/searchable-picker";
 import { SectionHeading } from "@/components/section-heading";
 import { TrainingAttendanceTable } from "@/components/training-attendance-table";
 import { requireUser } from "@/lib/auth";
+import { executiveViewerRoles } from "@/lib/domain";
 import { getParticipantBalances } from "@/lib/coins";
 import { prisma } from "@/lib/prisma";
 
@@ -200,10 +201,12 @@ function messageFor(query: Awaited<TrainingPageProps["searchParams"]>) {
 }
 
 export default async function TrainingPage({ searchParams }: TrainingPageProps) {
-  const currentUser = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const currentUser = await requireUser(executiveViewerRoles);
   const query = await searchParams;
+  const canManage = currentUser.role === "ADMIN" || currentUser.role === "MEJORA_CONTINUA";
   const selectedSessionId = query.session || "";
-  const activeView = selectedSessionId ? "operation" : trainingView(query.view);
+  const requestedView = selectedSessionId ? "operation" : trainingView(query.view);
+  const activeView = !canManage && requestedView === "setup" ? "operation" : requestedView;
   const activeDirectoryView = directoryView(query.directory);
   const sessionPage = positivePage(query.sessionPage);
   const rosterPage = positivePage(query.rosterPage);
@@ -475,12 +478,12 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
           icon={<ClipboardCheck className="h-4 w-4" aria-hidden />}
           label="Sesiones"
         />
-        <WorkspaceTab
+        {canManage ? <WorkspaceTab
           active={activeView === "setup"}
           href="/entrenamientos?view=setup"
           icon={<Plus className="h-4 w-4" aria-hidden />}
           label="Preparar"
-        />
+        /> : null}
         <WorkspaceTab
           active={activeView === "directory" && activeDirectoryView === "programs"}
           count={programs.length}
@@ -566,10 +569,10 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                 <div className="border-y border-dashed border-line px-4 py-10 text-center">
                   <CalendarDays className="mx-auto h-7 w-7 text-slate-400" aria-hidden />
                   <p className="mt-3 text-sm font-extrabold text-ink">No hay sesiones con estos filtros</p>
-                  <Link className="btn btn-primary mt-4" href="/entrenamientos?view=setup">
+                  {canManage ? <Link className="btn btn-primary mt-4" href="/entrenamientos?view=setup">
                     <Plus className="h-4 w-4" aria-hidden />
                     Preparar sesion
-                  </Link>
+                  </Link> : null}
                 </div>
               ) : (
                 <div className="divide-y divide-line border-y border-line">
@@ -697,7 +700,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                     </div>
                   </div>
 
-                  <details className="details-panel mt-5">
+                  {canManage ? <details className="details-panel mt-5">
                     <summary>
                       <span className="flex min-w-0 items-center gap-2">
                         <UserPlus className="h-4 w-4 shrink-0 text-brand-700" aria-hidden />
@@ -714,7 +717,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                         sessionId={selectedSession.id}
                       />
                     </div>
-                  </details>
+                  </details> : null}
 
                   <div className="mt-6">
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
@@ -773,6 +776,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                         action={bulkUpdateTrainingEnrollmentsAction}
                         enrollments={rosterRows}
                         pendingTotal={pendingInSession}
+                        readOnly={!canManage}
                         sessionId={selectedSession.id}
                       />
                     )}
@@ -806,7 +810,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
         </>
       ) : null}
 
-      {activeView === "setup" ? (
+      {activeView === "setup" && canManage ? (
         <section aria-label="Preparar entrenamientos" className="mx-auto max-w-5xl">
           <SectionHeading
             title="Preparacion"
@@ -1050,22 +1054,22 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                       <ProbocaCoin size="sm" />
                       {program.coinValue}
                     </p>
-                    <form action={toggleTrainingProgramAction} className="md:text-right">
+                    {canManage ? <form action={toggleTrainingProgramAction} className="md:text-right">
                       <input name="programId" type="hidden" value={program.id} />
                       <input name="active" type="hidden" value={String(!program.active)} />
                       <button className="btn btn-secondary" type="submit">
                         {program.active ? "Pausar" : "Activar"}
                       </button>
-                    </form>
+                    </form> : <span className="text-right text-xs font-extrabold text-slate-500">{program.active ? "Activo" : "Pausado"}</span>}
                   </div>
                 ))}
                 {!programs.length ? (
                   <div className="py-10 text-center">
                     <p className="text-sm font-bold text-slate-500">No hay programas registrados.</p>
-                    <Link className="btn btn-primary mt-4" href="/entrenamientos?view=setup">
+                    {canManage ? <Link className="btn btn-primary mt-4" href="/entrenamientos?view=setup">
                       <Plus className="h-4 w-4" aria-hidden />
                       Crear programa
-                    </Link>
+                    </Link> : null}
                   </div>
                 ) : null}
               </div>

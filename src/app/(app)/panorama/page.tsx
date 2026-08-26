@@ -9,7 +9,7 @@ import {
 } from "@/components/executive-portfolio-dashboard";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
-import { attendancePercent, workProgress } from "@/lib/domain";
+import { attendancePercent, executiveViewerRoles, workProgress } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 
@@ -40,7 +40,7 @@ function monthBuckets(now: Date, count = 6) {
 }
 
 export default async function PanoramaPage() {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(executiveViewerRoles);
   const now = new Date();
 
   const [ideas, kaizenProjects, genbaWalks, trainingPrograms, coinTransactions, participants, users] = await Promise.all([

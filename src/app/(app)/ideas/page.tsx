@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { StatusPill } from "@/components/status-pill";
 import { requireUser } from "@/lib/auth";
-import { classificationLabels, ideaCategoryLabels, statusLabels } from "@/lib/domain";
+import { classificationLabels, executiveViewerRoles, ideaCategoryLabels, statusLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 type IdeasPageProps = {
@@ -22,7 +22,7 @@ function positivePage(value?: string) {
 }
 
 export default async function IdeasPage({ searchParams }: IdeasPageProps) {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  await requireUser(executiveViewerRoles);
   const query = await searchParams;
   const currentPage = positivePage(query.page);
   const where: Prisma.IdeaWhereInput = {};

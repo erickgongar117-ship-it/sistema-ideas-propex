@@ -5,6 +5,7 @@ import { markNotificationAction, retryNotificationAction } from "@/app/actions";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
+import { hasExecutiveVisibility } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 
@@ -25,7 +26,8 @@ const channelLabels = { EMAIL: "Correo", TEAMS: "Teams", LOCAL: "Aviso interno" 
 export default async function NotificationsPage({ searchParams }: NotificationsProps) {
   const user = await requireUser();
   const query = await searchParams;
-  const canSeeAll = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
+  const canSeeAll = hasExecutiveVisibility(user);
+  const canManageNotifications = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
   const showHistory = query.vista === "todas";
   const currentPage = Math.max(1, Number.parseInt(query.pagina ?? "1", 10) || 1);
   const pageSize = 20;
@@ -95,10 +97,10 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
                 {notification.idea ? <Link className="btn btn-secondary" href={`/ideas/${notification.idea.id}`}>Ver {notification.idea.folio}</Link> : null}
                 <div className="ml-auto flex flex-wrap gap-2">
-                  {canSeeAll && ["PENDING", "ERROR"].includes(notification.status) ? (
+                  {canManageNotifications && ["PENDING", "ERROR"].includes(notification.status) ? (
                     <form action={retryNotificationAction}><input name="notificationId" type="hidden" value={notification.id} /><button className="btn btn-secondary" type="submit"><RefreshCw className="h-4 w-4" aria-hidden />Reintentar</button></form>
                   ) : null}
-                  {notification.status !== "DISMISSED" ? (
+                  {notification.status !== "DISMISSED" && (canManageNotifications || notification.to.toLowerCase().includes(user.email.toLowerCase())) ? (
                     <form action={markNotificationAction}><input name="notificationId" type="hidden" value={notification.id} /><button className="btn btn-ghost" type="submit"><Check className="h-4 w-4" aria-hidden />Marcar revisada</button></form>
                   ) : null}
                 </div>

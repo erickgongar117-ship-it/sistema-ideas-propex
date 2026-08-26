@@ -18,6 +18,7 @@ type TrainingAttendanceTableProps = {
   action: (formData: FormData) => void | Promise<void>;
   enrollments: EnrollmentRow[];
   pendingTotal: number;
+  readOnly?: boolean;
   sessionId: string;
 };
 
@@ -27,7 +28,7 @@ function Status({ status }: { status: EnrollmentRow["status"] }) {
   return <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase ${style}`}>{label}</span>;
 }
 
-export function TrainingAttendanceTable({ action, enrollments, pendingTotal, sessionId }: TrainingAttendanceTableProps) {
+export function TrainingAttendanceTable({ action, enrollments, pendingTotal, readOnly = false, sessionId }: TrainingAttendanceTableProps) {
   const pendingVisible = enrollments.filter((enrollment) => enrollment.status === "REGISTERED");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
@@ -45,7 +46,7 @@ export function TrainingAttendanceTable({ action, enrollments, pendingTotal, ses
 
   return (
     <div>
-      {pendingTotal ? (
+      {pendingTotal && !readOnly ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-y border-line py-3">
           <div><p className="text-sm font-extrabold text-ink">Cierre de asistencia</p><p className="text-xs text-slate-500">Confirma personas seleccionadas o todos los pendientes de la sesion.</p></div>
           <form action={action} onSubmit={(event) => { if (!window.confirm(`Se completaran ${pendingTotal} entrenamientos y se entregaran ProbocaCoins. ¿Continuar?`)) event.preventDefault(); }}>
@@ -58,7 +59,7 @@ export function TrainingAttendanceTable({ action, enrollments, pendingTotal, ses
       <form action={action}>
         <input name="sessionId" type="hidden" value={sessionId} />
         {[...selected].map((id) => <input key={id} name="enrollmentIds" type="hidden" value={id} />)}
-        {pendingVisible.length ? (
+        {pendingVisible.length && !readOnly ? (
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <button className="btn btn-secondary" onClick={selectPendingVisible} type="button">Seleccionar pendientes visibles</button>
             {selected.size ? <button className="btn btn-secondary" onClick={() => setSelected(new Set())} type="button"><X className="h-4 w-4" aria-hidden />Limpiar</button> : null}
@@ -71,7 +72,7 @@ export function TrainingAttendanceTable({ action, enrollments, pendingTotal, ses
             <tbody className="divide-y divide-line">
               {enrollments.map((enrollment) => (
                 <tr className={selected.has(enrollment.id) ? "bg-red-50" : "bg-white"} key={enrollment.id}>
-                  <td className="px-2 py-3"><input aria-label={`Seleccionar ${enrollment.participant.name}`} checked={selected.has(enrollment.id)} disabled={enrollment.status !== "REGISTERED"} onChange={() => toggle(enrollment.id)} type="checkbox" /></td>
+                  <td className="px-2 py-3"><input aria-label={`Seleccionar ${enrollment.participant.name}`} checked={selected.has(enrollment.id)} disabled={readOnly || enrollment.status !== "REGISTERED"} onChange={() => toggle(enrollment.id)} type="checkbox" /></td>
                   <td className="px-2 py-3"><p className="font-extrabold text-ink">{enrollment.participant.name}</p><p className="text-xs text-slate-500">{enrollment.participant.employeeNumber ?? enrollment.participant.email ?? "Sin identificador"}</p></td>
                   <td className="px-2 py-3"><Status status={enrollment.status} /></td>
                   <td className="px-2 py-3 text-right"><span className="inline-flex items-center gap-1.5 font-extrabold tabular-nums text-ink">{enrollment.coinsAwarded ? <Coins className="h-4 w-4 text-amber-600" aria-hidden /> : null}{enrollment.coinsAwarded || "-"}</span></td>
@@ -80,7 +81,7 @@ export function TrainingAttendanceTable({ action, enrollments, pendingTotal, ses
             </tbody>
           </table>
         </div>
-        {selected.size ? (
+        {selected.size && !readOnly ? (
           <div className="mt-3 flex flex-wrap justify-end gap-2">
             <button className="btn btn-secondary" name="status" type="submit" value="CANCELLED"><Ban className="h-4 w-4" aria-hidden />Cancelar seleccionados</button>
             <button className="btn btn-success" name="status" type="submit" value="COMPLETED"><CheckCircle2 className="h-4 w-4" aria-hidden />Completar seleccionados</button>

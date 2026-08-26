@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { RepositoryList, type RepositoryEntry } from "@/components/repository-list";
 import { requireUser } from "@/lib/auth";
-import { statusLabels } from "@/lib/domain";
+import { executiveViewerRoles, statusLabels } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 type RepositoryPageProps = { searchParams: Promise<{ page?: string; q?: string; status?: string }> };
@@ -19,7 +19,7 @@ function positivePage(value?: string) {
 }
 
 export default async function IdeasRepositoryPage({ searchParams }: RepositoryPageProps) {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  await requireUser(executiveViewerRoles);
   const query = await searchParams;
   const page = positivePage(query.page);
   const search = query.q?.trim() ?? "";

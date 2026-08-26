@@ -32,11 +32,11 @@ function walkColumn(walk: {
 }
 
 export default async function GenbaKanbanPage() {
-  const { user, canManage } = await requireGenbaAccess();
+  const { user, canViewAll } = await requireGenbaAccess();
   const walks = await prisma.genbaWalk.findMany({
     where: {
       status: "ABIERTO",
-      ...(!canManage ? { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } : {})
+      ...(!canViewAll ? { OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }] } : {})
     },
     include: { activities: { include: { owner: true }, orderBy: { number: "asc" } } },
     orderBy: { visitDate: "desc" }

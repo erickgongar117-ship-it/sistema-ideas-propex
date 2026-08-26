@@ -5,12 +5,14 @@ import { AutomationPilotPanel } from "@/components/automation-pilot-panel";
 import { PageHeader } from "@/components/page-header";
 import { automationPilotConfig } from "@/lib/automation-pilot";
 import { requireUser } from "@/lib/auth";
+import { executiveViewerRoles } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 
 export const metadata = { title: "Reportes" };
 export default async function ReportsPage() {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(executiveViewerRoles);
+  const canRunAutomation = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
   const automationPilot = automationPilotConfig();
   const [ideaCount, notificationCount, overdueCount] = await Promise.all([
     prisma.idea.count(),
@@ -21,7 +23,7 @@ export default async function ReportsPage() {
   const tools = [
     { title: "Base completa de ideas", value: ideaCount, detail: "Incluye validaciones, responsables, fechas, ProbocaCoins y comentarios.", icon: FileSpreadsheet, color: "bg-emerald-50 text-emerald-700", action: <Link className="btn btn-primary w-full" href="/api/export"><Download className="h-4 w-4" aria-hidden />Descargar Excel</Link> },
     { title: "Notificaciones pendientes", value: notificationCount, detail: "Mensajes pendientes o que requieren un nuevo intento.", icon: Bell, color: "bg-blue-50 text-blue-700", action: <Link className="btn btn-secondary w-full" href="/notificaciones">Abrir notificaciones</Link> },
-    { title: "Compromisos vencidos", value: overdueCount, detail: "Ejecuta la revisión para actualizar semáforos y generar avisos.", icon: AlertTriangle, color: "bg-rose-50 text-rose-700", action: <form action={runRemindersAction}><button className="btn btn-secondary w-full" type="submit"><Play className="h-4 w-4" aria-hidden />Revisar vencimientos</button></form> }
+    { title: "Compromisos vencidos", value: overdueCount, detail: canRunAutomation ? "Ejecuta la revisión para actualizar semáforos y generar avisos." : "Consulta los compromisos que requieren atención.", icon: AlertTriangle, color: "bg-rose-50 text-rose-700", action: canRunAutomation ? <form action={runRemindersAction}><button className="btn btn-secondary w-full" type="submit"><Play className="h-4 w-4" aria-hidden />Revisar vencimientos</button></form> : <Link className="btn btn-secondary w-full" href="/vencidas">Ver compromisos</Link> }
   ];
 
   return (

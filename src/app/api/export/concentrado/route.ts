@@ -1,8 +1,9 @@
 import { requireUser } from "@/lib/auth";
 import { buildConsolidatedWorkbook } from "@/lib/consolidated-export";
+import { executiveViewerRoles } from "@/lib/domain";
 
 export async function GET() {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  await requireUser(executiveViewerRoles);
   const workbook = await buildConsolidatedWorkbook();
   const buffer = await workbook.xlsx.writeBuffer();
   const date = new Date().toISOString().slice(0, 10);

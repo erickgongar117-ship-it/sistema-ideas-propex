@@ -1,8 +1,9 @@
 import { buildIdeasWorkbook } from "@/lib/export";
 import { requireUser } from "@/lib/auth";
+import { executiveViewerRoles } from "@/lib/domain";
 
 export async function GET() {
-  await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  await requireUser(executiveViewerRoles);
   const workbook = await buildIdeasWorkbook();
   const buffer = await workbook.xlsx.writeBuffer();
   const date = new Date().toISOString().slice(0, 10);

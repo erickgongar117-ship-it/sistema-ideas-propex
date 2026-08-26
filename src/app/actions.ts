@@ -84,7 +84,7 @@ const ideaSchema = z.object({
   category: z.enum(["A", "B", "C"])
 });
 
-const userRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"];
+const userRoles: Role[] = ["ADMIN", "DIRECCION", "GERENTE", "MEJORA_CONTINUA", "SUPERVISOR", "CALIDAD", "SEGURIDAD", "MANTENIMIENTO", "COLABORADOR"];
 const emailSchema = z.string().trim().toLowerCase().email();
 
 async function userWithNormalizedEmail(email: string) {
