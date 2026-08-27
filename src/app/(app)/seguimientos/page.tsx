@@ -86,7 +86,13 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     : "TODOS";
   const errorMessage = query.error === "sin_permiso"
     ? "No puedes decidir esa idea porque no está asignada a tu ruta ni al equipo que supervisas."
-    : null;
+    : query.error === "validacion_ejecutiva_permiso"
+      ? "Esta validación ejecutiva no está asignada a tu cuenta o ya no admite esa acción."
+      : query.error === "validacion_ejecutiva_justificacion"
+        ? "Escribe una justificación suficiente para completar la decisión ejecutiva."
+        : query.error === "validacion_ejecutiva_campos"
+          ? "Agrega la información solicitada antes de reenviar la validación ejecutiva."
+          : null;
   const globalAccess = hasGlobalIdeaAccess(user) && user.role !== "DIRECCION";
   const [supervisableOrgUnitIds, manageableOrgUnitIds, moduleAccess] = await Promise.all([
     globalAccess ? Promise.resolve([]) : getSupervisableOrgUnitIds(user.id),
@@ -124,6 +130,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         implementationOwner: true,
         approvals: { include: { assignedTo: true } },
         supportRequests: { include: { assignedTo: true, orgUnit: true } },
+        executiveValidations: { include: { assignedTo: true, requestedBy: true } },
         followers: { where: { userId: user.id } },
         escalationRule: { include: { reviewerMembership: true } },
         participant: { select: { orgUnitId: true } },
@@ -187,6 +194,11 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     );
     const pendingApproval = pendingApprovals[0];
     const pendingSupport = pendingSupports[0];
+    const pendingExecutiveValidations = idea.executiveValidations.filter((validation) =>
+      (validation.assignedToId === user.id && validation.status === "PENDING") ||
+      (validation.requestedById === user.id && ["MORE_INFO", "REJECTED"].includes(validation.status))
+    );
+    const pendingExecutive = pendingExecutiveValidations[0];
     const orgUnit = idea.area.organizationUnit;
     const directInitialReview = Boolean(
       pendingInitialApproval ||
@@ -199,17 +211,18 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       (idea.escalationRule?.orgUnitId && supervisedScope.has(idea.escalationRule.orgUnitId)) ||
       (idea.participant?.orgUnitId && supervisedScope.has(idea.participant.orgUnitId))
     );
-    const supervisorAction = initialReviewStatuses.has(idea.status) && (user.role === "ADMIN" || directInitialReview || teamInitialReview);
+    const supervisorAction = user.role !== "DIRECCION" && initialReviewStatuses.has(idea.status) && (user.role === "ADMIN" || directInitialReview || teamInitialReview);
     const ownerAction = idea.implementationOwnerId === user.id && ["APROBADA_PARA_IMPLEMENTAR", "EN_IMPLEMENTACION", "VENCIDA"].includes(idea.status);
     const unassignedValidation = (user.role === "ADMIN" && pendingApprovals.some((approval) => !approval.assignedToId)) || (globalAccess && pendingSupports.some((request) => !request.assignedToId));
     const globalAction = globalAccess && mcActionStatuses.has(idea.status);
-    const needsAction = Boolean(pendingInitialApproval || pendingApproval || pendingSupport || supervisorAction || ownerAction || unassignedValidation || globalAction);
+    const needsAction = Boolean(pendingInitialApproval || pendingApproval || pendingSupport || pendingExecutive || supervisorAction || ownerAction || unassignedValidation || globalAction);
     const directAssignment = Boolean(
       idea.supervisorId === user.id ||
       idea.implementationOwnerId === user.id ||
       idea.area.supervisorId === user.id ||
       idea.approvals.some((approval) => approval.assignedToId === user.id) ||
       idea.supportRequests.some((request) => request.assignedToId === user.id) ||
+      idea.executiveValidations.some((validation) => validation.assignedToId === user.id || validation.requestedById === user.id) ||
       idea.followers.length ||
       idea.escalationRule?.reviewerMembership.userId === user.id
     );
@@ -217,11 +230,15 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     const dueDate = idea.dueDate;
     const supportLabel = pendingSupport ? `Apoyo solicitado · ${pendingSupport.orgUnit.name}` : null;
     const followerLabel = idea.followers[0]?.label;
-    const decisionCount = (supervisorAction && initialApproval ? 1 : 0) + pendingApprovals.length + pendingSupports.length;
+    const decisionCount = (supervisorAction && initialApproval ? 1 : 0) + pendingApprovals.length + pendingSupports.length + pendingExecutiveValidations.length;
     const assignment = decisionCount > 1
       ? `${decisionCount} validaciones pendientes · abre el expediente para revisar cada una`
       : supervisorAction
       ? "Aprobación como responsable directo"
+      : pendingExecutive
+        ? pendingExecutive.assignedToId === user.id
+          ? `Validación ejecutiva solicitada por ${pendingExecutive.requestedBy.name}`
+          : `${pendingExecutive.assignedTo.name} requiere tu respuesta ejecutiva`
       : pendingApproval
         ? "Validación pendiente"
         : supportLabel
@@ -236,6 +253,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     const owner = decisionCount > 1
       ? "Varios responsables"
       : pendingInitialApproval?.assignedTo?.name
+      ?? pendingExecutive?.assignedTo.name
       ?? pendingApproval?.assignedTo?.name
       ?? pendingSupport?.assignedTo?.name
       ?? idea.implementationOwner?.name
@@ -263,7 +281,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       }))
     ];
     let bulkEntityId: string | undefined;
-    if (decisionTargets.length === 1) {
+    if (decisionTargets.length === 1 && !pendingExecutive) {
       bulkActions.push("APPROVE", "REJECT");
       bulkEntityId = serializeFollowUpBulkTarget(decisionTargets[0]);
     } else if (

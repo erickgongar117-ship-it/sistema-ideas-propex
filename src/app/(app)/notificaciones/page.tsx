@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import Link from "next/link";
-import { AlertCircle, Bell, Check, Clock3, Mail, RefreshCw } from "lucide-react";
+import { AlertCircle, Bell, Check, Clock3, Crown, Mail, RefreshCw } from "lucide-react";
 import { markNotificationAction, retryNotificationAction } from "@/app/actions";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -31,7 +31,11 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
   const showHistory = query.vista === "todas";
   const currentPage = Math.max(1, Number.parseInt(query.pagina ?? "1", 10) || 1);
   const pageSize = 20;
-  const personalWhere: Prisma.NotificationOutboxWhereInput = canSeeAll ? {} : { to: { contains: user.email } };
+  const personalWhere: Prisma.NotificationOutboxWhereInput = canSeeAll
+    ? {}
+    : user.role === "DIRECCION"
+      ? { to: { contains: user.email }, audience: "EXECUTIVE_VALIDATION" }
+      : { to: { contains: user.email } };
   const activeWhere: Prisma.NotificationOutboxWhereInput = { ...personalWhere, status: { in: ["PENDING", "ERROR"] } };
   const viewWhere = showHistory ? personalWhere : activeWhere;
   const [notifications, pendingCount, viewCount] = await Promise.all([
@@ -53,7 +57,7 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
       <PageHeader
         eyebrow="Avisos · Actividad del sistema"
         title="Notificaciones"
-        description={user.role === "DIRECCION" ? "Dirección conserva visibilidad ejecutiva, sin recibir avisos operativos." : canSeeAll ? "Avisos generados por el flujo y estado de los envíos de correo." : `Avisos dirigidos a ${user.email}.`}
+        description={user.role === "DIRECCION" ? "Dirección no recibe avisos operativos; aquí solo aparecen validaciones ejecutivas solicitadas expresamente." : canSeeAll ? "Avisos generados por el flujo y estado de los envíos de correo." : `Avisos dirigidos a ${user.email}.`}
       />
 
       <section className="mb-6 grid gap-4 lg:grid-cols-[280px_1fr]">
@@ -77,12 +81,16 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
         {notifications.map((notification) => {
           const meta = statusMeta[notification.status];
           const StatusIcon = meta.icon;
+          const isExecutive = notification.audience === "EXECUTIVE_VALIDATION";
           return (
-            <article className={`surface min-w-0 overflow-hidden rounded-lg border-l-4 p-4 sm:p-5 ${notification.status === "ERROR" ? "border-l-rose-600" : notification.status === "PENDING" ? "border-l-amber-500" : "border-l-emerald-600"}`} key={notification.id}>
+            <article className={`surface min-w-0 overflow-hidden rounded-lg border-l-4 p-4 sm:p-5 ${isExecutive ? "border-l-slate-950" : notification.status === "ERROR" ? "border-l-rose-600" : notification.status === "PENDING" ? "border-l-amber-500" : "border-l-emerald-600"}`} key={notification.id}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700"><Mail className="h-5 w-5" aria-hidden /></span>
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${isExecutive ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-700"}`}>
+                    {isExecutive ? <Crown className="h-5 w-5" aria-hidden /> : <Mail className="h-5 w-5" aria-hidden />}
+                  </span>
                   <div className="min-w-0">
+                    {isExecutive ? <p className="mb-1 text-[10px] font-extrabold uppercase text-slate-600">Validación ejecutiva</p> : null}
                     <p className="text-sm font-extrabold leading-5 text-ink">{notification.subject}</p>
                     <p className="mt-1 break-all text-xs text-slate-500">{channelLabels[notification.channel]} · {notification.to}</p>
                   </div>

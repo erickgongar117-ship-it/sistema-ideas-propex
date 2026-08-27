@@ -104,6 +104,24 @@ enum NotificationStatus {
   DISMISSED
 }
 
+enum NotificationAudience {
+  OPERATIONAL
+  EXECUTIVE_VALIDATION
+}
+
+enum ExecutiveValidationLevel {
+  DIRECTOR
+  CEO
+}
+
+enum ExecutiveValidationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  MORE_INFO
+  CANCELLED
+}
+
 enum KaizenStatus {
   PENDIENTE_CHARTER
   PLANIFICACION
@@ -167,43 +185,45 @@ enum CoinSourceType {
 }
 
 model User {
-  id                      String               @id @default(cuid())
-  name                    String
-  email                   String               @unique
-  role                    Role
-  passwordHash            String
-  active                  Boolean              @default(true)
-  kaizenAccess            Boolean              @default(false)
-  genbaAccess             Boolean              @default(false)
-  jobTitle                String?
-  employeeNumber          String?              @unique
-  createdAt               DateTime             @default(now())
-  updatedAt               DateTime             @updatedAt
-  supervisedAreas         Area[]               @relation("AreaSupervisor")
-  supervisedIdeas         Idea[]               @relation("IdeaSupervisor")
-  ownedImplementations    Idea[]               @relation("ImplementationOwner")
-  approvals               Approval[]
-  comments                Comment[]
-  auditLogs               AuditLog[]
-  ledKaizenProjects       KaizenProject[]      @relation("KaizenLeader")
-  createdKaizenProjects   KaizenProject[]      @relation("KaizenCreator")
-  closedKaizenProjects    KaizenProject[]      @relation("KaizenCloser")
-  kaizenTeamMemberships   KaizenTeamMember[]   @relation("KaizenTeamMemberUser")
-  ownedKaizenActivities   KaizenActivity[]     @relation("KaizenActivityOwner")
-  kaizenUpdates           KaizenUpdate[]
-  coordinatedGenbaWalks   GenbaWalk[]          @relation("GenbaCoordinator")
-  createdGenbaWalks       GenbaWalk[]          @relation("GenbaCreator")
-  ownedGenbaActivities    GenbaActivity[]      @relation("GenbaActivityOwner")
-  genbaUpdates            GenbaUpdate[]
-  routedOrgUnits          OrgUnit[]            @relation("OrgUnitRoutingUser")
-  orgMemberships          OrgMembership[]
-  assignedSupportIdeas    IdeaSupportRequest[] @relation("IdeaSupportAssignee")
-  followedIdeas           IdeaFollower[]       @relation("IdeaFollowerUser")
-  createdIdeaFollowers    IdeaFollower[]       @relation("IdeaFollowerCreator")
-  participant             Participant?
-  createdTrainingPrograms TrainingProgram[]    @relation("TrainingProgramCreator")
-  createdTrainingSessions TrainingSession[]    @relation("TrainingSessionCreator")
-  createdCoinTransactions CoinTransaction[]    @relation("CoinTransactionCreator")
+  id                            String                @id @default(cuid())
+  name                          String
+  email                         String                @unique
+  role                          Role
+  passwordHash                  String
+  active                        Boolean               @default(true)
+  kaizenAccess                  Boolean               @default(false)
+  genbaAccess                   Boolean               @default(false)
+  jobTitle                      String?
+  employeeNumber                String?               @unique
+  createdAt                     DateTime              @default(now())
+  updatedAt                     DateTime              @updatedAt
+  supervisedAreas               Area[]                @relation("AreaSupervisor")
+  supervisedIdeas               Idea[]                @relation("IdeaSupervisor")
+  ownedImplementations          Idea[]                @relation("ImplementationOwner")
+  approvals                     Approval[]
+  comments                      Comment[]
+  auditLogs                     AuditLog[]
+  ledKaizenProjects             KaizenProject[]       @relation("KaizenLeader")
+  createdKaizenProjects         KaizenProject[]       @relation("KaizenCreator")
+  closedKaizenProjects          KaizenProject[]       @relation("KaizenCloser")
+  kaizenTeamMemberships         KaizenTeamMember[]    @relation("KaizenTeamMemberUser")
+  ownedKaizenActivities         KaizenActivity[]      @relation("KaizenActivityOwner")
+  kaizenUpdates                 KaizenUpdate[]
+  coordinatedGenbaWalks         GenbaWalk[]           @relation("GenbaCoordinator")
+  createdGenbaWalks             GenbaWalk[]           @relation("GenbaCreator")
+  ownedGenbaActivities          GenbaActivity[]       @relation("GenbaActivityOwner")
+  genbaUpdates                  GenbaUpdate[]
+  routedOrgUnits                OrgUnit[]             @relation("OrgUnitRoutingUser")
+  orgMemberships                OrgMembership[]
+  assignedSupportIdeas          IdeaSupportRequest[]  @relation("IdeaSupportAssignee")
+  followedIdeas                 IdeaFollower[]        @relation("IdeaFollowerUser")
+  createdIdeaFollowers          IdeaFollower[]        @relation("IdeaFollowerCreator")
+  participant                   Participant?
+  createdTrainingPrograms       TrainingProgram[]     @relation("TrainingProgramCreator")
+  createdTrainingSessions       TrainingSession[]     @relation("TrainingSessionCreator")
+  createdCoinTransactions       CoinTransaction[]     @relation("CoinTransactionCreator")
+  requestedExecutiveValidations ExecutiveValidation[] @relation("ExecutiveValidationRequester")
+  assignedExecutiveValidations  ExecutiveValidation[] @relation("ExecutiveValidationAssignee")
 
   @@index([active, name])
   @@index([role, active])
@@ -267,8 +287,8 @@ model OrgUnit {
 }
 
 model Idea {
-  id                      String               @id @default(cuid())
-  folio                   String               @unique
+  id                      String                @id @default(cuid())
+  folio                   String                @unique
   collaboratorName        String
   collaboratorEmail       String?
   employeeNumber          String?
@@ -278,43 +298,44 @@ model Idea {
   proposal                String
   expectedBenefit         String
   impactTypes             String
-  category                IdeaCategory         @default(A)
-  impactsQuality          Boolean              @default(false)
-  impactsSafety           Boolean              @default(false)
-  requiresMaintenance     Boolean              @default(false)
-  requiresExternalSupport Boolean              @default(false)
+  category                IdeaCategory          @default(A)
+  impactsQuality          Boolean               @default(false)
+  impactsSafety           Boolean               @default(false)
+  requiresMaintenance     Boolean               @default(false)
+  requiresExternalSupport Boolean               @default(false)
   externalSupportDetails  String?
   priority                Priority?
   classification          Classification?
-  status                  IdeaStatus           @default(EN_REVISION_SUPERVISOR)
+  status                  IdeaStatus            @default(EN_REVISION_SUPERVISOR)
   supervisorId            String?
   implementationOwnerId   String?
   dueDate                 DateTime?
-  requiresEvidence        Boolean              @default(true)
+  requiresEvidence        Boolean               @default(true)
   implementedAt           DateTime?
   closedAt                DateTime?
-  pointsAssigned          Int                  @default(0)
+  pointsAssigned          Int                   @default(0)
   rejectionReason         String?
   moreInfoRequest         String?
   mcComments              String?
   escalationRuleId        String?
   submitterPosition       String?
   participantId           String?
-  createdAt               DateTime             @default(now())
-  updatedAt               DateTime             @updatedAt
-  area                    Area                 @relation(fields: [areaId], references: [id])
-  supervisor              User?                @relation("IdeaSupervisor", fields: [supervisorId], references: [id])
-  implementationOwner     User?                @relation("ImplementationOwner", fields: [implementationOwnerId], references: [id])
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  area                    Area                  @relation(fields: [areaId], references: [id])
+  supervisor              User?                 @relation("IdeaSupervisor", fields: [supervisorId], references: [id])
+  implementationOwner     User?                 @relation("ImplementationOwner", fields: [implementationOwnerId], references: [id])
   approvals               Approval[]
   attachments             Attachment[]
   comments                Comment[]
   pointRuleSelections     IdeaPointRule[]
   notifications           NotificationOutbox[]
   kaizenProject           KaizenProject?
-  escalationRule          OrgEscalationRule?   @relation(fields: [escalationRuleId], references: [id], onDelete: SetNull)
-  participant             Participant?         @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  escalationRule          OrgEscalationRule?    @relation(fields: [escalationRuleId], references: [id], onDelete: SetNull)
+  participant             Participant?          @relation(fields: [participantId], references: [id], onDelete: SetNull)
   supportRequests         IdeaSupportRequest[]
   followers               IdeaFollower[]
+  executiveValidations    ExecutiveValidation[]
 
   @@index([status, createdAt])
   @@index([areaId, createdAt])
@@ -563,18 +584,44 @@ model IdeaPointRule {
   @@unique([ideaId, pointRuleId])
 }
 
+model ExecutiveValidation {
+  id                 String                    @id @default(cuid())
+  ideaId             String
+  requestedById      String
+  assignedToId       String
+  level              ExecutiveValidationLevel
+  status             ExecutiveValidationStatus @default(PENDING)
+  requestNote        String
+  decisionComment    String?
+  cancellationReason String?
+  decidedAt          DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  idea               Idea                      @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  requestedBy        User                      @relation("ExecutiveValidationRequester", fields: [requestedById], references: [id])
+  assignedTo         User                      @relation("ExecutiveValidationAssignee", fields: [assignedToId], references: [id])
+
+  @@index([ideaId, status])
+  @@index([assignedToId, status])
+  @@index([requestedById, status])
+}
+
 model NotificationOutbox {
-  id           String              @id @default(cuid())
+  id           String               @id @default(cuid())
   ideaId       String?
   channel      NotificationChannel
+  audience     NotificationAudience @default(OPERATIONAL)
   to           String
   subject      String
   body         String
-  status       NotificationStatus  @default(PENDING)
+  status       NotificationStatus   @default(PENDING)
   errorMessage String?
   sentAt       DateTime?
-  createdAt    DateTime            @default(now())
-  idea         Idea?               @relation(fields: [ideaId], references: [id], onDelete: SetNull)
+  createdAt    DateTime             @default(now())
+  idea         Idea?                @relation(fields: [ideaId], references: [id], onDelete: SetNull)
+
+  @@index([audience, status, createdAt])
 }
 
 model AuditLog {

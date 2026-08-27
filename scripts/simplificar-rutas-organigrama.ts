@@ -234,7 +234,7 @@ async function directorOperationalAssignments() {
 async function cleanDirectorNotifications(directorEmails: string[]) {
   if (!directorEmails.length) return 0;
   const blocked = new Set(directorEmails.map(normalizeEmail));
-  const notices = await prisma.notificationOutbox.findMany({ where: { status: { in: ["PENDING", "ERROR"] } } });
+  const notices = await prisma.notificationOutbox.findMany({ where: { audience: "OPERATIONAL", status: { in: ["PENDING", "ERROR"] } } });
   let changed = 0;
   for (const notice of notices) {
     const recipients = notice.to.split(/[;,]/).map((recipient) => recipient.trim()).filter(Boolean);

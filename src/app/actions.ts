@@ -11,6 +11,14 @@ import { clearSession, requireUser, setSession } from "@/lib/auth";
 import { areOperationalUsers, operationalUserWhere } from "@/lib/director-policy";
 import { genbaDepartments, impactOptions, kaizenStatusLabels, nextValidationStatus, requiredApprovalTypes, roleHomePath, validationOrder } from "@/lib/domain";
 import { EmployeeNumberValidationError, normalizeEmployeeNumber } from "@/lib/employee-number";
+import {
+  blocksIdeaClosure,
+  canRequestExecutiveValidation,
+  canTargetExecutive,
+  executiveValidationLevelFor,
+  executiveValidationLevelLabels,
+  isCeoUser
+} from "@/lib/executive-validation";
 import { saveUpload } from "@/lib/files";
 import { createKaizenFromIdea } from "@/lib/kaizen-from-idea";
 import { managerialFactorForRule } from "@/lib/managerial-evaluation";
@@ -57,6 +65,9 @@ async function requireOperationalAssignees(userIds: Array<string | null | undefi
 class KaizenAlreadyClosedError extends Error {}
 class KaizenPermissionChangedError extends Error {}
 class BulkFollowUpConflictError extends Error {}
+class ExecutiveValidationDuplicateError extends Error {}
+class ExecutiveValidationStateError extends Error {}
+class ExecutiveValidationBlocksClosureError extends Error {}
 const terminalSourceIdeaStatuses: IdeaStatus[] = ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION", "CERRADA", "CANCELADA"];
 class GenbaWalkClosedError extends Error {
   constructor(readonly walkId: string) {
@@ -1178,6 +1189,251 @@ export async function supportDecisionAction(formData: FormData) {
   redirect(`/ideas/${request.ideaId}`);
 }
 
+export async function requestExecutiveValidationAction(formData: FormData) {
+  const user = await requireUser();
+  const ideaId = text(formData, "ideaId");
+  const requestNote = text(formData, "requestNote");
+  const targetUserIds = [...new Set(formData.getAll("targetUserIds").map(String).filter(Boolean))];
+  if (!ideaId || requestNote.length < 10 || !targetUserIds.length) {
+    redirect(`/ideas/${ideaId}?error=validacion_ejecutiva_campos`);
+  }
+
+  const idea = await prisma.idea.findUnique({
+    where: { id: ideaId },
+    include: { area: true }
+  });
+  if (!idea || ["CERRADA", "CANCELADA"].includes(idea.status)) redirect(`/ideas/${ideaId}?error=validacion_ejecutiva_estado`);
+  if (!(await canRequestExecutiveValidation(user, ideaId))) redirect(`/ideas/${ideaId}?error=validacion_ejecutiva_permiso`);
+
+  const targets = await prisma.user.findMany({
+    where: { id: { in: targetUserIds } },
+    select: { id: true, name: true, email: true, role: true, active: true, jobTitle: true }
+  });
+  if (targets.length !== targetUserIds.length || targets.some((target) => !canTargetExecutive(user, target))) {
+    redirect(`/ideas/${ideaId}?error=validacion_ejecutiva_destino`);
+  }
+
+  const created = await serializableTransaction(async (transaction) => {
+    const currentIdea = await transaction.idea.findUnique({ where: { id: ideaId }, select: { status: true } });
+    if (!currentIdea || ["CERRADA", "CANCELADA"].includes(currentIdea.status)) throw new ExecutiveValidationStateError();
+    const existing = await transaction.executiveValidation.findFirst({
+      where: {
+        ideaId,
+        assignedToId: { in: targetUserIds },
+        status: { not: "CANCELLED" }
+      },
+      select: { id: true }
+    });
+    if (existing) throw new ExecutiveValidationDuplicateError();
+    return Promise.all(targets.map((target) => transaction.executiveValidation.create({
+      data: {
+        ideaId,
+        requestedById: user.id,
+        assignedToId: target.id,
+        level: executiveValidationLevelFor(target),
+        requestNote
+      }
+    })));
+  }).catch((error) => {
+    if (error instanceof ExecutiveValidationDuplicateError) redirect(`/ideas/${ideaId}?error=validacion_ejecutiva_duplicada`);
+    if (error instanceof ExecutiveValidationStateError) redirect(`/ideas/${ideaId}?error=validacion_ejecutiva_estado`);
+    throw error;
+  });
+
+  await auditLog({
+    entity: "Idea",
+    entityId: ideaId,
+    action: "EXECUTIVE_VALIDATION_REQUESTED",
+    userId: user.id,
+    details: { requestIds: created.map((request) => request.id), targetUserIds, requestNote }
+  });
+  for (const target of targets) {
+    const level = executiveValidationLevelFor(target);
+    await notify({
+      ideaId,
+      to: target.email,
+      audience: "EXECUTIVE_VALIDATION",
+      subject: `Validacion ejecutiva solicitada - ${idea.folio}`,
+      body: ideaMailBody({
+        folio: idea.folio,
+        area: idea.area.code,
+        problem: idea.problem,
+        proposal: idea.proposal,
+        action: `${user.name} solicita validacion de ${executiveValidationLevelLabels[level]}. Motivo: ${requestNote}`,
+        ideaId
+      })
+    });
+  }
+
+  revalidatePath("/seguimientos");
+  revalidatePath("/notificaciones");
+  revalidatePath(`/ideas/${ideaId}`);
+  redirect(`/ideas/${ideaId}?success=validacion_ejecutiva_solicitada`);
+}
+
+export async function decideExecutiveValidationAction(formData: FormData) {
+  const user = await requireUser();
+  const validationId = text(formData, "validationId");
+  const decision = text(formData, "decision");
+  const comments = text(formData, "comments");
+  if (!validationId || !["APROBAR", "RECHAZAR", "SOLICITAR_INFORMACION"].includes(decision)) redirect("/seguimientos");
+  if ((decision === "RECHAZAR" || decision === "SOLICITAR_INFORMACION") && comments.length < 5) {
+    redirect("/seguimientos?error=validacion_ejecutiva_justificacion");
+  }
+
+  const validation = await prisma.executiveValidation.findUnique({
+    where: { id: validationId },
+    include: { idea: { include: { area: true } }, requestedBy: true, assignedTo: true }
+  });
+  if (!validation || validation.assignedToId !== user.id) redirect("/seguimientos?error=validacion_ejecutiva_permiso");
+  const validRecipient = validation.level === "CEO"
+    ? isCeoUser(user)
+    : user.role === "DIRECCION" && !isCeoUser(user);
+  if (!validRecipient || validation.status !== "PENDING") {
+    redirect(`/ideas/${validation.ideaId}?error=validacion_ejecutiva_estado`);
+  }
+
+  const status = decision === "APROBAR" ? "APPROVED" : decision === "RECHAZAR" ? "REJECTED" : "MORE_INFO";
+  const updated = await prisma.executiveValidation.updateMany({
+    where: { id: validation.id, assignedToId: user.id, status: "PENDING" },
+    data: { status, decisionComment: comments || null, decidedAt: new Date() }
+  });
+  if (updated.count !== 1) redirect(`/ideas/${validation.ideaId}?error=validacion_ejecutiva_estado`);
+
+  await auditLog({
+    entity: "ExecutiveValidation",
+    entityId: validation.id,
+    action: `EXECUTIVE_VALIDATION_${decision}`,
+    userId: user.id,
+    details: { ideaId: validation.ideaId, comments }
+  });
+  await notify({
+    ideaId: validation.ideaId,
+    to: validation.requestedBy.email,
+    audience: "EXECUTIVE_VALIDATION",
+    subject: `Validacion ejecutiva ${status === "APPROVED" ? "aprobada" : status === "REJECTED" ? "rechazada" : "requiere informacion"} - ${validation.idea.folio}`,
+    body: ideaMailBody({
+      folio: validation.idea.folio,
+      area: validation.idea.area.code,
+      problem: validation.idea.problem,
+      proposal: validation.idea.proposal,
+      action: `${user.name}: ${comments || decision}`,
+      ideaId: validation.ideaId
+    })
+  });
+
+  revalidatePath("/seguimientos");
+  revalidatePath("/notificaciones");
+  revalidatePath(`/ideas/${validation.ideaId}`);
+  redirect(`/ideas/${validation.ideaId}?success=validacion_ejecutiva_decidida`);
+}
+
+export async function resubmitExecutiveValidationAction(formData: FormData) {
+  const user = await requireUser();
+  const validationId = text(formData, "validationId");
+  const response = text(formData, "response");
+  if (!validationId || response.length < 10) redirect("/seguimientos?error=validacion_ejecutiva_campos");
+
+  const validation = await prisma.executiveValidation.findUnique({
+    where: { id: validationId },
+    include: { idea: { include: { area: true } }, assignedTo: true }
+  });
+  if (!validation || validation.requestedById !== user.id || !["MORE_INFO", "REJECTED"].includes(validation.status)) {
+    redirect("/seguimientos?error=validacion_ejecutiva_permiso");
+  }
+  if (!(await canRequestExecutiveValidation(user, validation.ideaId))) {
+    redirect(`/ideas/${validation.ideaId}?error=validacion_ejecutiva_permiso`);
+  }
+
+  const previousStatus = validation.status;
+  const previousComment = validation.decisionComment;
+  const updated = await prisma.executiveValidation.updateMany({
+    where: { id: validation.id, requestedById: user.id, status: { in: ["MORE_INFO", "REJECTED"] } },
+    data: {
+      status: "PENDING",
+      requestNote: `${validation.requestNote}\n\nInformacion adicional de ${user.name}: ${response}`,
+      decisionComment: null,
+      decidedAt: null
+    }
+  });
+  if (updated.count !== 1) redirect(`/ideas/${validation.ideaId}?error=validacion_ejecutiva_estado`);
+
+  await auditLog({
+    entity: "ExecutiveValidation",
+    entityId: validation.id,
+    action: "EXECUTIVE_VALIDATION_RESUBMITTED",
+    userId: user.id,
+    details: { ideaId: validation.ideaId, previousStatus, previousComment, response }
+  });
+  await notify({
+    ideaId: validation.ideaId,
+    to: validation.assignedTo.email,
+    audience: "EXECUTIVE_VALIDATION",
+    subject: `Validacion ejecutiva reenviada - ${validation.idea.folio}`,
+    body: ideaMailBody({
+      folio: validation.idea.folio,
+      area: validation.idea.area.code,
+      problem: validation.idea.problem,
+      proposal: validation.idea.proposal,
+      action: `${user.name} agrego informacion: ${response}`,
+      ideaId: validation.ideaId
+    })
+  });
+
+  revalidatePath("/seguimientos");
+  revalidatePath("/notificaciones");
+  revalidatePath(`/ideas/${validation.ideaId}`);
+  redirect(`/ideas/${validation.ideaId}?success=validacion_ejecutiva_reenviada`);
+}
+
+export async function cancelExecutiveValidationAction(formData: FormData) {
+  const user = await requireUser();
+  const validationId = text(formData, "validationId");
+  const reason = text(formData, "reason");
+  if (!validationId || reason.length < 5) redirect("/seguimientos?error=validacion_ejecutiva_justificacion");
+
+  const validation = await prisma.executiveValidation.findUnique({
+    where: { id: validationId },
+    include: { idea: { include: { area: true } }, assignedTo: true }
+  });
+  if (!validation || validation.requestedById !== user.id || !["PENDING", "MORE_INFO"].includes(validation.status)) {
+    redirect("/seguimientos?error=validacion_ejecutiva_permiso");
+  }
+
+  const updated = await prisma.executiveValidation.updateMany({
+    where: { id: validation.id, requestedById: user.id, status: { in: ["PENDING", "MORE_INFO"] } },
+    data: { status: "CANCELLED", cancellationReason: reason, cancelledAt: new Date() }
+  });
+  if (updated.count !== 1) redirect(`/ideas/${validation.ideaId}?error=validacion_ejecutiva_estado`);
+
+  await auditLog({
+    entity: "ExecutiveValidation",
+    entityId: validation.id,
+    action: "EXECUTIVE_VALIDATION_CANCELLED",
+    userId: user.id,
+    details: { ideaId: validation.ideaId, reason }
+  });
+  await notify({
+    ideaId: validation.ideaId,
+    to: validation.assignedTo.email,
+    audience: "EXECUTIVE_VALIDATION",
+    subject: `Validacion ejecutiva cancelada - ${validation.idea.folio}`,
+    body: ideaMailBody({
+      folio: validation.idea.folio,
+      area: validation.idea.area.code,
+      problem: validation.idea.problem,
+      proposal: validation.idea.proposal,
+      action: `${user.name} cancelo la solicitud. Motivo: ${reason}`,
+      ideaId: validation.ideaId
+    })
+  });
+
+  revalidatePath("/seguimientos");
+  revalidatePath("/notificaciones");
+  revalidatePath(`/ideas/${validation.ideaId}`);
+  redirect(`/ideas/${validation.ideaId}?success=validacion_ejecutiva_cancelada`);
+}
+
 export async function reopenRejectedIdeaAction(formData: FormData) {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const ideaId = text(formData, "ideaId");
@@ -1443,12 +1699,15 @@ export async function closeIdeaAction(formData: FormData) {
   const selectedRuleIds = new Set(formData.getAll("pointRuleIds").map(String));
   const idea = await prisma.idea.findUniqueOrThrow({
     where: { id: ideaId },
-    include: { approvals: true, attachments: true }
+    include: { approvals: true, attachments: true, executiveValidations: { select: { status: true } } }
   });
   const wasClosed = idea.status === "CERRADA";
 
   const hasAfterEvidence = idea.attachments.some((attachment) => attachment.type === "AFTER");
   if (!wasClosed && idea.requiresEvidence && !hasAfterEvidence) redirect(`/ideas/${ideaId}?error=evidencia`);
+  if (!wasClosed && idea.executiveValidations.some((validation) => blocksIdeaClosure(validation.status))) {
+    redirect(`/ideas/${ideaId}?error=validacion_ejecutiva_pendiente`);
+  }
 
   const activeRules = await prisma.pointRule.findMany({
     where: { active: true },
@@ -1473,6 +1732,12 @@ export async function closeIdeaAction(formData: FormData) {
   }
   const totalPoints = selectedRules.reduce((sum, rule) => sum + (pointAdjustments.get(rule.id) ?? rule.points), 0);
   await serializableTransaction(async (transaction) => {
+    if (!wasClosed) {
+      const blockingExecutiveCount = await transaction.executiveValidation.count({
+        where: { ideaId, status: { notIn: ["APPROVED", "CANCELLED"] } }
+      });
+      if (blockingExecutiveCount) throw new ExecutiveValidationBlocksClosureError();
+    }
     await transaction.ideaPointRule.deleteMany({ where: { ideaId } });
     for (const rule of selectedRules) {
       await transaction.ideaPointRule.create({
@@ -1528,6 +1793,9 @@ export async function closeIdeaAction(formData: FormData) {
         }
       });
     }
+  }).catch((error) => {
+    if (error instanceof ExecutiveValidationBlocksClosureError) redirect(`/ideas/${ideaId}?error=validacion_ejecutiva_pendiente`);
+    throw error;
   });
   await auditLog({
     entity: "Idea",
@@ -2949,7 +3217,7 @@ export async function updateUserAction(formData: FormData) {
       const updated = await tx.user.update({ where: { id: userId }, data });
       if (updated.role === "DIRECCION") {
         await tx.notificationOutbox.updateMany({
-          where: { to: { in: [...new Set([currentUser.email, updated.email])] }, status: { in: ["PENDING", "ERROR"] } },
+          where: { to: { in: [...new Set([currentUser.email, updated.email])] }, audience: "OPERATIONAL", status: { in: ["PENDING", "ERROR"] } },
           data: { status: "DISMISSED", errorMessage: "Direccion conserva consulta y no recibe avisos operativos." }
         });
       } else if (currentUser.email !== updated.email) {
@@ -3023,7 +3291,9 @@ export async function deleteInactiveUserAction(formData: FormData) {
           createdIdeaFollowers: true,
           createdTrainingPrograms: true,
           createdTrainingSessions: true,
-          createdCoinTransactions: true
+          createdCoinTransactions: true,
+          requestedExecutiveValidations: true,
+          assignedExecutiveValidations: true
         }
       }
     }
@@ -3090,7 +3360,8 @@ export async function retryNotificationAction(formData: FormData) {
     to: notification.to,
     subject: notification.subject,
     body: notification.body,
-    channels: [notification.channel]
+    channels: [notification.channel],
+    audience: notification.audience
   });
   await prisma.notificationOutbox.update({ where: { id: notification.id }, data: { status: "DISMISSED" } });
   revalidatePath("/notificaciones");

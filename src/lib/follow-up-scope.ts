@@ -29,6 +29,19 @@ function viewWhere<T>(base: T, pending: T, direct: T, view: FollowUpView): T {
 
 export function followUpIdeaWhere(input: ScopeInput, view: FollowUpView): Prisma.IdeaWhereInput {
   const { user, globalAccess, supervisableOrgUnitIds } = input;
+  if (user.role === "DIRECCION") {
+    const pending: Prisma.IdeaWhereInput = {
+      OR: [
+        { executiveValidations: { some: { assignedToId: user.id, status: "PENDING" } } },
+        { executiveValidations: { some: { requestedById: user.id, status: { in: ["MORE_INFO", "REJECTED"] } } } }
+      ]
+    };
+    const direct: Prisma.IdeaWhereInput = {
+      executiveValidations: { some: { OR: [{ assignedToId: user.id }, { requestedById: user.id }] } }
+    };
+    return viewWhere({}, pending, direct, view);
+  }
+
   const base = buildIdeaVisibilityWhere(user, supervisableOrgUnitIds);
   const initialAssignment = buildInitialReviewWhere(user, supervisableOrgUnitIds);
   const pendingOptions: Prisma.IdeaWhereInput[] = [
@@ -40,6 +53,8 @@ export function followUpIdeaWhere(input: ScopeInput, view: FollowUpView): Prisma
     },
     { approvals: { some: { assignedToId: user.id, status: { in: ["PENDING", "MORE_INFO"] } } } },
     { supportRequests: { some: { assignedToId: user.id, activatedAt: { not: null }, status: { in: ["PENDING", "MORE_INFO"] } } } },
+    { executiveValidations: { some: { assignedToId: user.id, status: "PENDING" } } },
+    { executiveValidations: { some: { requestedById: user.id, status: { in: ["MORE_INFO", "REJECTED"] } } } },
     { implementationOwnerId: user.id, status: { in: implementationStatuses } }
   ];
 
@@ -61,6 +76,7 @@ export function followUpIdeaWhere(input: ScopeInput, view: FollowUpView): Prisma
       { area: { is: { supervisorId: user.id } } },
       { approvals: { some: { assignedToId: user.id } } },
       { supportRequests: { some: { assignedToId: user.id } } },
+      { executiveValidations: { some: { OR: [{ assignedToId: user.id }, { requestedById: user.id }] } } },
       { followers: { some: { userId: user.id } } },
       { escalationRule: { is: { reviewerMembership: { is: { userId: user.id, active: true } } } } }
     ]
@@ -74,6 +90,7 @@ export function followUpKaizenWhere(
   view: FollowUpView
 ): Prisma.KaizenProjectWhereInput {
   const { user, globalAccess, supervisableOrgUnitIds, manageableOrgUnitIds, hasAccess } = input;
+  if (user.role === "DIRECCION") return { id: "__no_director_operational_kaizen__" };
   if (!hasAccess) return { id: "__no_kaizen_access__" };
 
   const memberScope = supervisableOrgUnitIds.length
@@ -120,6 +137,7 @@ export function followUpGenbaWhere(
   view: FollowUpView
 ): Prisma.GenbaWalkWhereInput {
   const { user, globalAccess, supervisableOrgUnitIds, manageableOrgUnitIds, hasAccess } = input;
+  if (user.role === "DIRECCION") return { id: "__no_director_operational_genba__" };
   if (!hasAccess) return { id: "__no_genba_access__" };
 
   const memberScope = supervisableOrgUnitIds.length

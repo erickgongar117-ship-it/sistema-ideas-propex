@@ -664,7 +664,7 @@ async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
     const directorEmails = directors.map((director) => director.email.trim().toLowerCase());
     if (directorEmails.length) {
       await database.notificationOutbox.updateMany({
-        where: { to: { in: directorEmails }, status: { in: ["PENDING", "ERROR"] } },
+        where: { to: { in: directorEmails }, audience: "OPERATIONAL", status: { in: ["PENDING", "ERROR"] } },
         data: { status: "DISMISSED", errorMessage: "Direccion conserva consulta y no recibe avisos operativos." }
       });
     }

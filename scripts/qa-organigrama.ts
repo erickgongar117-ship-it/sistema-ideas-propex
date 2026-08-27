@@ -2,9 +2,10 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const CEO_EMAIL = "osbaldo.montano@proboca.net";
 
 async function main() {
-  const [users, memberships, qrUnits, generatedRoutes, activeRoutes, directorFollowers, pendingNotices] = await Promise.all([
+  const [users, memberships, qrUnits, generatedRoutes, activeRoutes, directorFollowers, pendingNotices, executiveValidations] = await Promise.all([
     prisma.user.findMany({ select: { id: true, email: true, name: true, role: true, jobTitle: true } }),
     prisma.orgMembership.findMany({
       where: { active: true },
@@ -44,7 +45,10 @@ async function main() {
     }),
     prisma.notificationOutbox.findMany({
       where: { status: { in: ["PENDING", "ERROR"] } },
-      select: { id: true, to: true, subject: true, status: true }
+      select: { id: true, to: true, subject: true, status: true, audience: true }
+    }),
+    prisma.executiveValidation.findMany({
+      include: { requestedBy: true, assignedTo: true, idea: { select: { folio: true } } }
     })
   ]);
 
@@ -119,8 +123,20 @@ async function main() {
     .filter((membership) => directorIds.has(membership.userId) && (membership.canReceiveIdeas || membership.canReviewTeam || membership.canManageActivities))
     .map((membership) => ({ unit: membership.orgUnit.code, director: membership.user.name }));
   const directorNotifications = pendingNotices.filter((notice) =>
+    notice.audience === "OPERATIONAL" &&
     notice.to.split(/[;,]/).some((recipient) => directorEmails.has(recipient.trim().toLowerCase()))
   );
+  const executiveValidationIntegrity = executiveValidations.flatMap((validation) => {
+    const reasons: string[] = [];
+    const assignedIsCeo = validation.assignedTo.email.trim().toLowerCase() === CEO_EMAIL;
+    const requesterIsCeo = validation.requestedBy.email.trim().toLowerCase() === CEO_EMAIL;
+    if (!validation.assignedTo.active || validation.assignedTo.role !== "DIRECCION") reasons.push("destinatario no es Dirección activa");
+    if (validation.requestedBy.role !== "GERENTE" && validation.requestedBy.role !== "DIRECCION") reasons.push("solicitante no es Gerencia ni Dirección");
+    if (validation.requestedById === validation.assignedToId) reasons.push("autovalidación");
+    if ((validation.level === "CEO") !== assignedIsCeo) reasons.push("nivel ejecutivo no coincide con destinatario");
+    if (validation.requestedBy.role === "DIRECCION" && (requesterIsCeo || !assignedIsCeo)) reasons.push("Dirección solo puede solicitar al CEO");
+    return reasons.length ? [{ folio: validation.idea.folio, validationId: validation.id, reasons }] : [];
+  });
 
   const openIdeaStatuses = [
     "REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION", "APROBADA_SUPERVISOR",
@@ -170,6 +186,7 @@ async function main() {
     directorMembershipCapabilities,
     directorFollowers,
     directorNotifications,
+    executiveValidationIntegrity,
     directorIdeas,
     directorImplementations,
     directorApprovals,
@@ -183,7 +200,7 @@ async function main() {
   const failureCount = Object.values(failures).reduce((sum, values) => sum + values.length, 0);
   console.log(JSON.stringify({
     ok: failureCount === 0,
-    totals: { users: users.length, memberships: memberships.length, qrUnitsWithPeople: qrWithPeople.length, generatedRoutes: generatedRoutes.length, directors: directors.length },
+    totals: { users: users.length, memberships: memberships.length, qrUnitsWithPeople: qrWithPeople.length, generatedRoutes: generatedRoutes.length, directors: directors.length, executiveValidations: executiveValidations.length },
     roleCounts,
     dnpRoutes,
     missingManagers,

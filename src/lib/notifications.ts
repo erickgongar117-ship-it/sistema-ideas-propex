@@ -1,4 +1,4 @@
-import { NotificationChannel } from "@prisma/client";
+import { NotificationAudience, NotificationChannel } from "@prisma/client";
 import { withoutDirectorRecipients } from "@/lib/director-policy";
 import { appBaseUrl } from "@/lib/url";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +9,7 @@ type NotifyInput = {
   subject: string;
   body: string;
   channels?: NotificationChannel[];
+  audience?: NotificationAudience;
 };
 
 function hasGraphConfig() {
@@ -83,6 +84,7 @@ async function recordOutbox(input: NotifyInput, channel: NotificationChannel, st
     data: {
       ideaId: input.ideaId ?? null,
       channel,
+      audience: input.audience ?? "OPERATIONAL",
       to: input.to || "LOCAL",
       subject: input.subject,
       body: input.body,
@@ -94,7 +96,9 @@ async function recordOutbox(input: NotifyInput, channel: NotificationChannel, st
 }
 
 export async function notify(input: NotifyInput) {
-  const filteredRecipients = await withoutDirectorRecipients(input.to);
+  const filteredRecipients = input.audience === "EXECUTIVE_VALIDATION"
+    ? input.to
+    : await withoutDirectorRecipients(input.to);
   if (input.to && !filteredRecipients) return;
   const safeInput = filteredRecipients === input.to ? input : { ...input, to: filteredRecipients };
   const channels = input.channels ?? ["EMAIL"];

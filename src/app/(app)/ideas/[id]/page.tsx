@@ -1,4 +1,4 @@
-import type { ApprovalType } from "@prisma/client";
+import type { ApprovalType, ExecutiveValidationStatus } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import {
@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   ClipboardCheck,
+  Crown,
   FileText,
   ImageIcon,
   MessageSquare,
@@ -27,12 +28,16 @@ import {
   addCommentAction,
   addIdeaFollowerAction,
   assignImplementationAction,
+  cancelExecutiveValidationAction,
   cancelIdeaAction,
   classifyIdeaAction,
+  decideExecutiveValidationAction,
   deleteCancelledIdeaAction,
   implementationUpdateAction,
   removeIdeaPointsAction,
   reopenRejectedIdeaAction,
+  requestExecutiveValidationAction,
+  resubmitExecutiveValidationAction,
   removeIdeaFollowerAction,
   supportDecisionAction,
   supervisorDecisionAction,
@@ -59,6 +64,14 @@ import {
 } from "@/lib/domain";
 import { requireUser } from "@/lib/auth";
 import { operationalUserWhere } from "@/lib/director-policy";
+import {
+  blocksIdeaClosure,
+  canRequestExecutiveValidation,
+  executiveValidationLevelLabels,
+  executiveValidationStatusLabels,
+  executiveValidationTargetsFor,
+  isCeoUser
+} from "@/lib/executive-validation";
 import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
 import { canDecideInitialIdea, canViewIdea } from "@/lib/idea-access";
 import { automaticManagerialEvaluation, automaticPointRules } from "@/lib/points";
@@ -67,7 +80,7 @@ import { prisma } from "@/lib/prisma";
 
 type DetailProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ coins?: string; error?: string }>;
+  searchParams: Promise<{ coins?: string; error?: string; success?: string }>;
 };
 
 const approvalTone: Record<ApprovalType, { border: string; accent: string; soft: string; text: string; icon: typeof ShieldCheck }> = {
@@ -78,6 +91,14 @@ const approvalTone: Record<ApprovalType, { border: string; accent: string; soft:
   MEJORA_CONTINUA_FINAL: { border: "border-slate-950", accent: "bg-slate-950", soft: "bg-slate-100", text: "text-slate-950", icon: CheckCircle2 }
 };
 
+const executiveStatusTone: Record<ExecutiveValidationStatus, string> = {
+  PENDING: "border-amber-200 bg-amber-50 text-amber-900",
+  APPROVED: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  REJECTED: "border-rose-200 bg-rose-50 text-rose-900",
+  MORE_INFO: "border-blue-200 bg-blue-50 text-blue-900",
+  CANCELLED: "border-slate-200 bg-slate-100 text-slate-700"
+};
+
 function isImagePath(path: string) {
   return /\.(png|jpe?g|webp|gif)(\?|$)/i.test(path);
 }
@@ -86,7 +107,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
   const user = await requireUser();
   const { id } = await params;
   const query = await searchParams;
-  const [idea, owners, pointRules, supportAreas, userMemberships] = await Promise.all([
+  const [idea, owners, pointRules, supportAreas, userMemberships, executiveTargets] = await Promise.all([
     prisma.idea.findUnique({
       where: { id },
       include: {
@@ -100,13 +121,18 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
         kaizenProject: true,
         escalationRule: { include: { reviewerMembership: { include: { user: true } } } },
         supportRequests: { include: { orgUnit: true, assignedTo: true }, orderBy: { createdAt: "asc" } },
-        followers: { include: { user: true }, orderBy: { createdAt: "asc" } }
+        followers: { include: { user: true }, orderBy: { createdAt: "asc" } },
+        executiveValidations: {
+          include: { requestedBy: true, assignedTo: true },
+          orderBy: { createdAt: "desc" }
+        }
       }
     }),
     prisma.user.findMany({ where: operationalUserWhere(), orderBy: [{ name: "asc" }, { email: "asc" }] }),
     prisma.pointRule.findMany({ where: { active: true }, orderBy: { createdAt: "asc" } }),
     prisma.orgUnit.findMany({ where: { active: true, isSupportArea: true }, orderBy: [{ plantId: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true, code: true, plantId: true } }),
-    prisma.orgMembership.findMany({ where: { userId: user.id, active: true }, select: { orgUnitId: true, canReceiveIdeas: true, canReviewTeam: true, canManageActivities: true } })
+    prisma.orgMembership.findMany({ where: { userId: user.id, active: true }, select: { orgUnitId: true, canReceiveIdeas: true, canReviewTeam: true, canManageActivities: true } }),
+    executiveValidationTargetsFor(user)
   ]);
 
   if (!idea) notFound();
@@ -149,6 +175,12 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
   const canClassify = canMC && ["APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA"].includes(idea.status);
   const canReopen = canMC && ["RECHAZADA_SUPERVISOR", "RECHAZADA_VALIDACION"].includes(idea.status);
   const canPermanentlyDelete = user.role === "ADMIN" && idea.status === "CANCELADA";
+  const canRequestExecutive = !["CERRADA", "CANCELADA"].includes(idea.status) && await canRequestExecutiveValidation(user, idea.id);
+  const existingExecutiveTargetIds = new Set(
+    idea.executiveValidations.filter((validation) => validation.status !== "CANCELLED").map((validation) => validation.assignedToId)
+  );
+  const availableExecutiveTargets = executiveTargets.filter((target) => !existingExecutiveTargetIds.has(target.id));
+  const blockingExecutiveValidations = idea.executiveValidations.filter((validation) => blocksIdeaClosure(validation.status));
   const impacts = parseImpactTypes(idea.impactTypes);
   const returnPath = canMC ? roleHomePath(user.role) : "/seguimientos";
   const parsedReward = Number.parseInt(query.coins ?? "", 10);
@@ -168,11 +200,26 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
             ? "Solo se pueden eliminar definitivamente las ideas canceladas."
           : query.error === "eliminar_confirmacion"
             ? `La confirmación no coincide. Escribe exactamente ELIMINAR ${idea.folio}.`
-          : query.error === "flujo"
-            ? "Completa primero la aprobación, las validaciones y la clasificación antes de avanzar a la siguiente etapa."
-        : query.error
-          ? "Revisa los campos obligatorios e intenta nuevamente."
-          : null;
+           : query.error === "flujo"
+             ? "Completa primero la aprobación, las validaciones y la clasificación antes de avanzar a la siguiente etapa."
+           : query.error === "validacion_ejecutiva_campos"
+             ? "Selecciona al menos un destinatario y explica en diez caracteres o más qué debe validar."
+           : query.error === "validacion_ejecutiva_permiso"
+             ? "Solo una gerencia responsable del área o una dirección autorizada puede gestionar esta validación ejecutiva."
+           : query.error === "validacion_ejecutiva_destino"
+             ? "El destinatario no cumple la regla ejecutiva: gerencias eligen Dirección o CEO; Dirección solo puede elegir al CEO."
+           : query.error === "validacion_ejecutiva_duplicada"
+             ? "Ya existe una validación vigente para uno de los destinatarios seleccionados."
+           : query.error === "validacion_ejecutiva_pendiente"
+             ? "La idea no puede cerrarse mientras una validación ejecutiva esté pendiente, rechazada o requiera información."
+           : query.error === "validacion_ejecutiva_estado"
+             ? "La validación ejecutiva cambió de estado o la idea ya está cerrada. Actualiza el expediente."
+         : query.error
+           ? "Revisa los campos obligatorios e intenta nuevamente."
+           : null;
+  const successMessage = query.success?.startsWith("validacion_ejecutiva")
+    ? "La validación ejecutiva se actualizó correctamente y quedó registrada en la bitácora."
+    : null;
 
   return (
     <>
@@ -191,6 +238,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
       />
 
       {errorMessage ? <div className="alert alert-danger mb-5" role="alert"><XCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{errorMessage}</span></div> : null}
+      {successMessage ? <div className="alert alert-success mb-5" role="status"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden /><span className="font-bold">{successMessage}</span></div> : null}
 
       <section className="surface mb-5 rounded-lg p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -226,6 +274,153 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
             </div>
             {idea.requiresExternalSupport ? <div className="mt-4 border-l-4 border-slate-900 bg-slate-50 p-3"><p className="text-xs font-extrabold uppercase text-slate-600">Compra, cotización o apoyo externo</p><p className="mt-1 text-sm leading-5 text-slate-700">{idea.externalSupportDetails}</p></div> : null}
           </article>
+
+          {(idea.executiveValidations.length || canRequestExecutive) ? (
+            <article className="surface overflow-hidden rounded-lg border border-slate-300">
+              <div className="h-1 bg-slate-950" />
+              <div className="p-5 sm:p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-white">
+                      <Crown className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <h2 className="text-base font-extrabold text-ink">Validación ejecutiva</h2>
+                      <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-600">
+                        Excepción controlada: una gerencia puede solicitar Dirección o CEO; una dirección solo puede solicitar al CEO.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="w-fit rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-[11px] font-extrabold text-slate-800">
+                    {idea.executiveValidations.length} {idea.executiveValidations.length === 1 ? "solicitud" : "solicitudes"}
+                  </span>
+                </div>
+
+                {blockingExecutiveValidations.length ? (
+                  <div className="alert alert-warning mt-4" role="status">
+                    <Crown className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                    <span><strong>{blockingExecutiveValidations.length}</strong> validación ejecutiva impide el cierre hasta quedar aprobada o cancelada.</span>
+                  </div>
+                ) : null}
+
+                {idea.executiveValidations.length ? (
+                  <div className="mt-5 space-y-3">
+                    {idea.executiveValidations.map((validation) => {
+                      const assignedToCurrentUser = validation.assignedToId === user.id;
+                      const requestedByCurrentUser = validation.requestedById === user.id;
+                      const canDecide = assignedToCurrentUser && validation.status === "PENDING";
+                      const canResubmit = requestedByCurrentUser && ["MORE_INFO", "REJECTED"].includes(validation.status);
+                      const canCancel = requestedByCurrentUser && ["PENDING", "MORE_INFO"].includes(validation.status);
+
+                      return (
+                        <section className="rounded-lg border border-line bg-panel p-4" key={validation.id}>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-extrabold text-ink">{validation.assignedTo.name}</p>
+                                {isCeoUser(validation.assignedTo) ? <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-extrabold text-white">CEO</span> : null}
+                              </div>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {executiveValidationLevelLabels[validation.level]} · solicitada por {validation.requestedBy.name} el {validation.createdAt.toLocaleString("es-MX")}
+                              </p>
+                            </div>
+                            <span className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-extrabold ${executiveStatusTone[validation.status]}`}>
+                              {executiveValidationStatusLabels[validation.status]}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 border-l-4 border-slate-400 pl-3">
+                            <p className="text-[11px] font-extrabold uppercase text-slate-500">Qué debe validar</p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-slate-700">{validation.requestNote}</p>
+                          </div>
+                          {validation.decisionComment ? (
+                            <div className="mt-3 border-l-4 border-brand-500 pl-3">
+                              <p className="text-[11px] font-extrabold uppercase text-slate-500">Respuesta ejecutiva</p>
+                              <p className="mt-1 text-sm leading-5 text-slate-700">{validation.decisionComment}</p>
+                            </div>
+                          ) : null}
+                          {validation.cancellationReason ? (
+                            <p className="mt-3 text-xs leading-5 text-slate-600"><strong>Motivo de cancelación:</strong> {validation.cancellationReason}</p>
+                          ) : null}
+
+                          {canDecide ? (
+                            <form action={decideExecutiveValidationAction} className="mt-4 grid gap-3 border-t border-line pt-4">
+                              <input name="validationId" type="hidden" value={validation.id} />
+                              <label>
+                                <span className="label">Comentario de decisión</span>
+                                <textarea className="field min-h-20" name="comments" placeholder="Obligatorio al rechazar o pedir información" />
+                              </label>
+                              <div className="grid gap-2 sm:grid-cols-3">
+                                <button className="btn btn-success" name="decision" type="submit" value="APROBAR"><Check className="h-4 w-4" aria-hidden />Aprobar</button>
+                                <button className="btn btn-secondary" name="decision" type="submit" value="SOLICITAR_INFORMACION">Pedir información</button>
+                                <button className="btn btn-danger" name="decision" type="submit" value="RECHAZAR">Rechazar</button>
+                              </div>
+                            </form>
+                          ) : null}
+
+                          {canResubmit ? (
+                            <form action={resubmitExecutiveValidationAction} className="mt-4 grid gap-3 border-t border-line pt-4">
+                              <input name="validationId" type="hidden" value={validation.id} />
+                              <label>
+                                <span className="label">Información adicional para reenviar</span>
+                                <textarea className="field min-h-20" minLength={10} name="response" required />
+                              </label>
+                              <button className="btn btn-secondary" type="submit"><Send className="h-4 w-4" aria-hidden />Reenviar a validación</button>
+                            </form>
+                          ) : null}
+
+                          {canCancel ? (
+                            <form action={cancelExecutiveValidationAction} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+                              <input name="validationId" type="hidden" value={validation.id} />
+                              <label>
+                                <span className="label">Cancelar solicitud</span>
+                                <input className="field" minLength={5} name="reason" placeholder="Motivo de cancelación" required />
+                              </label>
+                              <button className="btn btn-ghost text-rose-700" type="submit"><XCircle className="h-4 w-4" aria-hidden />Cancelar</button>
+                            </form>
+                          ) : null}
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {canRequestExecutive ? (
+                  <form action={requestExecutiveValidationAction} className="mt-5 grid gap-4 border-t border-line pt-5">
+                    <input name="ideaId" type="hidden" value={idea.id} />
+                    <div>
+                      <p className="label">Destinatario ejecutivo</p>
+                      {availableExecutiveTargets.length ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {availableExecutiveTargets.map((target) => (
+                            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-white p-3" key={target.id}>
+                              <input className="mt-1" name="targetUserIds" type="checkbox" value={target.id} />
+                              <span className="min-w-0">
+                                <span className="flex flex-wrap items-center gap-2 text-sm font-extrabold text-ink">
+                                  {target.name}
+                                  {isCeoUser(target) ? <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] text-white">CEO</span> : null}
+                                </span>
+                                <span className="mt-0.5 block text-xs text-slate-500">{target.jobTitle ?? executiveValidationLevelLabels[isCeoUser(target) ? "CEO" : "DIRECTOR"]}</span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : <p className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-600">Todos los destinatarios permitidos ya tienen una solicitud vigente.</p>}
+                    </div>
+                    {availableExecutiveTargets.length ? (
+                      <>
+                        <label>
+                          <span className="label">Motivo y decisión requerida</span>
+                          <textarea className="field min-h-24" minLength={10} name="requestNote" placeholder="Explica claramente qué debe autorizar o validar" required />
+                        </label>
+                        <button className="btn bg-slate-950 text-white hover:bg-slate-800" type="submit"><Crown className="h-4 w-4" aria-hidden />Solicitar validación ejecutiva</button>
+                      </>
+                    ) : null}
+                  </form>
+                ) : null}
+              </div>
+            </article>
+          ) : null}
 
           <article className="surface rounded-lg p-5 sm:p-6">
             <SectionHeading count={idea.approvals.length + idea.supportRequests.length} description="Decisiones registradas por cada departamento y apoyo solicitado." title="Validaciones" />
