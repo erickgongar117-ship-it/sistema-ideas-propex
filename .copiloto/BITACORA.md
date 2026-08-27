@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Deje DIRECCION como rol global de solo consulta; retire 44 rutas, limite 29 membresias, elimine 6 seguidores, bloquee nuevas asignaciones y notificaciones, valide TypeScript/build/QA y publique Vercel dpl_84QHAjmziWmrpE1jHzXypEYjmYQb.
+
+Siguiente paso dejado: No queda trabajo pendiente de esta regla. Antes de modificar organigrama o rutas, ejecutar node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/qa-organigrama.ts y conservar vacios todos los arreglos director* del resultado.
+
+---
+
 ## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Simplifique las rutas activas de 292 a 173 responsables unicos, bloquee duplicados futuros, limite Myriam a gerencias, reasigne IM-000001 e IM-000008 a Lucero, valide 185 credenciales y publique Vercel dpl_FJFKKrTd9gSwMfP2JSZwMWC2WecR.
 
 Siguiente paso dejado: En Configuracion > Estructura, confirmar con negocio si CAR-LOG-EMB, TSJ-LOG y TSJ-CAL requieren un gerente puente adicional; mantener una sola ruta por responsable y nunca asignar a Myriam por debajo del nivel 4.
