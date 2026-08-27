@@ -14,6 +14,18 @@ import { PrismaClient, type Prisma, type Role } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const aplicar = process.argv.includes("--aplicar");
+const credentialsOnly = process.argv.includes("--solo-credenciales");
+const GENERATED_ROUTE_PREFIX = "Organigrama 2026 -";
+const OPERATIONS_DIRECTOR_EMAIL = "myriam.esparza@proboca.net";
+const MANAGER_LEVEL = 4;
+const MAX_GENERATED_ROUTES_PER_UNIT = 8;
+const requestedInitialPassword = process.env.PROPEX_INITIAL_PASSWORD?.trim();
+if (requestedInitialPassword && requestedInitialPassword.length < 8) {
+  throw new Error("PROPEX_INITIAL_PASSWORD debe tener al menos 8 caracteres.");
+}
+if (credentialsOnly && !requestedInitialPassword) {
+  throw new Error("--solo-credenciales requiere PROPEX_INITIAL_PASSWORD.");
+}
 const sourceIndex = process.argv.findIndex((argument) => argument === "--directorio");
 const sourcePath = sourceIndex >= 0 ? process.argv[sourceIndex + 1] : undefined;
 if (!sourcePath) throw new Error("Indica el JSON del directorio con --directorio <ruta>.");
@@ -59,6 +71,15 @@ type ImportedMembership = {
   title: string;
   unitCode: string;
   userId: string;
+};
+
+type RouteCandidate = {
+  reviewerId: string;
+  reviewerName: string;
+  reviewerEmail: string;
+  reviewerTitle: string;
+  level: number;
+  directReports: number;
 };
 
 const ROOT_EMAILS = [
@@ -156,6 +177,16 @@ function normalize(value?: string | null) {
 
 function normalizeEmail(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function addRouteCandidate(candidates: Map<string, RouteCandidate>, candidate: RouteCandidate) {
+  if (candidate.reviewerEmail === OPERATIONS_DIRECTOR_EMAIL && candidate.level < MANAGER_LEVEL) return;
+  const current = candidates.get(candidate.reviewerId);
+  if (!current
+    || candidate.directReports > current.directReports
+    || (candidate.directReports === current.directReports && candidate.level < current.level)) {
+    candidates.set(candidate.reviewerId, candidate);
+  }
 }
 
 function loadDirectory() {
@@ -407,7 +438,8 @@ function summary(prepared: ReturnType<typeof prepareDirectory>) {
     byLevel,
     unitsWithPeople: usedUnits.size,
     byUnit: Object.fromEntries(byUnit),
-    executives
+    executives,
+    credentialActivationRequested: Boolean(requestedInitialPassword)
   }, null, 2));
 }
 
@@ -613,7 +645,10 @@ async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
       include: {
         plant: true,
         captureArea: true,
-        escalationRules: { where: { active: true } },
+        escalationRules: {
+          where: { active: true },
+          include: { reviewerMembership: { include: { user: true } } }
+        },
         memberships: {
           where: { active: true },
           include: {
@@ -628,13 +663,15 @@ async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
     for (const unit of activeUnits) {
       if (!unit.memberships.length) continue;
       const area = await ensureCaptureArea(database, unit.id, unit.code, unit.name);
-      const routeCandidates = new Map<string, { label: string; reviewerId: string; level: number; directReports: number }>();
+      const routeCandidates = new Map<string, RouteCandidate>();
       for (const membership of unit.memberships) {
         if (!membership.canReceiveIdeas) continue;
         const reportsHere = membership.directReports.filter((report) => report.orgUnitId === unit.id).length;
-        if (reportsHere) routeCandidates.set(`review-${membership.id}-${Math.max(0, membership.level - 1)}`, {
-          label: `Mi jefe directo es ${membership.user.name}`,
+        if (reportsHere) addRouteCandidate(routeCandidates, {
           reviewerId: membership.id,
+          reviewerName: membership.user.name,
+          reviewerEmail: normalizeEmail(membership.user.email),
+          reviewerTitle: membership.title,
           level: Math.max(0, membership.level - 1),
           directReports: reportsHere
         });
@@ -642,45 +679,89 @@ async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
       for (const membership of unit.memberships) {
         const manager = membership.managerMembership;
         if (!manager || manager.userId === membership.userId || manager.orgUnit.plantId !== unit.plantId || !manager.canReceiveIdeas) continue;
-        const submitterLevel = membership.level;
-        routeCandidates.set(submitterLevel === 0 ? `review-${manager.id}-0` : `up-${normalize(membership.title)}-${manager.id}`, {
-          label: submitterLevel === 0 ? `Mi jefe directo es ${manager.user.name}` : `Soy ${membership.title} y reporto a ${manager.user.name}`,
+        addRouteCandidate(routeCandidates, {
           reviewerId: manager.id,
-          level: submitterLevel,
+          reviewerName: manager.user.name,
+          reviewerEmail: normalizeEmail(manager.user.email),
+          reviewerTitle: manager.title,
+          level: membership.level,
           directReports: 0
         });
       }
       if (![...routeCandidates.values()].some((candidate) => candidate.level === 0)) {
-        const fallback = unit.memberships.filter((membership) => membership.canReceiveIdeas).sort((a, b) => a.level - b.level)[0];
-        if (fallback) routeCandidates.set(`fallback-${fallback.id}`, { label: "Personal operativo o colaborador", reviewerId: fallback.id, level: 0, directReports: 0 });
+        const fallback = unit.memberships
+          .filter((membership) => membership.canReceiveIdeas && normalizeEmail(membership.user.email) !== OPERATIONS_DIRECTOR_EMAIL)
+          .sort((a, b) => a.level - b.level || a.user.name.localeCompare(b.user.name))[0];
+        if (fallback) addRouteCandidate(routeCandidates, {
+          reviewerId: fallback.id,
+          reviewerName: fallback.user.name,
+          reviewerEmail: normalizeEmail(fallback.user.email),
+          reviewerTitle: fallback.title,
+          level: 0,
+          directReports: 0
+        });
       }
-      const candidates = [...routeCandidates.values()].sort((a, b) => b.directReports - a.directReports || a.level - b.level || a.label.localeCompare(b.label)).slice(0, 12);
-      const forceOrganigramDefault = ["APO-DNP", "CAR-DNP", "TSJ-DNP"].includes(unit.code);
-      if (forceOrganigramDefault) {
-        await database.orgEscalationRule.updateMany({ where: { orgUnitId: unit.id, isDefault: true }, data: { isDefault: false } });
+      const prohibitedDirectorRules = unit.escalationRules.filter((rule) =>
+        normalizeEmail(rule.reviewerMembership.user.email) === OPERATIONS_DIRECTOR_EMAIL
+        && rule.submitterLevel < MANAGER_LEVEL
+      );
+      if (prohibitedDirectorRules.length) {
+        await database.orgEscalationRule.updateMany({
+          where: { id: { in: prohibitedDirectorRules.map((rule) => rule.id) } },
+          data: { active: false, isDefault: false }
+        });
       }
-      const hasDefault = !forceOrganigramDefault && unit.escalationRules.some((rule) => rule.isDefault);
+      const manualRoutes = unit.escalationRules.filter((rule) =>
+        !rule.name.startsWith(GENERATED_ROUTE_PREFIX)
+        && !prohibitedDirectorRules.some((prohibited) => prohibited.id === rule.id)
+      );
+      const manualReviewerIds = new Set(manualRoutes.map((rule) => rule.reviewerMembershipId));
+      const candidates = [...routeCandidates.values()]
+        .filter((candidate) => !manualReviewerIds.has(candidate.reviewerId))
+        .sort((a, b) => b.directReports - a.directReports || a.level - b.level || a.reviewerName.localeCompare(b.reviewerName))
+        .slice(0, MAX_GENERATED_ROUTES_PER_UNIT);
+      await database.orgEscalationRule.updateMany({
+        where: { orgUnitId: unit.id, active: true, name: { startsWith: GENERATED_ROUTE_PREFIX } },
+        data: { active: false, isDefault: false }
+      });
+      const generatedRouteIds: string[] = [];
       for (const [index, candidate] of candidates.entries()) {
-        const name = `Organigrama 2026 - ${candidate.label}`;
-        const existing = await database.orgEscalationRule.findFirst({ where: { orgUnitId: unit.id, name } });
-        const isDefault = !hasDefault && index === 0;
+        const name = `${GENERATED_ROUTE_PREFIX}${candidate.reviewerName}`;
+        const existing = await database.orgEscalationRule.findFirst({
+          where: {
+            orgUnitId: unit.id,
+            reviewerMembershipId: candidate.reviewerId,
+            name: { startsWith: GENERATED_ROUTE_PREFIX }
+          },
+          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }]
+        });
         const data = {
           name,
-          submitterLabel: candidate.label,
-          circumstance: "Ruta basada en el organigrama y editable por Administracion.",
+          submitterLabel: candidate.reviewerName,
+          circumstance: candidate.reviewerTitle,
           submitterLevel: candidate.level,
           reviewerMembershipId: candidate.reviewerId,
-          isDefault,
+          isDefault: false,
           active: true
         };
-        if (existing) await database.orgEscalationRule.update({ where: { id: existing.id }, data: { ...data, isDefault: existing.isDefault || isDefault } });
-        else await database.orgEscalationRule.create({ data: { ...data, orgUnitId: unit.id, sortOrder: unit.escalationRules.length + index } });
+        const saved = existing
+          ? await database.orgEscalationRule.update({ where: { id: existing.id }, data: { ...data, sortOrder: manualRoutes.length + index } })
+          : await database.orgEscalationRule.create({ data: { ...data, orgUnitId: unit.id, sortOrder: manualRoutes.length + index } });
+        generatedRouteIds.push(saved.id);
         stats.routes++;
-        if (isDefault) {
-          const reviewer = await database.orgMembership.findUniqueOrThrow({ where: { id: candidate.reviewerId }, include: { user: true } });
-          await database.orgUnit.update({ where: { id: unit.id }, data: { routingUserId: reviewer.userId, responsible: reviewer.user.name, manager: reviewer.user.name } });
-          await database.area.update({ where: { id: area.id }, data: { supervisorId: reviewer.userId } });
-        }
+      }
+      const manualDefault = manualRoutes.find((rule) => rule.isDefault) ?? manualRoutes[0];
+      const defaultRuleId = manualDefault?.id ?? generatedRouteIds[0];
+      if (defaultRuleId) {
+        await database.orgEscalationRule.updateMany({ where: { orgUnitId: unit.id, isDefault: true }, data: { isDefault: false } });
+        const defaultRule = await database.orgEscalationRule.update({
+          where: { id: defaultRuleId },
+          data: { isDefault: true },
+          include: { reviewerMembership: { include: { user: true } } }
+        });
+        const reviewer = defaultRule.reviewerMembership.user;
+        await database.orgUnit.update({ where: { id: unit.id }, data: { routingUserId: reviewer.id, responsible: reviewer.name, manager: reviewer.name } });
+        await database.area.update({ where: { id: area.id }, data: { supervisorId: reviewer.id } });
       }
     }
 
@@ -726,14 +807,44 @@ async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
   console.log(JSON.stringify({ ...stats, cycles: cycles.length, generatedRoutes: generatedRoutes.length, crossPlantRoutes: crossPlant.length, administrativeExecutives }, null, 2));
 }
 
+async function activateCredentials(prepared: ReturnType<typeof prepareDirectory>) {
+  if (!requestedInitialPassword) return;
+  const passwordHash = await bcrypt.hash(requestedInitialPassword, 10);
+  const importedEmails = prepared.people.map((person) => person.email);
+  const result = await prisma.user.updateMany({
+    where: { active: true, email: { in: importedEmails } },
+    data: { passwordHash }
+  });
+  const credentialsEnabled = await prisma.user.count({
+    where: { active: true, email: { in: importedEmails }, passwordHash }
+  });
+  if (credentialsEnabled !== importedEmails.length) {
+    throw new Error(`Solo se habilitaron ${credentialsEnabled} de ${importedEmails.length} cuentas importadas.`);
+  }
+  const admin = await prisma.user.findFirst({ where: { role: "ADMIN", active: true }, select: { id: true } });
+  await prisma.auditLog.create({
+    data: {
+      entity: "Organization",
+      entityId: "OUTLOOK-ORG-2026",
+      action: "ORGANIZATION_CREDENTIALS_ENABLED",
+      userId: admin?.id ?? null,
+      details: JSON.stringify({ accounts: credentialsEnabled, source: "Outlook GAL + Organigrama_Apodaca_250326" })
+    }
+  });
+  console.log(JSON.stringify({ passwordsUpdated: result.count, credentialsEnabled }, null, 2));
+}
+
 async function main() {
   const directory = loadDirectory();
   const prepared = prepareDirectory(directory);
   summary(prepared);
   if (!aplicar) {
     console.log("\nSimulacion completada. Usa --aplicar para guardar usuarios, areas, jefaturas y rutas.");
+  } else if (credentialsOnly) {
+    await activateCredentials(prepared);
   } else {
     await applyImport(prepared);
+    await activateCredentials(prepared);
   }
 }
 

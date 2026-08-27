@@ -258,15 +258,15 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
             </div>
             {escalationRoutes.length ? (
               <fieldset className="mt-5 rounded-lg border border-line bg-panel p-4">
-                <legend className="px-1 text-sm font-extrabold text-ink">¿Cual es tu puesto o circunstancia? *</legend>
-                <p className="mb-3 mt-1 text-xs leading-5 text-slate-600">Esto permite enviar tu idea al jefe directo correcto.</p>
+                <legend className="px-1 text-sm font-extrabold text-ink">¿Quien es tu jefe directo? *</legend>
+                <p className="mb-3 mt-1 text-xs leading-5 text-slate-600">Selecciona a la persona que normalmente revisa tu trabajo.</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {escalationRoutes.map((route, index) => (
                     <label className="capture-choice cursor-pointer" key={route.id}>
                       <input className="peer sr-only" defaultChecked={route.isDefault || (!primaryRoute?.isDefault && index === 0)} name="escalationRuleId" required type="radio" value={route.id} />
                       <span className="capture-choice-box min-h-20">
                         <GitBranch className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden />
-                        <span className="min-w-0"><span className="capture-choice-title block text-sm">{route.submitterLabel}</span><small className="mt-1 block text-xs leading-4">{`Reporta a ${route.reviewerMembership.user.name}`}{route.circumstance ? ` · ${route.circumstance}` : ""}</small></span>
+                        <span className="min-w-0"><span className="capture-choice-title block text-sm">{route.reviewerMembership.user.name}</span><small className="mt-1 block text-xs leading-4">{route.reviewerMembership.title}</small></span>
                       </span>
                     </label>
                   ))}

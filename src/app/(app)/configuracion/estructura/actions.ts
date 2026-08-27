@@ -397,6 +397,23 @@ export async function saveEscalationRuleAction(formData: FormData): Promise<Orga
   if (input.isDefault && !input.active) {
     return { ok: false, message: "Una ruta predeterminada debe estar activa. Activa la ruta o desmarca la opcion predeterminada." };
   }
+  if (reviewer.user.email.trim().toLowerCase() === "myriam.esparza@proboca.net" && input.submitterLevel < 4) {
+    return { ok: false, message: "Direccion de Operaciones solo recibe escalaciones de nivel gerencia. Selecciona al jefe o gerente inmediato." };
+  }
+  const duplicateRoute = input.active
+    ? await prisma.orgEscalationRule.findFirst({
+        where: {
+          orgUnitId: input.orgUnitId,
+          reviewerMembershipId: input.reviewerMembershipId,
+          active: true,
+          ...(input.ruleId ? { id: { not: input.ruleId } } : {})
+        },
+        select: { id: true, submitterLabel: true }
+      })
+    : null;
+  if (duplicateRoute) {
+    return { ok: false, message: `Ya existe una ruta activa hacia ${reviewer.user.name}. Edita esa ruta para evitar opciones duplicadas.` };
+  }
 
   const rule = await prisma.$transaction(async (tx) => {
     if (input.isDefault) await tx.orgEscalationRule.updateMany({ where: { orgUnitId: input.orgUnitId }, data: { isDefault: false } });

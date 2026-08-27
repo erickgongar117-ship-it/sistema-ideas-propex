@@ -2,9 +2,11 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const OPERATIONS_DIRECTOR_EMAIL = "myriam.esparza@proboca.net";
+const MANAGER_LEVEL = 4;
 
 async function main() {
-  const [users, memberships, qrUnits, generatedRoutes] = await Promise.all([
+  const [users, memberships, qrUnits, generatedRoutes, pendingDirectorIdeasBelowManager] = await Promise.all([
     prisma.user.findMany({ select: { id: true, email: true, name: true, role: true, jobTitle: true } }),
     prisma.orgMembership.findMany({
       where: { active: true },
@@ -32,6 +34,17 @@ async function main() {
         orgUnit: { include: { plant: true } },
         reviewerMembership: { include: { user: true, orgUnit: { include: { plant: true } } } }
       }
+    }),
+    prisma.idea.findMany({
+      where: {
+        supervisor: { is: { email: OPERATIONS_DIRECTOR_EMAIL } },
+        status: { in: ["EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"] },
+        OR: [
+          { escalationRule: { is: { submitterLevel: { lt: MANAGER_LEVEL } } } },
+          { escalationRuleId: null }
+        ]
+      },
+      select: { folio: true, submitterPosition: true }
     })
   ]);
 
@@ -74,6 +87,19 @@ async function main() {
   const qrWithoutCaptureArea = qrWithPeople.filter((unit) => !unit.captureArea).map((unit) => unit.code);
   const noDefaultRoute = qrWithPeople.filter((unit) => !unit.escalationRules.some((rule) => rule.isDefault)).map((unit) => unit.code);
   const multipleDefaultRoutes = qrWithPeople.filter((unit) => unit.escalationRules.filter((rule) => rule.isDefault).length > 1).map((unit) => unit.code);
+  const duplicateReviewerRoutes = qrUnits.flatMap((unit) => {
+    const counts = new Map<string, number>();
+    for (const route of unit.escalationRules) {
+      counts.set(route.reviewerMembershipId, (counts.get(route.reviewerMembershipId) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([reviewerMembershipId, count]) => ({ unit: unit.code, reviewerMembershipId, count }));
+  });
+  const directorRoutesBelowManager = qrUnits.flatMap((unit) => unit.escalationRules
+    .filter((route) => route.reviewerMembership.user.email.trim().toLowerCase() === OPERATIONS_DIRECTOR_EMAIL && route.submitterLevel < MANAGER_LEVEL)
+    .map((route) => ({ unit: unit.code, route: route.submitterLabel, level: route.submitterLevel }))
+  );
   const invalidGeneratedReviewers = generatedRoutes
     .filter((route) => !route.reviewerMembership.active || !route.reviewerMembership.user.active || !route.reviewerMembership.canReceiveIdeas)
     .map((route) => route.name);
@@ -103,6 +129,9 @@ async function main() {
     qrWithoutCaptureArea,
     noDefaultRoute,
     multipleDefaultRoutes,
+    duplicateReviewerRoutes,
+    directorRoutesBelowManager,
+    pendingDirectorIdeasBelowManager,
     invalidGeneratedReviewers,
     crossPlantRoutes,
     executiveAdmins
