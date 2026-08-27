@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Audite HC EDGAR y activos 2708: identifique 157 quincenales reales, 650 semanales, cruce reciente con Outlook, coincidencias existentes, jefaturas, truncamientos y excepciones sin modificar datos ni codigo.
+
+Siguiente paso dejado: Crear un importador idempotente para Participant/User que persista tipo de nomina QUINCENAL/SEMANAL y estado de correo ENCONTRADO/PENDIENTE/NO_APLICA; simular primero contra Neon y resolver el numero 266770 antes de aplicar. Corregir Erick Osvaldo de 81163 a 81177 y liberar 81163 para Ana Jazmin segun HC.
+
+---
+
 ## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Implemente y probe validacion ejecutiva: Gerencia solicita Direccion/CEO, Direccion solo CEO Osbaldo, CEO no solicita; historial, respuesta, reenvio, cancelacion, avisos exclusivos, cierre atomico bloqueado y Mi trabajo de Direccion sin tareas operativas. Commit bca6898. TSC, QA de 20 controles y build Vercel pasaron.
 
 Siguiente paso dejado: Esperar autorizacion explicita del usuario para produccion. Con autorizacion: ejecutar pnpm run db:push:production, validar que NotificationAudience y ExecutiveValidation existan en Neon, fusionar bca6898 a main, desplegar Vercel y hacer smoke test Gerente-Direccion-CEO sin crear datos permanentes.
