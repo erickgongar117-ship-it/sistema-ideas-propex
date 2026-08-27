@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Realice diagnostico de solo lectura de la minuta Alestra contra alcance, modelos, roles y pantallas actuales de PROpEx; no modifique codigo ni datos.
+
+Siguiente paso dejado: Si el usuario autoriza implementacion, convertir el diagnostico en backlog priorizado y comenzar por plantillas GENBA/Kaizen de ciberseguridad, mantenimiento y cadena de frio, definiendo campos y permisos antes de editar ambos esquemas Prisma.
+
+---
+
 ## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Deje DIRECCION como rol global de solo consulta; retire 44 rutas, limite 29 membresias, elimine 6 seguidores, bloquee nuevas asignaciones y notificaciones, valide TypeScript/build/QA y publique Vercel dpl_84QHAjmziWmrpE1jHzXypEYjmYQb.
 
 Siguiente paso dejado: No queda trabajo pendiente de esta regla. Antes de modificar organigrama o rutas, ejecutar node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/qa-organigrama.ts y conservar vacios todos los arreglos director* del resultado.
