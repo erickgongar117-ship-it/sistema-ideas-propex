@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Implemente y probe validacion ejecutiva: Gerencia solicita Direccion/CEO, Direccion solo CEO Osbaldo, CEO no solicita; historial, respuesta, reenvio, cancelacion, avisos exclusivos, cierre atomico bloqueado y Mi trabajo de Direccion sin tareas operativas. Commit bca6898. TSC, QA de 20 controles y build Vercel pasaron.
+
+Siguiente paso dejado: Esperar autorizacion explicita del usuario para produccion. Con autorizacion: ejecutar pnpm run db:push:production, validar que NotificationAudience y ExecutiveValidation existan en Neon, fusionar bca6898 a main, desplegar Vercel y hacer smoke test Gerente-Direccion-CEO sin crear datos permanentes.
+
+---
+
 ## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Realice diagnostico de solo lectura de la minuta Alestra contra alcance, modelos, roles y pantallas actuales de PROpEx; no modifique codigo ni datos.
 
 Siguiente paso dejado: Si el usuario autoriza implementacion, convertir el diagnostico en backlog priorizado y comenzar por plantillas GENBA/Kaizen de ciberseguridad, mantenimiento y cadena de frio, definiendo campos y permisos antes de editar ambos esquemas Prisma.
