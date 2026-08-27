@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Simplifique las rutas activas de 292 a 173 responsables unicos, bloquee duplicados futuros, limite Myriam a gerencias, reasigne IM-000001 e IM-000008 a Lucero, valide 185 credenciales y publique Vercel dpl_FJFKKrTd9gSwMfP2JSZwMWC2WecR.
+
+Siguiente paso dejado: En Configuracion > Estructura, confirmar con negocio si CAR-LOG-EMB, TSJ-LOG y TSJ-CAL requieren un gerente puente adicional; mantener una sola ruta por responsable y nunca asignar a Myriam por debajo del nivel 4.
+
+---
+
 ## 2026-08-26 -- codex (codex/hierarchy-training-coins) -- Cree y publique roles DIRECCION/GERENTE de solo lectura, importe 185 personas en 59 unidades con 250 rutas desde Outlook y organigrama, mantuve las 8 cuentas urgentes con admin123, cargue 8 ideas Forms y valide Neon/Vercel.
 
 Siguiente paso dejado: Revisar en Configuracion > Estructura las dos rutas manuales de un solo peldano (APO-LOG-REC y APO-LOG-TAR) y definir credenciales solo para las cuentas adicionales que realmente deban iniciar sesion; el resto ya funciona como directorio y responsables.
