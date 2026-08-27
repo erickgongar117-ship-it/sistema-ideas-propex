@@ -159,6 +159,7 @@ export function buildInitialReviewWhere(
 }
 
 export async function canDecideInitialIdea(user: IdeaAccessUser, ideaId: string) {
+  if (user.role === "DIRECCION") return false;
   if (user.role === "ADMIN") return true;
   const supervisableOrgUnitIds = await getSupervisableOrgUnitIds(user.id);
   const match = await prisma.idea.findFirst({
@@ -184,6 +185,7 @@ export async function decidableInitialIdeaIds(
 ): Promise<Set<string>> {
   const unique = [...new Set(ideaIds.filter(Boolean))];
   if (!unique.length) return new Set();
+  if (user.role === "DIRECCION") return new Set();
   // Mismo atajo que canDecideInitialIdea: ADMIN decide cualquier idea sin comprobar ambito.
   if (user.role === "ADMIN") return new Set(unique);
 
@@ -220,6 +222,7 @@ export async function canDecideDepartmentApproval(
   ideaId: string,
   type: ApprovalType
 ) {
+  if (user.role === "DIRECCION") return false;
   const approval = await prisma.approval.findFirst({
     where: {
       ideaId,

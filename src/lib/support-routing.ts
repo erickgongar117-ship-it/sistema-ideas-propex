@@ -31,7 +31,7 @@ export async function validSupportUnits(unitIds: string[], plantId?: string | nu
     include: {
       routingUser: true,
       memberships: {
-        where: { active: true, canReceiveIdeas: true },
+        where: { active: true, canReceiveIdeas: true, user: { active: true, role: { not: "DIRECCION" } } },
         include: { user: true },
         orderBy: [{ level: "asc" }, { sortOrder: "asc" }]
       }
@@ -66,7 +66,9 @@ export async function syncIdeaSupportRequests(input: {
 
   const requests = [];
   for (const unit of additionalUnits) {
-    const assignedToId = unit.routingUserId ?? unit.memberships[0]?.userId ?? null;
+    const assignedToId = unit.routingUser?.active && unit.routingUser.role !== "DIRECCION"
+      ? unit.routingUser.id
+      : unit.memberships[0]?.userId ?? null;
     const request = await prisma.ideaSupportRequest.upsert({
       where: { ideaId_orgUnitId: { ideaId: input.ideaId, orgUnitId: unit.id } },
       update: {
@@ -98,15 +100,15 @@ export async function managerFollowersForMembership(membershipId: string | null 
       managerMembership: {
         userId: string;
         active: boolean;
-        user: { active: boolean };
+        user: { active: boolean; role: string };
       } | null;
     } | null = await prisma.orgMembership.findUnique({
       where: { id: currentId },
-      select: { managerMembershipId: true, managerMembership: { select: { userId: true, active: true, user: { select: { active: true } } } } }
+      select: { managerMembershipId: true, managerMembership: { select: { userId: true, active: true, user: { select: { active: true, role: true } } } } }
     });
     const manager = membership?.managerMembership;
     if (!manager) break;
-    if (manager.active && manager.user.active) followers.push(manager.userId);
+    if (manager.active && manager.user.active && manager.user.role !== "DIRECCION") followers.push(manager.userId);
     currentId = membership?.managerMembershipId ?? null;
   }
   return [...new Set(followers)];

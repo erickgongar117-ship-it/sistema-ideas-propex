@@ -6,6 +6,7 @@ import { SearchablePicker } from "@/components/searchable-picker";
 import { GenbaActivityEntryTable } from "@/components/genba-activity-entry-table";
 import { PageHeader } from "@/components/page-header";
 import { SectionHeading } from "@/components/section-heading";
+import { operationalUserWhere } from "@/lib/director-policy";
 import { genbaDepartments } from "@/lib/domain";
 import { requireGenbaAccess } from "@/lib/module-access";
 import { personOptions } from "@/lib/person-options";
@@ -17,7 +18,7 @@ export default async function NewGenbaPage({ searchParams }: NewGenbaProps) {
   const { canManage } = await requireGenbaAccess();
   if (!canManage) redirect("/genba");
   const query = await searchParams;
-  const users = await prisma.user.findMany({ where: { active: true, role: { not: "COLABORADOR" } }, orderBy: { name: "asc" } });
+  const users = await prisma.user.findMany({ where: operationalUserWhere({ role: { not: "COLABORADOR" } }), orderBy: { name: "asc" } });
   const today = new Date();
   const due = new Date(today.getTime() + 14 * 86400000);
 

@@ -16,8 +16,6 @@ const prisma = new PrismaClient();
 const aplicar = process.argv.includes("--aplicar");
 const credentialsOnly = process.argv.includes("--solo-credenciales");
 const GENERATED_ROUTE_PREFIX = "Organigrama 2026 -";
-const OPERATIONS_DIRECTOR_EMAIL = "myriam.esparza@proboca.net";
-const MANAGER_LEVEL = 4;
 const MAX_GENERATED_ROUTES_PER_UNIT = 8;
 const requestedInitialPassword = process.env.PROPEX_INITIAL_PASSWORD?.trim();
 if (requestedInitialPassword && requestedInitialPassword.length < 8) {
@@ -78,6 +76,7 @@ type RouteCandidate = {
   reviewerName: string;
   reviewerEmail: string;
   reviewerTitle: string;
+  reviewerRole: Role;
   level: number;
   directReports: number;
 };
@@ -180,7 +179,7 @@ function normalizeEmail(value?: string | null) {
 }
 
 function addRouteCandidate(candidates: Map<string, RouteCandidate>, candidate: RouteCandidate) {
-  if (candidate.reviewerEmail === OPERATIONS_DIRECTOR_EMAIL && candidate.level < MANAGER_LEVEL) return;
+  if (candidate.reviewerRole === "DIRECCION") return;
   const current = candidates.get(candidate.reviewerId);
   if (!current
     || candidate.directReports > current.directReports
@@ -508,7 +507,7 @@ async function ensureCaptureArea(database: Prisma.TransactionClient, unitId: str
 
 async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
   const unavailableHash = await bcrypt.hash(`NotForLogin-${randomBytes(32).toString("base64url")}`, 10);
-  const stats = { usersCreated: 0, usersUpdated: 0, participantsLinked: 0, memberships: 0, managerLinks: 0, routes: 0, units: 0 };
+  const stats = { usersCreated: 0, usersUpdated: 0, participantsLinked: 0, memberships: 0, managerLinks: 0, routes: 0, directorRoutesDeactivated: 0, units: 0 };
 
   await prisma.$transaction(async (database) => {
     await ensureUnits(database);
@@ -570,15 +569,15 @@ async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
         const unit = unitsByCode.get(unitCode);
         if (!unit) continue;
         const existing = await database.orgMembership.findUnique({ where: { userId_orgUnitId: { userId: user.id, orgUnitId: unit.id } } });
-        const canLead = person.level >= 1;
+        const canLead = person.level >= 1 && user.role !== "DIRECCION";
         const membership = await database.orgMembership.upsert({
           where: { userId_orgUnitId: { userId: user.id, orgUnitId: unit.id } },
           update: {
             title: person.JobTitle?.trim() || "Colaborador",
             level: person.level,
-            canReviewTeam: existing?.canReviewTeam || canLead,
-            canReceiveIdeas: existing?.canReceiveIdeas || canLead,
-            canManageActivities: existing?.canManageActivities || canLead,
+            canReviewTeam: user.role === "DIRECCION" ? false : existing?.canReviewTeam || canLead,
+            canReceiveIdeas: user.role === "DIRECCION" ? false : existing?.canReceiveIdeas || canLead,
+            canManageActivities: user.role === "DIRECCION" ? false : existing?.canManageActivities || canLead,
             active: true
           },
           create: {
@@ -640,6 +639,36 @@ async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
       await database.orgMembership.updateMany({ where: { id: { in: ids } }, data: { active: false, canReceiveIdeas: false, canReviewTeam: false, canManageActivities: false } });
     }
 
+    const directors = await database.user.findMany({
+      where: { role: "DIRECCION" },
+      select: { id: true, email: true, orgMemberships: { select: { id: true } } }
+    });
+    const directorIds = directors.map((director) => director.id);
+    const directorMembershipIds = directors.flatMap((director) => director.orgMemberships.map((membership) => membership.id));
+    if (directorMembershipIds.length) {
+      const deactivated = await database.orgEscalationRule.updateMany({
+        where: { reviewerMembershipId: { in: directorMembershipIds }, active: true },
+        data: { active: false, isDefault: false }
+      });
+      stats.directorRoutesDeactivated = deactivated.count;
+      await database.orgMembership.updateMany({
+        where: { id: { in: directorMembershipIds } },
+        data: { canReceiveIdeas: false, canReviewTeam: false, canManageActivities: false }
+      });
+    }
+    if (directorIds.length) {
+      await database.orgUnit.updateMany({ where: { routingUserId: { in: directorIds } }, data: { routingUserId: null } });
+      await database.area.updateMany({ where: { supervisorId: { in: directorIds } }, data: { supervisorId: null } });
+      await database.ideaFollower.deleteMany({ where: { userId: { in: directorIds } } });
+    }
+    const directorEmails = directors.map((director) => director.email.trim().toLowerCase());
+    if (directorEmails.length) {
+      await database.notificationOutbox.updateMany({
+        where: { to: { in: directorEmails }, status: { in: ["PENDING", "ERROR"] } },
+        data: { status: "DISMISSED", errorMessage: "Direccion conserva consulta y no recibe avisos operativos." }
+      });
+    }
+
     const activeUnits = await database.orgUnit.findMany({
       where: { active: true, qrEnabled: true },
       include: {
@@ -672,6 +701,7 @@ async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
           reviewerName: membership.user.name,
           reviewerEmail: normalizeEmail(membership.user.email),
           reviewerTitle: membership.title,
+          reviewerRole: membership.user.role,
           level: Math.max(0, membership.level - 1),
           directReports: reportsHere
         });
@@ -684,26 +714,27 @@ async function applyImport(prepared: ReturnType<typeof prepareDirectory>) {
           reviewerName: manager.user.name,
           reviewerEmail: normalizeEmail(manager.user.email),
           reviewerTitle: manager.title,
+          reviewerRole: manager.user.role,
           level: membership.level,
           directReports: 0
         });
       }
       if (![...routeCandidates.values()].some((candidate) => candidate.level === 0)) {
         const fallback = unit.memberships
-          .filter((membership) => membership.canReceiveIdeas && normalizeEmail(membership.user.email) !== OPERATIONS_DIRECTOR_EMAIL)
+          .filter((membership) => membership.canReceiveIdeas && membership.user.role !== "DIRECCION")
           .sort((a, b) => a.level - b.level || a.user.name.localeCompare(b.user.name))[0];
         if (fallback) addRouteCandidate(routeCandidates, {
           reviewerId: fallback.id,
           reviewerName: fallback.user.name,
           reviewerEmail: normalizeEmail(fallback.user.email),
           reviewerTitle: fallback.title,
+          reviewerRole: fallback.user.role,
           level: 0,
           directReports: 0
         });
       }
       const prohibitedDirectorRules = unit.escalationRules.filter((rule) =>
-        normalizeEmail(rule.reviewerMembership.user.email) === OPERATIONS_DIRECTOR_EMAIL
-        && rule.submitterLevel < MANAGER_LEVEL
+        rule.reviewerMembership.user.role === "DIRECCION"
       );
       if (prohibitedDirectorRules.length) {
         await database.orgEscalationRule.updateMany({

@@ -145,6 +145,7 @@ export function OrganizationBuilder({
   const [messageTone, setMessageTone] = useState<"success" | "error">("success");
   const [isSaving, startSaving] = useTransition();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const operationalUsers = users.filter((user) => user.role !== "DIRECCION");
 
   useEffect(() => {
     setStructure(initialStructure);
@@ -512,7 +513,7 @@ export function OrganizationBuilder({
               <label><span className="label">Codigo</span><input className="field uppercase" maxLength={32} name="code" pattern="[A-Za-z0-9-]{2,32}" required value={values.code} onChange={(event) => setValues((current) => ({ ...current, code: event.target.value.toUpperCase() }))} placeholder={`${plant}-LOG-SEC`} /></label>
               <label><span className="label">Responsable o puesto</span><input className="field" name="responsible" required value={values.responsible} onChange={(event) => setValues((current) => ({ ...current, responsible: event.target.value }))} placeholder="Nombre o puesto responsable" /></label>
               <label><span className="label">Jefe directo o gerente</span><input className="field" name="manager" required value={values.manager} onChange={(event) => setValues((current) => ({ ...current, manager: event.target.value }))} placeholder="Nombre o puesto superior" /></label>
-              <label className="sm:col-span-2"><span className="label">Usuario que recibe las ideas y correos</span><select className="field" name="routingUserId" value={values.routingUserId} onChange={(event) => setValues((current) => ({ ...current, routingUserId: event.target.value }))}><option value="">Pendiente de asignar</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.email}</option>)}</select><span className="helper-text">El correo se toma del directorio de usuarios; si cambia ahi, se actualiza aqui automaticamente.</span></label>
+              <label className="sm:col-span-2"><span className="label">Usuario que recibe las ideas y correos</span><select className="field" name="routingUserId" value={values.routingUserId} onChange={(event) => setValues((current) => ({ ...current, routingUserId: event.target.value }))}><option value="">Pendiente de asignar</option>{operationalUsers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.email}</option>)}</select><span className="helper-text">Dirección conserva consulta global y no aparece como destinataria. El correo se actualiza desde el directorio.</span></label>
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">

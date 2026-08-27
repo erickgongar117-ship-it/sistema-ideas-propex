@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { SectionHeading } from "@/components/section-heading";
 import { requireUser } from "@/lib/auth";
+import { operationalUserWhere } from "@/lib/director-policy";
 import { roleLabels } from "@/lib/domain";
 import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
 import { personOptions } from "@/lib/person-options";
@@ -57,7 +58,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
   };
   const [areas, assignableUsers, userCount, users, pointRules] = await Promise.all([
     prisma.area.findMany({ include: { supervisor: true }, orderBy: { code: "asc" } }),
-    prisma.user.findMany({ where: { role: { in: [...configurableRoles] }, active: true }, orderBy: [{ role: "asc" }, { name: "asc" }] }),
+    prisma.user.findMany({ where: operationalUserWhere({ role: { in: [...configurableRoles] } }), orderBy: [{ role: "asc" }, { name: "asc" }] }),
     prisma.user.count({ where: userWhere }),
     prisma.user.findMany({ where: userWhere, orderBy: [{ role: "asc" }, { name: "asc" }], skip: (currentPage - 1) * userPageSize, take: userPageSize }),
     prisma.pointRule.findMany({ orderBy: { createdAt: "asc" } })
@@ -81,6 +82,8 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
         ? "Esta cuenta tiene ideas, aprobaciones, entrenamientos, ProbocaCoins u otras responsabilidades. Debe permanecer archivada para conservar la trazabilidad."
       : query.error === "usuario_propio"
         ? "No puedes eliminar la cuenta con la que tienes abierta la sesion."
+      : query.error === "director_asignado"
+        ? "Antes de convertir esta cuenta en Dirección, reasigna sus rutas, ideas y actividades abiertas. Dirección es un rol exclusivamente de consulta."
       : query.error
         ? "Revisa la información capturada."
         : null;
@@ -110,7 +113,7 @@ export default async function ConfigPage({ searchParams }: ConfigPageProps) {
 
       <div className="alert alert-info mb-7">
         <Mail className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-        <div><p className="font-extrabold">Directorio de notificaciones</p><p className="mt-0.5 leading-5">Puedes crear varias personas para un mismo departamento. Cualquier usuario activo recibira los avisos que correspondan a su rol.</p></div>
+        <div><p className="font-extrabold">Directorio de notificaciones</p><p className="mt-0.5 leading-5">Puedes crear varias personas para un mismo departamento. Los usuarios operativos reciben los avisos de su rol; Dirección conserva consulta ejecutiva sin rutas, tareas ni notificaciones.</p></div>
       </div>
 
       <section className="scroll-mt-6" id="usuarios">

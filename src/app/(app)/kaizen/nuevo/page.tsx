@@ -5,6 +5,7 @@ import { createKaizenProjectAction } from "@/app/actions";
 import { PageHeader } from "@/components/page-header";
 import { SearchablePicker } from "@/components/searchable-picker";
 import { SectionHeading } from "@/components/section-heading";
+import { operationalUserWhere } from "@/lib/director-policy";
 import { requireKaizenAccess } from "@/lib/module-access";
 import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
@@ -15,7 +16,7 @@ export default async function NewKaizenPage({ searchParams }: NewKaizenProps) {
   const { canManage } = await requireKaizenAccess();
   if (!canManage) redirect("/kaizen");
   const query = await searchParams;
-  const users = await prisma.user.findMany({ where: { active: true, role: { not: "COLABORADOR" } }, orderBy: { name: "asc" } });
+  const users = await prisma.user.findMany({ where: operationalUserWhere({ role: { not: "COLABORADOR" } }), orderBy: { name: "asc" } });
   const today = new Date();
   const defaultEnd = new Date(today.getTime() + 60 * 86400000);
 

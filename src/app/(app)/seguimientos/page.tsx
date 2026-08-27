@@ -87,7 +87,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
   const errorMessage = query.error === "sin_permiso"
     ? "No puedes decidir esa idea porque no está asignada a tu ruta ni al equipo que supervisas."
     : null;
-  const globalAccess = hasGlobalIdeaAccess(user);
+  const globalAccess = hasGlobalIdeaAccess(user) && user.role !== "DIRECCION";
   const [supervisableOrgUnitIds, manageableOrgUnitIds, moduleAccess] = await Promise.all([
     globalAccess ? Promise.resolve([]) : getSupervisableOrgUnitIds(user.id),
     globalAccess ? Promise.resolve([]) : getManageableActivityOrgUnitIds(user.id),

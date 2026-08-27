@@ -31,7 +31,7 @@ export async function supportUsersFor(type: ApprovalType, plantId?: string | nul
       include: {
         routingUser: true,
         memberships: {
-          where: { active: true, canReceiveIdeas: true, user: { active: true } },
+          where: { active: true, canReceiveIdeas: true, user: { active: true, role: { not: "DIRECCION" } } },
           include: { user: true },
           orderBy: [{ level: "asc" }, { sortOrder: "asc" }]
         }
@@ -43,7 +43,7 @@ export async function supportUsersFor(type: ApprovalType, plantId?: string | nul
       return type === "CALIDAD" ? flags.impactsQuality : type === "SEGURIDAD" ? flags.impactsSafety : flags.requiresMaintenance;
     });
     const users = matchingUnits.flatMap((unit) => [
-      ...(unit.routingUser?.active ? [unit.routingUser] : []),
+      ...(unit.routingUser?.active && unit.routingUser.role !== "DIRECCION" ? [unit.routingUser] : []),
       ...unit.memberships.map((membership) => membership.user)
     ]);
     const uniqueUsers = [...new Map(users.map((user) => [user.id, user])).values()];

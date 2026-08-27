@@ -2,8 +2,8 @@
  * Normaliza las rutas del organigrama sin borrar historial:
  * - conserva una sola ruta activa por persona revisora y area;
  * - deja una sola ruta predeterminada;
- * - impide que Direccion de Operaciones reciba niveles menores a gerencia;
- * - corrige las ideas DNP pendientes que aun apuntan a la ruta interina.
+ * - excluye a cualquier usuario DIRECCION de rutas y asignaciones estructurales;
+ * - conserva a Direccion en el organigrama con visibilidad de consulta.
  *
  * Uso:
  *   pnpm exec tsx scripts/simplificar-rutas-organigrama.ts
@@ -14,13 +14,12 @@ import { PrismaClient, type Prisma } from "@prisma/client";
 const prisma = new PrismaClient();
 const aplicar = process.argv.includes("--aplicar");
 const GENERATED_ROUTE_PREFIX = "Organigrama 2026 -";
-const OPERATIONS_DIRECTOR_EMAIL = "myriam.esparza@proboca.net";
-const DNP_COORDINATOR_REVIEWER_EMAIL = "lucero.aguilar@proboca.net";
-const MANAGER_LEVEL = 4;
 
 type UnitWithRoutes = Prisma.OrgUnitGetPayload<{
   include: {
-    captureArea: true;
+    routingUser: true;
+    captureArea: { include: { supervisor: true } };
+    memberships: { include: { user: true } };
     escalationRules: {
       include: {
         reviewerMembership: { include: { user: true } };
@@ -64,9 +63,15 @@ function preferredDefault(routes: Route[]) {
 
 async function loadUnits() {
   return prisma.orgUnit.findMany({
-    where: { active: true, qrEnabled: true },
+    where: { active: true },
     include: {
-      captureArea: true,
+      routingUser: true,
+      captureArea: { include: { supervisor: true } },
+      memberships: {
+        where: { active: true },
+        include: { user: true },
+        orderBy: [{ level: "desc" }, { sortOrder: "asc" }]
+      },
       escalationRules: {
         where: { active: true },
         include: {
@@ -80,12 +85,91 @@ async function loadUnits() {
   });
 }
 
+function localFallbackMembership(unit: UnitWithRoutes) {
+  return unit.memberships.find((membership) =>
+    membership.canReceiveIdeas && membership.user.active && membership.user.role !== "DIRECCION"
+  ) ?? null;
+}
+
+function needsOperationalFallback(item: ReturnType<typeof buildPlan>[number]) {
+  return item.unit.qrEnabled
+    && !item.defaultRoute
+    && (item.prohibitedDirectorRoutes.length > 0 || item.unit.routingUser?.role === "DIRECCION");
+}
+
+async function globalImprovementFallback() {
+  const candidates = await prisma.user.findMany({
+    where: { active: true, role: { not: "DIRECCION" } },
+    select: { id: true, name: true, email: true, role: true, jobTitle: true }
+  });
+  const score = (candidate: (typeof candidates)[number]) => {
+    const corporate = candidate.email.toLowerCase().endsWith("@proboca.net");
+    if (corporate && candidate.role === "MEJORA_CONTINUA") return 0;
+    if (corporate && /mejora continua/i.test(candidate.jobTitle ?? "")) return 1;
+    if (corporate && candidate.role === "ADMIN") return 2;
+    if (candidate.role === "MEJORA_CONTINUA") return 3;
+    return 4;
+  };
+  return candidates.sort((left, right) => score(left) - score(right) || left.name.localeCompare(right.name))[0] ?? null;
+}
+
+async function ensureOperationalFallbackRoutes(plan: ReturnType<typeof buildPlan>) {
+  const pending = plan.filter(needsOperationalFallback);
+  if (!pending.length) return [];
+  const globalFallback = await globalImprovementFallback();
+  const created: Array<{ unit: string; reviewer: string; source: "local" | "mejora_continua" }> = [];
+
+  for (const item of pending) {
+    const local = localFallbackMembership(item.unit);
+    let membershipId = local?.id;
+    let reviewerName = local?.user.name;
+    let source: "local" | "mejora_continua" = "local";
+    if (!membershipId || !reviewerName) {
+      if (!globalFallback) throw new Error(`No hay una persona operativa para resguardar la ruta ${item.unit.code}.`);
+      source = "mejora_continua";
+      reviewerName = globalFallback.name;
+      const membership = await prisma.orgMembership.upsert({
+        where: { userId_orgUnitId: { userId: globalFallback.id, orgUnitId: item.unit.id } },
+        update: { active: true, canReceiveIdeas: true, canReviewTeam: true, canManageActivities: true },
+        create: {
+          userId: globalFallback.id,
+          orgUnitId: item.unit.id,
+          title: "Resguardo provisional de Mejora Continua",
+          level: 4,
+          canReceiveIdeas: true,
+          canReviewTeam: true,
+          canManageActivities: true,
+          active: true,
+          sortOrder: item.unit.memberships.length
+        }
+      });
+      membershipId = membership.id;
+    }
+
+    const existing = await prisma.orgEscalationRule.findFirst({
+      where: { orgUnitId: item.unit.id, reviewerMembershipId: membershipId },
+      orderBy: [{ active: "desc" }, { createdAt: "asc" }]
+    });
+    const data = {
+      name: `${GENERATED_ROUTE_PREFIX}${reviewerName}`,
+      submitterLabel: "Personal del area",
+      circumstance: source === "local" ? "Responsable operativo disponible" : "Resguardo provisional de Mejora Continua",
+      submitterLevel: 0,
+      reviewerMembershipId: membershipId,
+      active: true,
+      isDefault: false,
+      sortOrder: 0
+    };
+    if (existing) await prisma.orgEscalationRule.update({ where: { id: existing.id }, data });
+    else await prisma.orgEscalationRule.create({ data: { ...data, orgUnitId: item.unit.id } });
+    created.push({ unit: item.unit.code, reviewer: reviewerName, source });
+  }
+  return created;
+}
+
 function buildPlan(units: UnitWithRoutes[]) {
   return units.map((unit) => {
-    const prohibitedDirectorRoutes = unit.escalationRules.filter((route) =>
-      normalizeEmail(route.reviewerMembership.user.email) === OPERATIONS_DIRECTOR_EMAIL
-      && route.submitterLevel < MANAGER_LEVEL
-    );
+    const prohibitedDirectorRoutes = unit.escalationRules.filter((route) => route.reviewerMembership.user.role === "DIRECCION");
     const prohibitedIds = new Set(prohibitedDirectorRoutes.map((route) => route.id));
     const eligibleRoutes = unit.escalationRules.filter((route) => !prohibitedIds.has(route.id));
     const routesByReviewer = new Map<string, Route[]>();
@@ -127,48 +211,59 @@ async function runInBatches(operations: Prisma.PrismaPromise<unknown>[], batchSi
   }
 }
 
-async function pendingDnpIdeasForDirector() {
-  return prisma.idea.findMany({
-    where: {
-      supervisor: { is: { email: OPERATIONS_DIRECTOR_EMAIL } },
-      status: { in: ["EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"] },
-      area: { organizationUnit: { is: { code: { contains: "DNP" } } } }
-    },
-    include: {
-      area: { include: { organizationUnit: true } },
-      escalationRule: true,
-      approvals: { where: { type: "SUPERVISOR" } },
-      notifications: {
-        where: { status: { in: ["PENDING", "ERROR"] } },
-        orderBy: { createdAt: "asc" }
-      }
-    },
-    orderBy: { folio: "asc" }
-  });
+async function directorOperationalAssignments() {
+  const openIdeaStatuses = [
+    "REGISTRADA", "EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION", "APROBADA_SUPERVISOR",
+    "EN_VALIDACION_CALIDAD", "EN_VALIDACION_SEGURIDAD", "EN_VALIDACION_MANTENIMIENTO",
+    "APROBADA_PARA_IMPLEMENTAR", "CLASIFICACION_MEJORA_CONTINUA", "EN_IMPLEMENTACION",
+    "IMPLEMENTADA", "EN_VALIDACION_FINAL", "VENCIDA"
+  ] as const;
+  const [ideas, implementations, approvals, support, kaizenLeaders, kaizenActivities, genbaCoordinators, genbaActivities] = await Promise.all([
+    prisma.idea.count({ where: { status: { in: [...openIdeaStatuses] }, supervisor: { is: { role: "DIRECCION" } } } }),
+    prisma.idea.count({ where: { status: { in: [...openIdeaStatuses] }, implementationOwner: { is: { role: "DIRECCION" } } } }),
+    prisma.approval.count({ where: { status: { in: ["PENDING", "MORE_INFO"] }, assignedTo: { is: { role: "DIRECCION" } } } }),
+    prisma.ideaSupportRequest.count({ where: { status: { in: ["PENDING", "MORE_INFO"] }, assignedTo: { is: { role: "DIRECCION" } } } }),
+    prisma.kaizenProject.count({ where: { status: { notIn: ["COMPLETADO", "CANCELADO"] }, leader: { is: { role: "DIRECCION" } } } }),
+    prisma.kaizenActivity.count({ where: { status: { notIn: ["COMPLETADA", "CANCELADA", "COMBINADA"] }, owner: { is: { role: "DIRECCION" } } } }),
+    prisma.genbaWalk.count({ where: { status: "ABIERTO", coordinator: { is: { role: "DIRECCION" } } } }),
+    prisma.genbaActivity.count({ where: { status: { notIn: ["COMPLETADA", "CANCELADA", "COMBINADA"] }, owner: { is: { role: "DIRECCION" } } } })
+  ]);
+  return { ideas, implementations, approvals, support, kaizenLeaders, kaizenActivities, genbaCoordinators, genbaActivities };
 }
 
-async function dnpTargetRoute(plan: ReturnType<typeof buildPlan>) {
-  const dnpUnit = plan.find((item) => item.unit.code === "APO-DNP");
-  const target = dnpUnit?.canonicalRoutes.find((route) =>
-    normalizeEmail(route.reviewerMembership.user.email) === DNP_COORDINATOR_REVIEWER_EMAIL
-  );
-  if (!target) throw new Error("APO-DNP no tiene una ruta activa hacia Lucero Aguilar.");
-  return target;
+async function cleanDirectorNotifications(directorEmails: string[]) {
+  if (!directorEmails.length) return 0;
+  const blocked = new Set(directorEmails.map(normalizeEmail));
+  const notices = await prisma.notificationOutbox.findMany({ where: { status: { in: ["PENDING", "ERROR"] } } });
+  let changed = 0;
+  for (const notice of notices) {
+    const recipients = notice.to.split(/[;,]/).map((recipient) => recipient.trim()).filter(Boolean);
+    if (!recipients.some((recipient) => blocked.has(normalizeEmail(recipient)))) continue;
+    const allowed = recipients.filter((recipient) => !blocked.has(normalizeEmail(recipient)));
+    await prisma.notificationOutbox.update({
+      where: { id: notice.id },
+      data: allowed.length
+        ? { to: allowed.join(";"), status: "PENDING", errorMessage: null }
+        : { status: "DISMISSED", errorMessage: "Direccion conserva consulta y no recibe avisos operativos." }
+    });
+    changed++;
+  }
+  return changed;
 }
 
-async function applyPlan(plan: ReturnType<typeof buildPlan>) {
-  const dnpIdeas = await pendingDnpIdeasForDirector();
-  const targetRoute = await dnpTargetRoute(plan);
+async function applyPlan(plan: ReturnType<typeof buildPlan>, fallbacksCreated: Awaited<ReturnType<typeof ensureOperationalFallbackRoutes>>) {
+  const assignments = await directorOperationalAssignments();
+  const assignmentCount = Object.values(assignments).reduce((sum, count) => sum + count, 0);
+  if (assignmentCount) {
+    throw new Error(`Hay ${assignmentCount} asignaciones operativas activas a Direccion. Reasignalas antes de ejecutar el saneamiento: ${JSON.stringify(assignments)}`);
+  }
+
   const duplicateRuleIds = plan.flatMap((item) => item.duplicates.map(({ duplicate }) => duplicate.id));
   const prohibitedRuleIds = plan.flatMap((item) => item.prohibitedDirectorRoutes.map((route) => route.id));
 
-  const ideaRepointOperations = plan.flatMap((item) => item.duplicates.map(({ canonical, duplicate }) =>
-    prisma.idea.updateMany({
-      where: { escalationRuleId: duplicate.id },
-      data: { escalationRuleId: canonical.id }
-    })
-  ));
-  await runInBatches(ideaRepointOperations);
+  await runInBatches(plan.flatMap((item) => item.duplicates.map(({ canonical, duplicate }) =>
+    prisma.idea.updateMany({ where: { escalationRuleId: duplicate.id }, data: { escalationRuleId: canonical.id } })
+  )));
 
   const routesToDeactivate = [...new Set([...duplicateRuleIds, ...prohibitedRuleIds])];
   if (routesToDeactivate.length) {
@@ -178,7 +273,7 @@ async function applyPlan(plan: ReturnType<typeof buildPlan>) {
     });
   }
 
-  const routeUpdates = plan.flatMap((item) => item.canonicalRoutes.map((route, index) =>
+  await runInBatches(plan.flatMap((item) => item.canonicalRoutes.map((route, index) =>
     prisma.orgEscalationRule.update({
       where: { id: route.id },
       data: {
@@ -189,107 +284,52 @@ async function applyPlan(plan: ReturnType<typeof buildPlan>) {
         } : {}),
         sortOrder: index,
         active: true,
-        isDefault: false
+        isDefault: route.id === item.defaultRoute?.id
       }
     })
-  ));
-  await runInBatches(routeUpdates);
+  )));
 
-  const defaultOperations = plan.flatMap((item) => {
-    const route = item.defaultRoute;
-    if (!route) return [];
-    const reviewer = route.reviewerMembership.user;
+  const structuralOperations = plan.flatMap((item) => {
+    const reviewer = item.defaultRoute?.reviewerMembership.user;
+    const mustClearRouting = item.unit.routingUser?.role === "DIRECCION";
+    const mustClearArea = item.unit.captureArea?.supervisor?.role === "DIRECCION";
     return [
-      prisma.orgEscalationRule.update({ where: { id: route.id }, data: { isDefault: true } }),
-      prisma.orgUnit.update({
+      ...(reviewer ? [prisma.orgUnit.update({
         where: { id: item.unit.id },
         data: { routingUserId: reviewer.id, responsible: reviewer.name, manager: reviewer.name }
-      }),
-      ...(item.unit.captureAreaId ? [
+      })] : mustClearRouting ? [prisma.orgUnit.update({ where: { id: item.unit.id }, data: { routingUserId: null } })] : []),
+      ...(item.unit.captureAreaId && reviewer ? [
         prisma.area.update({ where: { id: item.unit.captureAreaId }, data: { supervisorId: reviewer.id } })
+      ] : item.unit.captureAreaId && mustClearArea ? [
+        prisma.area.update({ where: { id: item.unit.captureAreaId }, data: { supervisorId: null } })
       ] : [])
     ];
   });
-  await runInBatches(defaultOperations);
+  await runInBatches(structuralOperations);
 
-  for (const idea of dnpIdeas) {
-    await prisma.$transaction(async (database) => {
-      await database.idea.update({
-        where: { id: idea.id },
-        data: {
-          supervisorId: targetRoute.reviewerMembership.userId,
-          escalationRuleId: targetRoute.id
-        }
-      });
-      await database.approval.updateMany({
-        where: {
-          ideaId: idea.id,
-          type: "SUPERVISOR",
-          status: { in: ["PENDING", "MORE_INFO"] }
-        },
-        data: { assignedToId: targetRoute.reviewerMembership.userId }
-      });
-      await database.notificationOutbox.updateMany({
-        where: {
-          ideaId: idea.id,
-          to: OPERATIONS_DIRECTOR_EMAIL,
-          status: { in: ["PENDING", "ERROR"] }
-        },
-        data: {
-          to: targetRoute.reviewerMembership.user.email,
-          status: "PENDING",
-          errorMessage: null
-        }
-      });
-      await database.auditLog.create({
-        data: {
-          entity: "Idea",
-          entityId: idea.id,
-          action: "DNP_ROUTE_REASSIGNED",
-          details: JSON.stringify({
-            folio: idea.folio,
-            from: OPERATIONS_DIRECTOR_EMAIL,
-            to: targetRoute.reviewerMembership.user.email,
-            reason: "Direccion de Operaciones recibe ideas solo desde nivel gerencia."
-          })
-        }
-      });
-    });
-  }
-
-  const pendingNotifications = await prisma.notificationOutbox.findMany({
-    where: {
-      ideaId: { in: dnpIdeas.map((idea) => idea.id) },
-      status: { in: ["PENDING", "ERROR"] }
-    },
-    orderBy: { createdAt: "asc" }
+  const directors = await prisma.user.findMany({ where: { role: "DIRECCION" }, select: { id: true, email: true } });
+  const directorIds = directors.map((director) => director.id);
+  const memberships = await prisma.orgMembership.updateMany({
+    where: { userId: { in: directorIds } },
+    data: { canReceiveIdeas: false, canReviewTeam: false, canManageActivities: false }
   });
-  const notificationKeys = new Set<string>();
-  const duplicateNotificationIds: string[] = [];
-  for (const notification of pendingNotifications) {
-    const key = [notification.ideaId, notification.channel, normalizeEmail(notification.to), notification.subject].join("|");
-    if (notificationKeys.has(key)) duplicateNotificationIds.push(notification.id);
-    else notificationKeys.add(key);
-  }
-  if (duplicateNotificationIds.length) {
-    await prisma.notificationOutbox.updateMany({
-      where: { id: { in: duplicateNotificationIds } },
-      data: { status: "DISMISSED", errorMessage: "Notificacion duplicada consolidada por saneamiento de rutas." }
-    });
-  }
+  const followers = await prisma.ideaFollower.deleteMany({ where: { userId: { in: directorIds } } });
+  const notifications = await cleanDirectorNotifications(directors.map((director) => director.email));
 
   const admin = await prisma.user.findFirst({ where: { role: "ADMIN", active: true }, select: { id: true } });
   await prisma.auditLog.create({
     data: {
       entity: "Organization",
-      entityId: "ROUTE-SIMPLIFICATION-2026",
-      action: "ORGANIZATION_ROUTES_SIMPLIFIED",
+      entityId: "DIRECTOR-READ-ONLY-2026",
+      action: "DIRECTOR_OPERATIONAL_ASSIGNMENTS_REMOVED",
       userId: admin?.id ?? null,
       details: JSON.stringify({
         duplicateRoutesDeactivated: duplicateRuleIds.length,
         directorRoutesDeactivated: prohibitedRuleIds.length,
-        dnpIdeasReassigned: dnpIdeas.length,
-        duplicateNotificationsDismissed: duplicateNotificationIds.length
+        directorMembershipsRestricted: memberships.count,
+        directorFollowersRemoved: followers.count,
+        directorNotificationsFiltered: notifications,
+        fallbackRoutesCreated: fallbacksCreated
       })
     }
   });
@@ -297,69 +337,43 @@ async function applyPlan(plan: ReturnType<typeof buildPlan>) {
   return {
     duplicateRoutesDeactivated: duplicateRuleIds.length,
     directorRoutesDeactivated: prohibitedRuleIds.length,
-    dnpIdeasReassigned: dnpIdeas.length,
-    duplicateNotificationsDismissed: duplicateNotificationIds.length
+    directorMembershipsRestricted: memberships.count,
+    directorFollowersRemoved: followers.count,
+    directorNotificationsFiltered: notifications,
+    fallbackRoutesCreated: fallbacksCreated
   };
 }
 
 async function audit() {
-  const units = await loadUnits();
-  const duplicateReviewers = units.flatMap((unit) => {
-    const counts = new Map<string, number>();
-    for (const route of unit.escalationRules) {
-      counts.set(route.reviewerMembershipId, (counts.get(route.reviewerMembershipId) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .filter(([, count]) => count > 1)
-      .map(([reviewerMembershipId, count]) => ({ unit: unit.code, reviewerMembershipId, count }));
-  });
-  const directorBelowManager = units.flatMap((unit) => unit.escalationRules
-    .filter((route) => normalizeEmail(route.reviewerMembership.user.email) === OPERATIONS_DIRECTOR_EMAIL && route.submitterLevel < MANAGER_LEVEL)
-    .map((route) => ({ unit: unit.code, route: route.submitterLabel, level: route.submitterLevel }))
-  );
-  const invalidDefaults = units
-    .filter((unit) => unit.escalationRules.length > 0 && unit.escalationRules.filter((route) => route.isDefault).length !== 1)
-    .map((unit) => ({ unit: unit.code, defaults: unit.escalationRules.filter((route) => route.isDefault).length }));
-  const pendingDirectorIdeasBelowManager = await prisma.idea.findMany({
-    where: {
-      supervisor: { is: { email: OPERATIONS_DIRECTOR_EMAIL } },
-      status: { in: ["EN_REVISION_SUPERVISOR", "SOLICITUD_INFORMACION"] },
-      OR: [
-        { escalationRule: { is: { submitterLevel: { lt: MANAGER_LEVEL } } } },
-        { escalationRuleId: null }
-      ]
-    },
-    select: { folio: true, submitterPosition: true }
-  });
-  const activeRoutes = units.reduce((total, unit) => total + unit.escalationRules.length, 0);
-  const result = {
-    ok: duplicateReviewers.length === 0
-      && directorBelowManager.length === 0
-      && invalidDefaults.length === 0
-      && pendingDirectorIdeasBelowManager.length === 0,
-    totals: {
-      units: units.length,
-      activeRoutes,
-      uniqueReviewerRoutes: units.reduce((total, unit) => total + new Set(unit.escalationRules.map((route) => route.reviewerMembershipId)).size, 0)
-    },
-    failures: { duplicateReviewers, directorBelowManager, invalidDefaults, pendingDirectorIdeasBelowManager }
-  };
-  return result;
+  const [routes, units, areas, memberships, followers, assignments] = await Promise.all([
+    prisma.orgEscalationRule.count({ where: { active: true, reviewerMembership: { user: { role: "DIRECCION" } } } }),
+    prisma.orgUnit.count({ where: { active: true, routingUser: { is: { role: "DIRECCION" } } } }),
+    prisma.area.count({ where: { active: true, supervisor: { is: { role: "DIRECCION" } } } }),
+    prisma.orgMembership.count({ where: { user: { role: "DIRECCION" }, OR: [{ canReceiveIdeas: true }, { canReviewTeam: true }, { canManageActivities: true }] } }),
+    prisma.ideaFollower.count({ where: { user: { role: "DIRECCION" } } }),
+    directorOperationalAssignments()
+  ]);
+  const assignmentCount = Object.values(assignments).reduce((sum, count) => sum + count, 0);
+  return { ok: routes + units + areas + memberships + followers + assignmentCount === 0, routes, units, areas, memberships, followers, assignments };
 }
 
 async function main() {
   const units = await loadUnits();
   const plan = buildPlan(units);
-  const dnpIdeas = await pendingDnpIdeasForDirector();
+  const assignments = await directorOperationalAssignments();
   const preview = {
     mode: aplicar ? "apply" : "preview",
     activeRoutesBefore: units.reduce((total, unit) => total + unit.escalationRules.length, 0),
     activeRoutesAfter: plan.reduce((total, item) => total + item.canonicalRoutes.length, 0),
     duplicateRoutes: plan.reduce((total, item) => total + item.duplicates.length, 0),
-    directorRoutesBelowManager: plan.reduce((total, item) => total + item.prohibitedDirectorRoutes.length, 0),
-    dnpIdeasToReassign: dnpIdeas.map((idea) => idea.folio),
+    directorRoutes: plan.reduce((total, item) => total + item.prohibitedDirectorRoutes.length, 0),
+    activeDirectorAssignments: assignments,
+    fallbackRoutesNeeded: plan.filter(needsOperationalFallback).map((item) => ({
+      unit: item.unit.code,
+      localReviewer: localFallbackMembership(item.unit)?.user.name ?? null
+    })),
     affectedUnits: plan
-      .filter((item) => item.duplicates.length || item.prohibitedDirectorRoutes.length)
+      .filter((item) => item.duplicates.length || item.prohibitedDirectorRoutes.length || item.unit.routingUser?.role === "DIRECCION" || item.unit.captureArea?.supervisor?.role === "DIRECCION")
       .map((item) => ({
         unit: item.unit.code,
         before: item.unit.escalationRules.length,
@@ -375,10 +389,12 @@ async function main() {
     return;
   }
 
-  const applied = await applyPlan(plan);
+  const fallbacksCreated = await ensureOperationalFallbackRoutes(plan);
+  const refreshedPlan = buildPlan(await loadUnits());
+  const applied = await applyPlan(refreshedPlan, fallbacksCreated);
   const result = await audit();
   console.log(JSON.stringify({ applied, audit: result }, null, 2));
-  if (!result.ok) throw new Error("El saneamiento termino con fallas de integridad.");
+  if (!result.ok) throw new Error("El saneamiento termino con referencias operativas a Direccion.");
 }
 
 main()

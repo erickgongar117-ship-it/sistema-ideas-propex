@@ -19,8 +19,12 @@ type MembershipOption = OrganizationMembership & { unitName: string; plantId: st
  * las membresias de ambas plantas a ojo; aqui se escribe el nombre o el numero de empleado.
  * La planta se conserva en la descripcion para no perder el aviso de cruce entre plantas.
  */
-function membershipOptions(options: MembershipOption[], plantId: string, excludeId?: string, activeOnly = false): SearchablePickerOption[] {
-  const available = options.filter((option) => option.id !== excludeId && (!activeOnly || option.active));
+function membershipOptions(options: MembershipOption[], plantId: string, excludeId?: string, activeOnly = false, operationalOnly = false): SearchablePickerOption[] {
+  const available = options.filter((option) =>
+    option.id !== excludeId
+    && (!activeOnly || option.active)
+    && (!operationalOnly || (option.user.role !== "DIRECCION" && option.canReceiveIdeas))
+  );
   const ordered = [
     ...available.filter((option) => option.plantId === plantId),
     ...available.filter((option) => option.plantId !== plantId)
@@ -87,7 +91,9 @@ export function OrganizationHierarchyEditor({
     });
   }
 
-  const activeMemberships = node.memberships.filter((membership) => membership.active);
+  const activeMemberships = node.memberships.filter((membership) =>
+    membership.active && membership.canReceiveIdeas && membership.user.role !== "DIRECCION"
+  );
 
   return (
     <div className="mt-6 space-y-5 border-t border-line pt-5">
@@ -126,13 +132,20 @@ export function OrganizationHierarchyEditor({
                   <label><span className="label">Nivel jerarquico</span><input className="field" defaultValue={membership.level} max={99} min={0} name="level" type="number" /></label>
                   <label className="block"><SearchablePicker defaultValue={membership.managerMembershipId ?? ""} label="Jefe directo" name="managerMembershipId" options={membershipOptions(allMemberships, node.plantId, membership.id)} placeholder="Sin jefe configurado" /><span className="helper-text">Los responsables de la misma planta aparecen primero.</span></label>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Checkbox defaultChecked={membership.canReviewTeam} label="Puede revisar y aprobar propuestas de su equipo" name="canReviewTeam" />
-                  <Checkbox defaultChecked={membership.canReceiveIdeas} label="Puede recibir ideas como responsable directo" name="canReceiveIdeas" />
-                  <Checkbox defaultChecked={membership.canManageActivities} label="Puede gestionar actividades" name="canManageActivities" />
-                  <Checkbox defaultChecked={node.routingUserId === membership.userId} label="Usar como ruta principal actual" name="setAsRoute" />
-                  <Checkbox defaultChecked={membership.active} label="Asignacion activa" name="active" />
-                </div>
+                {membership.user.role === "DIRECCION" ? (
+                  <div className="border-l-4 border-slate-700 bg-slate-50 p-3 text-xs font-bold leading-5 text-slate-700">
+                    Dirección aparece en el organigrama y conserva consulta global, sin permisos para recibir ideas, tareas o avisos.
+                    <input name="active" type="hidden" value={membership.active ? "on" : ""} />
+                  </div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Checkbox defaultChecked={membership.canReviewTeam} label="Puede revisar y aprobar propuestas de su equipo" name="canReviewTeam" />
+                    <Checkbox defaultChecked={membership.canReceiveIdeas} label="Puede recibir ideas como responsable directo" name="canReceiveIdeas" />
+                    <Checkbox defaultChecked={membership.canManageActivities} label="Puede gestionar actividades" name="canManageActivities" />
+                    <Checkbox defaultChecked={node.routingUserId === membership.userId} label="Usar como ruta principal actual" name="setAsRoute" />
+                    <Checkbox defaultChecked={membership.active} label="Asignacion activa" name="active" />
+                  </div>
+                )}
                 <div className="flex flex-wrap justify-end gap-2">
                   <button className="btn btn-secondary" disabled={isPending} type="submit">{isPending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <UserRoundCog className="h-4 w-4" aria-hidden />}Guardar persona</button>
                 </div>
@@ -192,7 +205,7 @@ export function OrganizationHierarchyEditor({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label><span className="label">Quien reporta</span><input className="field" defaultValue={rule.submitterLabel} name="submitterLabel" placeholder="Ej. Operador" required /></label>
                   <label><span className="label">Escalon</span><input className="field" defaultValue={rule.submitterLevel} min={0} name="submitterLevel" type="number" /><span className="helper-text">0 es quien esta mas abajo. Solo ordena la escalera.</span></label>
-                  <label className="block sm:col-span-2"><SearchablePicker defaultValue={rule.reviewerMembershipId} label="Quien le responde" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId)} placeholder="Nombre o numero de empleado" /><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
+                  <label className="block sm:col-span-2"><SearchablePicker defaultValue={rule.reviewerMembershipId} label="Quien le responde" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId, undefined, true, true)} placeholder="Nombre o numero de empleado" /><span className="helper-text">Dirección queda fuera de las rutas operativas; otra planta se separa para evitar cruces accidentales.</span></label>
                   <label className="block sm:col-span-2"><span className="label">Solo cuando (opcional)</span><input className="field" defaultValue={rule.circumstance ?? ""} name="circumstance" placeholder="Ej. turno nocturno o linea 2" /></label>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2"><Checkbox defaultChecked={rule.isDefault} label="Ruta principal" name="isDefault" /><Checkbox defaultChecked={rule.active} label="Ruta activa" name="active" /></div>
@@ -212,7 +225,7 @@ export function OrganizationHierarchyEditor({
               <div className="grid gap-3 sm:grid-cols-2">
                 <label><span className="label">Quien reporta</span><input className="field" name="submitterLabel" placeholder="Ej. Operador, supervisor, jefe de turno" required /></label>
                 <label><span className="label">Escalon</span><input className="field" defaultValue={node.escalationRules.length} min={0} name="submitterLevel" type="number" /><span className="helper-text">0 es quien esta mas abajo. Solo ordena la escalera.</span></label>
-                <label className="block sm:col-span-2"><SearchablePicker label="Quien le responde" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId, undefined, true)} placeholder="Nombre o numero de empleado" required /><span className="helper-text">Otra planta queda separada para evitar cruces accidentales.</span></label>
+                <label className="block sm:col-span-2"><SearchablePicker label="Quien le responde" name="reviewerMembershipId" options={membershipOptions(allMemberships, node.plantId, undefined, true, true)} placeholder="Nombre o numero de empleado" required /><span className="helper-text">Dirección queda fuera de las rutas operativas; otra planta se separa para evitar cruces accidentales.</span></label>
                 <label className="block sm:col-span-2"><span className="label">Solo cuando (opcional)</span><input className="field" name="circumstance" placeholder="Ej. turno nocturno o linea 2" /></label>
               </div>
               <div className="grid gap-2 sm:grid-cols-2"><Checkbox defaultChecked={node.escalationRules.length === 0} label="Ruta principal" name="isDefault" /><Checkbox defaultChecked label="Ruta activa" name="active" /></div>

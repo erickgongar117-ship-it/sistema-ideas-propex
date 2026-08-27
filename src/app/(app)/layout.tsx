@@ -11,7 +11,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const user = await requireUser();
   const pendingStatuses: NotificationStatus[] = ["PENDING", "ERROR"];
   const notificationWhere =
-    hasExecutiveVisibility(user)
+    hasExecutiveVisibility(user) && user.role !== "DIRECCION"
       ? { status: { in: pendingStatuses } }
       : { status: { in: pendingStatuses }, to: { contains: user.email } };
   const [pendingNotifications, moduleAccess, reviewMemberships, reviewAssignments, responsibilityMemberships] = await Promise.all([

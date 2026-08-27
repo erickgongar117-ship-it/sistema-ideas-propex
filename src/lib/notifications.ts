@@ -1,4 +1,5 @@
 import { NotificationChannel } from "@prisma/client";
+import { withoutDirectorRecipients } from "@/lib/director-policy";
 import { appBaseUrl } from "@/lib/url";
 import { prisma } from "@/lib/prisma";
 
@@ -93,38 +94,41 @@ async function recordOutbox(input: NotifyInput, channel: NotificationChannel, st
 }
 
 export async function notify(input: NotifyInput) {
+  const filteredRecipients = await withoutDirectorRecipients(input.to);
+  if (input.to && !filteredRecipients) return;
+  const safeInput = filteredRecipients === input.to ? input : { ...input, to: filteredRecipients };
   const channels = input.channels ?? ["EMAIL"];
   for (const channel of channels) {
     if (channel === "EMAIL") {
-      if (!input.to || !hasGraphConfig()) {
-        await recordOutbox(input, input.to ? "EMAIL" : "LOCAL", "PENDING");
+      if (!safeInput.to || !hasGraphConfig()) {
+        await recordOutbox(safeInput, safeInput.to ? "EMAIL" : "LOCAL", "PENDING");
         continue;
       }
 
       try {
-        await sendGraphMail(input);
-        await recordOutbox(input, "EMAIL", "SENT");
+        await sendGraphMail(safeInput);
+        await recordOutbox(safeInput, "EMAIL", "SENT");
       } catch (error) {
-        await recordOutbox(input, "EMAIL", "ERROR", error instanceof Error ? error.message : "Error desconocido");
+        await recordOutbox(safeInput, "EMAIL", "ERROR", error instanceof Error ? error.message : "Error desconocido");
       }
     }
 
     if (channel === "TEAMS") {
       if (!process.env.TEAMS_WEBHOOK_URL) {
-        await recordOutbox(input, "TEAMS", "PENDING", "TEAMS_WEBHOOK_URL no configurado");
+        await recordOutbox(safeInput, "TEAMS", "PENDING", "TEAMS_WEBHOOK_URL no configurado");
         continue;
       }
 
       try {
-        await sendTeams(input);
-        await recordOutbox(input, "TEAMS", "SENT");
+        await sendTeams(safeInput);
+        await recordOutbox(safeInput, "TEAMS", "SENT");
       } catch (error) {
-        await recordOutbox(input, "TEAMS", "ERROR", error instanceof Error ? error.message : "Error desconocido");
+        await recordOutbox(safeInput, "TEAMS", "ERROR", error instanceof Error ? error.message : "Error desconocido");
       }
     }
 
     if (channel === "LOCAL") {
-      await recordOutbox(input, "LOCAL", "PENDING");
+      await recordOutbox(safeInput, "LOCAL", "PENDING");
     }
   }
 }

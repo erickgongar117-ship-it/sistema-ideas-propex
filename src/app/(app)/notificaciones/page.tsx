@@ -26,7 +26,7 @@ const channelLabels = { EMAIL: "Correo", TEAMS: "Teams", LOCAL: "Aviso interno" 
 export default async function NotificationsPage({ searchParams }: NotificationsProps) {
   const user = await requireUser();
   const query = await searchParams;
-  const canSeeAll = hasExecutiveVisibility(user);
+  const canSeeAll = hasExecutiveVisibility(user) && user.role !== "DIRECCION";
   const canManageNotifications = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
   const showHistory = query.vista === "todas";
   const currentPage = Math.max(1, Number.parseInt(query.pagina ?? "1", 10) || 1);
@@ -53,7 +53,7 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
       <PageHeader
         eyebrow="Avisos · Actividad del sistema"
         title="Notificaciones"
-        description={canSeeAll ? "Avisos generados por el flujo y estado de los envíos de correo." : `Avisos dirigidos a ${user.email}.`}
+        description={user.role === "DIRECCION" ? "Dirección conserva visibilidad ejecutiva, sin recibir avisos operativos." : canSeeAll ? "Avisos generados por el flujo y estado de los envíos de correo." : `Avisos dirigidos a ${user.email}.`}
       />
 
       <section className="mb-6 grid gap-4 lg:grid-cols-[280px_1fr]">

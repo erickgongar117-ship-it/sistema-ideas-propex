@@ -38,6 +38,7 @@ import {
   parseStringArray,
   workProgress
 } from "@/lib/domain";
+import { operationalUserWhere } from "@/lib/director-policy";
 import { requireGenbaAccess } from "@/lib/module-access";
 import { personOptions } from "@/lib/person-options";
 import { prisma } from "@/lib/prisma";
@@ -68,7 +69,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
         updates: { include: { user: true, activity: true }, orderBy: { createdAt: "desc" }, take: 60 }
       }
     }),
-    prisma.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({ where: operationalUserWhere(), orderBy: { name: "asc" } }),
     prisma.kaizenProject.findMany({ where: { status: { notIn: ["COMPLETADO", "CANCELADO"] } }, orderBy: { number: "desc" } })
   ]);
 

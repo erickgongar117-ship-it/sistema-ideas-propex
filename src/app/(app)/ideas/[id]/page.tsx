@@ -58,6 +58,7 @@ import {
   roleLabels
 } from "@/lib/domain";
 import { requireUser } from "@/lib/auth";
+import { operationalUserWhere } from "@/lib/director-policy";
 import { isManagerialEvaluationRule } from "@/lib/managerial-evaluation";
 import { canDecideInitialIdea, canViewIdea } from "@/lib/idea-access";
 import { automaticManagerialEvaluation, automaticPointRules } from "@/lib/points";
@@ -102,7 +103,7 @@ export default async function IdeaDetailPage({ params, searchParams }: DetailPro
         followers: { include: { user: true }, orderBy: { createdAt: "asc" } }
       }
     }),
-    prisma.user.findMany({ where: { active: true }, orderBy: [{ name: "asc" }, { email: "asc" }] }),
+    prisma.user.findMany({ where: operationalUserWhere(), orderBy: [{ name: "asc" }, { email: "asc" }] }),
     prisma.pointRule.findMany({ where: { active: true }, orderBy: { createdAt: "asc" } }),
     prisma.orgUnit.findMany({ where: { active: true, isSupportArea: true }, orderBy: [{ plantId: "asc" }, { sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true, code: true, plantId: true } }),
     prisma.orgMembership.findMany({ where: { userId: user.id, active: true }, select: { orgUnitId: true, canReceiveIdeas: true, canReviewTeam: true, canManageActivities: true } })

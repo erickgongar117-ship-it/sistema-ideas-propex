@@ -8,6 +8,7 @@ import { Prisma, type ApprovalType, type Classification, type GenbaStatus, type 
 import type { WorkboardBulkInput, WorkboardBulkItemResult, WorkboardBulkResult } from "@/components/operations-workboard";
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
+import { areOperationalUsers, operationalUserWhere } from "@/lib/director-policy";
 import { genbaDepartments, impactOptions, kaizenStatusLabels, nextValidationStatus, requiredApprovalTypes, roleHomePath, validationOrder } from "@/lib/domain";
 import { EmployeeNumberValidationError, normalizeEmployeeNumber } from "@/lib/employee-number";
 import { saveUpload } from "@/lib/files";
@@ -50,6 +51,9 @@ const dateOrNull = (formData: FormData, key: string) => {
   return value ? new Date(`${value}T12:00:00`) : null;
 };
 const isImprovementManager = (role: Role) => role === "ADMIN" || role === "MEJORA_CONTINUA";
+async function requireOperationalAssignees(userIds: Array<string | null | undefined>, errorPath: string) {
+  if (!(await areOperationalUsers(userIds))) redirect(errorPath);
+}
 class KaizenAlreadyClosedError extends Error {}
 class KaizenPermissionChangedError extends Error {}
 class BulkFollowUpConflictError extends Error {}
@@ -288,7 +292,7 @@ export async function submitIdeaAction(formData: FormData) {
         where: {
           orgUnitId: area.organizationUnit.id,
           active: true,
-          reviewerMembership: { is: { active: true, user: { is: { active: true } } } },
+          reviewerMembership: { is: { active: true, user: { is: { active: true, role: { not: "DIRECCION" } } } } },
           ...(requestedRouteId ? { id: requestedRouteId } : { isDefault: true })
         },
         include: { reviewerMembership: { include: { user: true } } }
@@ -296,7 +300,7 @@ export async function submitIdeaAction(formData: FormData) {
         where: {
           orgUnitId: area.organizationUnit.id,
           active: true,
-          reviewerMembership: { is: { active: true, user: { is: { active: true } } } }
+          reviewerMembership: { is: { active: true, user: { is: { active: true, role: { not: "DIRECCION" } } } } }
         },
         include: { reviewerMembership: { include: { user: true } } },
         orderBy: [{ sortOrder: "asc" }, { submitterLevel: "asc" }]
@@ -305,7 +309,7 @@ export async function submitIdeaAction(formData: FormData) {
   if (requestedRouteId && !escalationRule) redirect(`/captura/${areaCode}?error=ruta`);
   const supervisorId = escalationRule?.reviewerMembership.userId ?? area.supervisorId;
   const supervisor = escalationRule?.reviewerMembership.user ?? area.supervisor;
-  if (!supervisorId || !supervisor?.active) {
+  if (!supervisorId || !supervisor?.active || supervisor.role === "DIRECCION") {
     redirect(`/captura/${areaCode}?error=sin_responsable`);
   }
 
@@ -412,7 +416,7 @@ export async function submitIdeaAction(formData: FormData) {
     channels: ["EMAIL", "TEAMS"]
   });
   if (followerIds.length) {
-    const followers = await prisma.user.findMany({ where: { id: { in: followerIds }, active: true }, select: { email: true } });
+    const followers = await prisma.user.findMany({ where: operationalUserWhere({ id: { in: followerIds } }), select: { email: true } });
     for (const follower of followers) {
       await notify({
         ideaId: idea.id,
@@ -547,12 +551,12 @@ async function resolveBulkAssignee(identifier: string) {
   const value = identifier.trim().toLowerCase();
   if (!value) return null;
   if (value.includes("@")) {
-    return prisma.user.findUnique({ where: { email: value }, select: { id: true, name: true, email: true, active: true } });
+    return prisma.user.findFirst({ where: operationalUserWhere({ email: value }), select: { id: true, name: true, email: true, active: true } });
   }
   try {
     const employeeNumber = normalizeEmployeeNumber(value);
     if (!employeeNumber) return null;
-    return prisma.user.findUnique({ where: { employeeNumber }, select: { id: true, name: true, email: true, active: true } });
+    return prisma.user.findFirst({ where: operationalUserWhere({ employeeNumber }), select: { id: true, name: true, email: true, active: true } });
   } catch {
     return null;
   }
@@ -1274,6 +1278,7 @@ export async function assignImplementationAction(formData: FormData) {
   const dueDateText = text(formData, "dueDate");
   const priority = text(formData, "priority") as Priority;
   if (!ownerId || !dueDateText) redirect(`/ideas/${ideaId}?error=asignacion`);
+  await requireOperationalAssignees([ownerId], `/ideas/${ideaId}?error=responsable`);
   const currentIdea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { status: true, classification: true } });
   if (!currentIdea.classification || !["CLASIFICACION_MEJORA_CONTINUA", "EN_IMPLEMENTACION"].includes(currentIdea.status)) {
     redirect(`/ideas/${ideaId}?error=flujo`);
@@ -1662,7 +1667,7 @@ export async function addIdeaFollowerAction(formData: FormData) {
   const label = text(formData, "label") || "Seguimiento asignado";
   const [idea, follower] = await Promise.all([
     prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, include: { area: true } }),
-    prisma.user.findFirst({ where: { id: followerId, active: true } })
+    prisma.user.findFirst({ where: operationalUserWhere({ id: followerId }) })
   ]);
   if (!follower) redirect(`/ideas/${ideaId}?error=responsable`);
   await prisma.ideaFollower.upsert({
@@ -1702,6 +1707,7 @@ export async function createKaizenProjectAction(formData: FormData) {
   const startDate = dateOrNull(formData, "startDate");
   const endDate = dateOrNull(formData, "endDate");
   if (!title || !area || !objective || !leaderId || !startDate || !endDate || endDate < startDate) redirect("/kaizen/nuevo?error=campos");
+  await requireOperationalAssignees([leaderId], "/kaizen/nuevo?error=lider");
 
   const project = await prisma.$transaction(async (tx) => {
     const maximum = await tx.kaizenProject.aggregate({ _max: { number: true } });
@@ -1755,6 +1761,7 @@ export async function updateKaizenProjectAction(formData: FormData) {
   const current = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId } });
   if (current.status === "COMPLETADO" || current.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
   const leaderId = text(formData, "leaderId");
+  await requireOperationalAssignees([leaderId], `/kaizen/${projectId}?error=lider`);
   const project = await prisma.$transaction(async (tx) => {
     const updated = await tx.kaizenProject.update({ where: { id: projectId }, data: {
       title: text(formData, "title"),
@@ -1913,6 +1920,8 @@ export async function addKaizenActivityAction(formData: FormData) {
   const projectId = text(formData, "projectId");
   const action = text(formData, "action");
   if (!action) redirect(`/kaizen/${projectId}?error=actividad`);
+  const ownerId = text(formData, "ownerId") || null;
+  await requireOperationalAssignees([ownerId], `/kaizen/${projectId}?error=responsable`);
   let activity: Prisma.KaizenActivityGetPayload<{ include: { owner: true; project: true } }>;
   try {
     activity = await serializableTransaction(async (tx) => {
@@ -1925,7 +1934,7 @@ export async function addKaizenActivityAction(formData: FormData) {
           number: (maximum._max.number ?? 0) + 1,
           problem: text(formData, "problem") || null,
           action,
-          ownerId: text(formData, "ownerId") || null,
+          ownerId,
           startDate: dateOrNull(formData, "startDate"),
           dueDate: dateOrNull(formData, "dueDate"),
           status: "PENDIENTE"
@@ -1966,6 +1975,9 @@ export async function updateKaizenActivityAction(formData: FormData) {
   const status = text(formData, "status") as WorkItemStatus;
   const editableStatuses: WorkItemStatus[] = ["PENDIENTE", "EN_PROCESO", "BLOQUEADA"];
   if (!editableStatuses.includes(status)) redirect("/kaizen");
+  const ownerId = text(formData, "ownerId") || null;
+  const activityProject = await prisma.kaizenActivity.findUnique({ where: { id: activityId }, select: { projectId: true } });
+  await requireOperationalAssignees([ownerId], `/kaizen/${activityProject?.projectId ?? ""}?error=responsable`);
   let activity: KaizenActivity;
   try {
     activity = await serializableTransaction(async (tx) => {
@@ -1974,7 +1986,7 @@ export async function updateKaizenActivityAction(formData: FormData) {
       const updated = await tx.kaizenActivity.update({ where: { id: activityId }, data: {
         problem: text(formData, "problem") || null,
         action: text(formData, "action"),
-        ownerId: text(formData, "ownerId") || null,
+        ownerId,
         startDate: dateOrNull(formData, "startDate"),
         dueDate: dateOrNull(formData, "dueDate"),
         status
@@ -2179,7 +2191,7 @@ export async function addKaizenTeamMemberAction(formData: FormData) {
   if (!projectId || !userId || !role) redirect(`/kaizen/${projectId}?error=equipo`);
   const project = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId } });
   if (project.status === "COMPLETADO" || project.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
-  const member = await prisma.user.findFirst({ where: { id: userId, active: true }, select: { id: true, name: true, email: true } });
+  const member = await prisma.user.findFirst({ where: operationalUserWhere({ id: userId }), select: { id: true, name: true, email: true } });
   if (!member) redirect(`/kaizen/${projectId}?error=equipo`);
   await prisma.$transaction(async (tx) => {
     await resolveParticipantFromUser(userId, tx);
@@ -2401,6 +2413,7 @@ export async function createGenbaWalkAction(formData: FormData) {
     dueDate: dateOrNull(formData, `dueDate-${index + 1}`)
   }));
   if (!areaName || !visitDate || !coordinatorId || expectedDepartments.length === 0 || activityInputs.some((activity) => !activity.problem)) redirect("/genba/nuevo?error=campos");
+  await requireOperationalAssignees([coordinatorId, ...activityInputs.map((activity) => activity.ownerId)], "/genba/nuevo?error=responsable");
 
   const walk = await prisma.$transaction(async (tx) => {
     const maximum = await tx.genbaWalk.aggregate({ _max: { number: true } });
@@ -2446,6 +2459,8 @@ export async function updateGenbaWalkAction(formData: FormData) {
   const status = text(formData, "status") as GenbaStatus;
   const allowed: GenbaStatus[] = ["ABIERTO", "CERRADO", "CANCELADO"];
   if (!allowed.includes(status) || expectedDepartments.length === 0) redirect(`/genba/${walkId}?error=campos`);
+  const coordinatorId = text(formData, "coordinatorId");
+  await requireOperationalAssignees([coordinatorId], `/genba/${walkId}?error=responsable`);
   const current = await prisma.genbaWalk.findUniqueOrThrow({ where: { id: walkId }, include: { activities: true } });
   if (current.status === "CERRADO" || current.status === "CANCELADO") redirect(`/genba/${walkId}?error=cerrado`);
   const notes = text(formData, "notes") || null;
@@ -2460,7 +2475,7 @@ export async function updateGenbaWalkAction(formData: FormData) {
       expectedDepartments: JSON.stringify(expectedDepartments),
       attendedDepartments: JSON.stringify(attendedDepartments),
       notes,
-      coordinatorId: text(formData, "coordinatorId"),
+      coordinatorId,
       status,
       closedAt
     } });
@@ -2482,6 +2497,8 @@ export async function addGenbaActivityAction(formData: FormData) {
   const walkId = text(formData, "walkId");
   const problem = text(formData, "problem");
   if (!problem) redirect(`/genba/${walkId}?error=actividad`);
+  const ownerId = text(formData, "ownerId") || null;
+  await requireOperationalAssignees([ownerId], `/genba/${walkId}?error=responsable`);
   const walk = await prisma.genbaWalk.findUniqueOrThrow({ where: { id: walkId } });
   if (walk.status !== "ABIERTO") redirect(`/genba/${walkId}?error=cerrado`);
   const activity = await prisma.$transaction(async (tx) => {
@@ -2492,7 +2509,7 @@ export async function addGenbaActivityAction(formData: FormData) {
         number: (maximum._max.number ?? 0) + 1,
         problem,
         action: text(formData, "action") || null,
-        ownerId: text(formData, "ownerId") || null,
+        ownerId,
         dueDate: dateOrNull(formData, "dueDate")
       },
       include: { owner: true, walk: true }
@@ -2519,6 +2536,9 @@ export async function updateGenbaActivityAction(formData: FormData) {
   const status = text(formData, "status") as WorkItemStatus;
   const editableStatuses: WorkItemStatus[] = ["PENDIENTE", "EN_PROCESO", "BLOQUEADA"];
   if (!editableStatuses.includes(status)) redirect("/genba");
+  const ownerId = text(formData, "ownerId") || null;
+  const activityWalk = await prisma.genbaActivity.findUnique({ where: { id: activityId }, select: { walkId: true } });
+  await requireOperationalAssignees([ownerId], `/genba/${activityWalk?.walkId ?? ""}?error=responsable`);
   const activity = await serializableTransaction(async (tx) => {
     const current = await tx.genbaActivity.findUniqueOrThrow({
       where: { id: activityId },
@@ -2530,7 +2550,7 @@ export async function updateGenbaActivityAction(formData: FormData) {
       data: {
         problem: text(formData, "problem"),
         action: text(formData, "action") || null,
-        ownerId: text(formData, "ownerId") || null,
+        ownerId,
         dueDate: dateOrNull(formData, "dueDate"),
         status
       }
@@ -2687,6 +2707,7 @@ export async function promoteGenbaActivityToKaizenAction(formData: FormData) {
   if (!projectId) {
     const leaderId = text(formData, "leaderId") || activity.ownerId;
     if (!leaderId) redirect(`/genba/${activity.walkId}?error=lider`);
+    await requireOperationalAssignees([leaderId], `/genba/${activity.walkId}?error=lider`);
     const project = await prisma.$transaction(async (tx) => {
       const maximum = await tx.kaizenProject.aggregate({ _max: { number: true } });
       const number = (maximum._max.number ?? 0) + 1;
@@ -2756,6 +2777,7 @@ export async function updateAreaAction(formData: FormData) {
   const areaId = text(formData, "areaId");
   const supervisorId = text(formData, "supervisorId") || null;
   const active = checked(formData, "active");
+  await requireOperationalAssignees([supervisorId], `/configuracion?error=responsable#areas`);
   await prisma.$transaction(async (tx) => {
     await tx.area.update({
       where: { id: areaId },
@@ -2879,6 +2901,25 @@ export async function updateUserAction(formData: FormData) {
   const email = parsedEmail.data;
   const currentUser = await prisma.user.findUnique({ where: { id: userId } });
   if (!currentUser) redirect("/configuracion?error=usuario#usuarios");
+  if (role === "DIRECCION") {
+    const references = await Promise.all([
+      prisma.orgEscalationRule.count({ where: { active: true, reviewerMembership: { userId } } }),
+      prisma.orgUnit.count({ where: { routingUserId: userId } }),
+      prisma.area.count({ where: { supervisorId: userId } }),
+      prisma.idea.count({ where: { OR: [{ supervisorId: userId }, { implementationOwnerId: userId }], status: { notIn: terminalSourceIdeaStatuses } } }),
+      prisma.approval.count({ where: { assignedToId: userId, status: { in: ["PENDING", "MORE_INFO"] } } }),
+      prisma.ideaSupportRequest.count({ where: { assignedToId: userId, status: { in: ["PENDING", "MORE_INFO"] } } }),
+      prisma.ideaFollower.count({ where: { userId } }),
+      prisma.kaizenProject.count({ where: { leaderId: userId, status: { notIn: ["COMPLETADO", "CANCELADO"] } } }),
+      prisma.kaizenTeamMember.count({ where: { userId, project: { status: { notIn: ["COMPLETADO", "CANCELADO"] } } } }),
+      prisma.kaizenActivity.count({ where: { ownerId: userId, status: { notIn: ["COMPLETADA", "CANCELADA", "COMBINADA"] } } }),
+      prisma.genbaWalk.count({ where: { coordinatorId: userId, status: "ABIERTO" } }),
+      prisma.genbaActivity.count({ where: { ownerId: userId, status: { notIn: ["COMPLETADA", "CANCELADA", "COMBINADA"] } } })
+    ]);
+    if (references.some((count) => count > 0)) {
+      redirect(`/configuracion?error=director_asignado&user=${encodeURIComponent(userId)}#usuarios`);
+    }
+  }
   const existing = await userWithNormalizedEmail(email);
   if (existing && existing.id !== userId) redirect(`/configuracion?error=correo&user=${encodeURIComponent(userId)}#usuarios`);
   const password = text(formData, "password");
@@ -2906,10 +2947,21 @@ export async function updateUserAction(formData: FormData) {
   try {
     user = await prisma.$transaction(async (tx) => {
       const updated = await tx.user.update({ where: { id: userId }, data });
-      if (currentUser.email !== updated.email) {
+      if (updated.role === "DIRECCION") {
+        await tx.notificationOutbox.updateMany({
+          where: { to: { in: [...new Set([currentUser.email, updated.email])] }, status: { in: ["PENDING", "ERROR"] } },
+          data: { status: "DISMISSED", errorMessage: "Direccion conserva consulta y no recibe avisos operativos." }
+        });
+      } else if (currentUser.email !== updated.email) {
         await tx.notificationOutbox.updateMany({
           where: { to: currentUser.email, status: { in: ["PENDING", "ERROR"] } },
           data: { to: updated.email }
+        });
+      }
+      if (updated.role === "DIRECCION") {
+        await tx.orgMembership.updateMany({
+          where: { userId: updated.id },
+          data: { canReceiveIdeas: false, canReviewTeam: false, canManageActivities: false }
         });
       }
       if (updated.active) {

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auditLog } from "@/lib/audit";
 import { requireUser } from "@/lib/auth";
+import { DIRECTOR_OPERATIONAL_MESSAGE } from "@/lib/director-policy";
 import type { OrganizationActionResult } from "@/lib/organization-types";
 import { prisma } from "@/lib/prisma";
 
@@ -126,6 +127,9 @@ export async function saveOrganizationUnitAction(formData: FormData): Promise<Or
     : null;
   if (input.routingUserId && !routingUser) {
     return { ok: false, message: "El usuario responsable no existe o esta inactivo." };
+  }
+  if (routingUser?.role === "DIRECCION") {
+    return { ok: false, message: `${DIRECTOR_OPERATIONAL_MESSAGE} Selecciona una gerencia o responsable.` };
   }
 
   const duplicate = await prisma.orgUnit.findFirst({
@@ -284,6 +288,9 @@ export async function saveMembershipAction(formData: FormData): Promise<Organiza
     prisma.orgMembership.findMany({ select: { id: true, managerMembershipId: true } })
   ]);
   if (!unit || !person) return { ok: false, message: "El area o la persona seleccionada ya no esta disponible." };
+  if (person.role === "DIRECCION" && (input.canReviewTeam || input.canReceiveIdeas || input.canManageActivities || input.setAsRoute)) {
+    return { ok: false, message: `${DIRECTOR_OPERATIONAL_MESSAGE} Puedes conservarla en el organigrama como jefe directo, sin permisos operativos.` };
+  }
   if (input.membershipId && !existingMembership) return { ok: false, message: "La asignacion que intentas modificar ya no existe." };
   if (input.managerMembershipId && !manager) return { ok: false, message: "El jefe directo seleccionado ya no existe." };
   if (manager && (!manager.active || !manager.user.active || !manager.orgUnit.active || !manager.orgUnit.plant.active)) {
@@ -388,6 +395,9 @@ export async function saveEscalationRuleAction(formData: FormData): Promise<Orga
   if (!reviewer.active || !reviewer.user.active || !reviewer.orgUnit.active || !reviewer.orgUnit.plant.active) {
     return { ok: false, message: "La persona revisora esta inactiva. Activa su usuario, planta, area y membresia antes de asignarla." };
   }
+  if (reviewer.user.role === "DIRECCION") {
+    return { ok: false, message: `${DIRECTOR_OPERATIONAL_MESSAGE} Selecciona una gerencia o responsable.` };
+  }
   if (reviewer.orgUnit.plantId !== unit.plantId) {
     return { ok: false, message: `La persona revisora pertenece a ${reviewer.orgUnit.plant.name}; esta ruta solo puede usar responsables de ${unit.plant.name}.` };
   }
@@ -396,9 +406,6 @@ export async function saveEscalationRuleAction(formData: FormData): Promise<Orga
   }
   if (input.isDefault && !input.active) {
     return { ok: false, message: "Una ruta predeterminada debe estar activa. Activa la ruta o desmarca la opcion predeterminada." };
-  }
-  if (reviewer.user.email.trim().toLowerCase() === "myriam.esparza@proboca.net" && input.submitterLevel < 4) {
-    return { ok: false, message: "Direccion de Operaciones solo recibe escalaciones de nivel gerencia. Selecciona al jefe o gerente inmediato." };
   }
   const duplicateRoute = input.active
     ? await prisma.orgEscalationRule.findFirst({

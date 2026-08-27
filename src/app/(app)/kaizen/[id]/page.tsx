@@ -24,6 +24,7 @@ import { SectionHeading } from "@/components/section-heading";
 import { KaizenProjectGantt } from "@/components/kaizen-project-gantt";
 import { WorkItemDisclosure } from "@/components/work-item-disclosure";
 import { isWorkItemOverdue, workItemStatusLabels, workProgress } from "@/lib/domain";
+import { operationalUserWhere } from "@/lib/director-policy";
 import { kaizenClosureReadiness } from "@/lib/kaizen-closure";
 import { requireKaizenAccess } from "@/lib/module-access";
 import { personOptions } from "@/lib/person-options";
@@ -56,7 +57,7 @@ export default async function KaizenDetailPage({ params, searchParams }: KaizenD
         updates: { include: { user: true, activity: true }, orderBy: { createdAt: "desc" }, take: 60 }
       }
     }),
-    prisma.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({ where: operationalUserWhere(), orderBy: { name: "asc" } }),
     prisma.coinTransaction.findMany({
       where: { sourceType: "KAIZEN", sourceId: id },
       include: { participant: { select: { userId: true, name: true, employeeNumber: true } } },
