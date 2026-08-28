@@ -473,7 +473,12 @@ export async function supervisorDecisionAction(formData: FormData) {
     redirect(`/ideas/${ideaId}?error=${decision === "RECHAZAR" ? "justificacion" : "informacion"}`);
   }
   const claimed = await prisma.approval.updateMany({
-    where: { ideaId, type: "SUPERVISOR", status: { in: ["PENDING", "MORE_INFO"] } },
+    where: {
+      ideaId,
+      type: "SUPERVISOR",
+      status: { in: ["PENDING", "MORE_INFO"] },
+      ...(user.role === "ADMIN" ? {} : { assignedToId: user.id })
+    },
     data: {
       assignedToId: user.id,
       status: decision === "APROBAR" ? "APPROVED" : decision === "RECHAZAR" ? "REJECTED" : "MORE_INFO",
@@ -746,7 +751,7 @@ export async function bulkFollowUpAction(input: WorkboardBulkInput): Promise<Wor
             continue;
           }
           if (!decidableInitialIdeas.has(idea.id)) {
-            results.push({ itemId, reference, ok: false, message: "No esta asignada a tu ruta ni al equipo que supervisas." });
+            results.push({ itemId, reference, ok: false, message: "Esta aprobacion esta asignada a otra persona." });
             continue;
           }
           if (!["PENDING", "MORE_INFO"].includes(approval.status)) {
@@ -757,7 +762,12 @@ export async function bulkFollowUpAction(input: WorkboardBulkInput): Promise<Wor
           if (cleanInput.action === "REJECT") {
             await serializableTransaction(async (tx) => {
               const claimedApproval = await tx.approval.updateMany({
-                where: { id: approval.id, updatedAt: expectedTargetUpdatedAt, status: { in: ["PENDING", "MORE_INFO"] } },
+                where: {
+                  id: approval.id,
+                  updatedAt: expectedTargetUpdatedAt,
+                  status: { in: ["PENDING", "MORE_INFO"] },
+                  ...(user.role === "ADMIN" ? {} : { assignedToId: user.id })
+                },
                 data: { assignedToId: user.id, status: "REJECTED", decision: "RECHAZAR", comments: reason, decidedAt: new Date() }
               });
               if (claimedApproval.count !== 1) throw new BulkFollowUpConflictError();
@@ -787,7 +797,12 @@ export async function bulkFollowUpAction(input: WorkboardBulkInput): Promise<Wor
           })));
           const status = await serializableTransaction(async (tx) => {
             const claimedApproval = await tx.approval.updateMany({
-              where: { id: approval.id, updatedAt: expectedTargetUpdatedAt, status: { in: ["PENDING", "MORE_INFO"] } },
+              where: {
+                id: approval.id,
+                updatedAt: expectedTargetUpdatedAt,
+                status: { in: ["PENDING", "MORE_INFO"] },
+                ...(user.role === "ADMIN" ? {} : { assignedToId: user.id })
+              },
               data: { assignedToId: user.id, status: "APPROVED", decision: "APROBAR", comments: null, decidedAt: new Date() }
             });
             if (claimedApproval.count !== 1) throw new BulkFollowUpConflictError();

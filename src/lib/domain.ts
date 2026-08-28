@@ -244,7 +244,19 @@ export function approvalTypeForRole(role: Role): ApprovalType | null {
   return null;
 }
 
+/**
+ * A donde cae cada quien al entrar.
+ *
+ * La regla la fijo el usuario: todos aterrizan en su propio trabajo, salvo quien dirige, que
+ * abre primero el panel ejecutivo. Antes gerencia y Mejora Continua caian en "Ideas de
+ * mejora", que es una bandeja de trabajo operativo y no la lectura del portafolio que
+ * necesitan al empezar el dia.
+ *
+ * ADMIN se queda en /dashboard a proposito: es el rol de operacion del sistema, no un puesto
+ * directivo, y el usuario no lo incluyo en la regla.
+ */
 export function roleHomePath(role: Role): string {
+  if (role === "DIRECCION" || role === "GERENTE" || role === "MEJORA_CONTINUA") return "/panorama";
   if (executiveViewerRoles.includes(role)) return "/dashboard";
   return "/seguimientos";
 }
