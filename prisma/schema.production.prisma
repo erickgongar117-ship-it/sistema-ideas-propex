@@ -208,6 +208,9 @@ model User {
   genbaAccess                   Boolean               @default(false)
   jobTitle                      String?
   employeeNumber                String?               @unique
+  // Con que abre cada quien su bandeja. Nulo = el comportamiento de siempre.
+  followUpView                  String?
+  followUpModule                String?
   createdAt                     DateTime              @default(now())
   updatedAt                     DateTime              @updatedAt
   supervisedAreas               Area[]                @relation("AreaSupervisor")
@@ -230,8 +233,8 @@ model User {
   orgMemberships                OrgMembership[]
   assignedSupportIdeas          IdeaSupportRequest[]  @relation("IdeaSupportAssignee")
   followedIdeas                 IdeaFollower[]        @relation("IdeaFollowerUser")
-  followedKaizen          KaizenFollower[]     @relation("KaizenFollowerUser")
-  followedGenba           GenbaFollower[]      @relation("GenbaFollowerUser")
+  followedKaizen                KaizenFollower[]      @relation("KaizenFollowerUser")
+  followedGenba                 GenbaFollower[]       @relation("GenbaFollowerUser")
   createdIdeaFollowers          IdeaFollower[]        @relation("IdeaFollowerCreator")
   participant                   Participant?
   createdTrainingPrograms       TrainingProgram[]     @relation("TrainingProgramCreator")
@@ -428,6 +431,7 @@ model IdeaFollower {
   userId      String
   createdById String?
   label       String   @default("Seguimiento")
+  pinned      Boolean  @default(false)
   createdAt   DateTime @default(now())
   idea        Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
   user        User     @relation("IdeaFollowerUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -451,7 +455,7 @@ model Participant {
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
   user             User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
-  orgUnit          OrgUnit?                @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  orgUnit          OrgUnit?               @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
   ideas            Idea[]
   enrollments      TrainingEnrollment[]
   coinTransactions CoinTransaction[]
@@ -862,13 +866,14 @@ model GenbaUpdate {
 /// foranea existe de verdad: si el proyecto se borra, el seguimiento se va con el y no
 /// queda apuntando a la nada.
 model KaizenFollower {
-  id          String        @id @default(cuid())
-  projectId   String
-  userId      String
-  label       String        @default("Seguimiento propio")
-  createdAt   DateTime      @default(now())
-  project     KaizenProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user        User          @relation("KaizenFollowerUser", fields: [userId], references: [id], onDelete: Cascade)
+  id        String        @id @default(cuid())
+  projectId String
+  userId    String
+  label     String        @default("Seguimiento propio")
+  pinned    Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  project   KaizenProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User          @relation("KaizenFollowerUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
   @@index([userId])
@@ -879,6 +884,7 @@ model GenbaFollower {
   walkId    String
   userId    String
   label     String    @default("Seguimiento propio")
+  pinned    Boolean   @default(false)
   createdAt DateTime  @default(now())
   walk      GenbaWalk @relation(fields: [walkId], references: [id], onDelete: Cascade)
   user      User      @relation("GenbaFollowerUser", fields: [userId], references: [id], onDelete: Cascade)

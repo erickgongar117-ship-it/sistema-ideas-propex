@@ -1,6 +1,6 @@
 import type { IdeaStatus, WorkItemStatus } from "@prisma/client";
 import Link from "next/link";
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, SlidersHorizontal } from "lucide-react";
 import { FollowUpTable, type FollowUpRow } from "@/components/follow-up-table";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
@@ -17,6 +17,7 @@ import {
   type FollowUpModuleFilter
 } from "@/lib/follow-up-pagination";
 import { serializeFollowUpBulkTarget } from "@/lib/follow-up-bulk";
+import { guardarPreferenciasSeguimientoAction } from "@/app/seguir-actions";
 import {
   followUpGenbaWhere,
   followUpIdeaWhere,
@@ -78,11 +79,17 @@ function followUpHref(view: FollowUpView, moduleFilter: FollowUpModuleFilter, pa
 
 export default async function FollowUpsPage({ searchParams }: PageProps) {
   const [user, query] = await Promise.all([requireUser(), searchParams]);
-  const requestedView = query.vista;
+  /**
+   * La preferencia guardada solo manda cuando la URL no dice nada.
+   *
+   * Asi un enlace compartido —"mira esto en ?vista=equipo"— sigue abriendo donde apunta, y
+   * no en la pestana favorita de quien lo recibe.
+   */
+  const requestedView = query.vista ?? user.followUpView ?? undefined;
   const activeView: FollowUpView = requestedView === "seguimiento" || requestedView === "equipo" || requestedView === "mias"
     ? requestedView
     : "pendientes";
-  const requestedModule = query.modulo?.toUpperCase();
+  const requestedModule = (query.modulo ?? user.followUpModule ?? undefined)?.toUpperCase();
   const moduleFilter: FollowUpModuleFilter = requestedModule === "IDEA" || requestedModule === "KAIZEN" || requestedModule === "GENBA"
     ? requestedModule
     : "TODOS";
@@ -150,7 +157,8 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         leader: true,
         orgUnit: { include: { plant: true } },
         activities: { include: { owner: true }, orderBy: { number: "asc" } },
-        attachments: { where: { type: "CHARTER" }, select: { id: true } }
+        attachments: { where: { type: "CHARTER" }, select: { id: true } },
+        followers: { where: { userId: user.id }, select: { pinned: true, label: true } }
       },
       orderBy: activeView === "pendientes" ? [{ endDate: "asc" }, { updatedAt: "desc" }] : { updatedAt: "desc" },
       skip: (currentPage - 1) * pageSlots.KAIZEN,
@@ -161,7 +169,8 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       include: {
         coordinator: true,
         orgUnit: { include: { plant: true } },
-        activities: { include: { owner: true }, orderBy: { number: "asc" } }
+        activities: { include: { owner: true }, orderBy: { number: "asc" } },
+        followers: { where: { userId: user.id }, select: { pinned: true, label: true } }
       },
       orderBy: { updatedAt: "desc" },
       skip: (currentPage - 1) * pageSlots.GENBA,
@@ -318,7 +327,8 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       updatedAt: idea.updatedAt,
       overdue: isPastDue(dueDate, terminalIdeaStatuses.has(idea.status)),
       bulkEntityId,
-      bulkActions
+      bulkActions,
+      pinned: idea.followers.some((seguidor) => seguidor.pinned)
     });
   }
 
@@ -379,6 +389,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       updatedAt: project.updatedAt,
       overdue: isPastDue(dueDate, project.status === "COMPLETADO" || project.status === "CANCELADO"),
       progress: { completed: progress.closed, total: progress.total, percent: progress.percent },
+      pinned: project.followers.some((seguidor) => seguidor.pinned),
       children: orderedActivities.map((activity) => ({
         id: activity.id,
         label: activity.action,
@@ -440,6 +451,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       updatedAt: walk.updatedAt,
       overdue: isPastDue(dueDate, walk.status !== "ABIERTO"),
       progress: { completed: progress.closed, total: progress.total, percent: progress.percent },
+      pinned: walk.followers.some((seguidor) => seguidor.pinned),
       children: orderedActivities.map((activity) => ({
         id: activity.id,
         label: activity.action || activity.problem,
@@ -521,6 +533,39 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
           </Link>
         ))}
       </nav>
+
+      <details className="details-panel no-print mb-4">
+        <summary>
+          <span className="flex items-center gap-2 text-sm font-extrabold">
+            <SlidersHorizontal className="h-4 w-4" aria-hidden />
+            Con qué quiero abrir mi bandeja
+          </span>
+        </summary>
+        <form action={guardarPreferenciasSeguimientoAction} className="grid gap-3 p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <label>
+            <span className="label">Pestaña</span>
+            <select className="field" defaultValue={user.followUpView ?? ""} name="vista">
+              <option value="">La de siempre (Pendientes)</option>
+              <option value="mias">Solo mías</option>
+              <option value="seguimiento">Seguimiento</option>
+              <option value="equipo">Equipo</option>
+            </select>
+          </label>
+          <label>
+            <span className="label">Módulo</span>
+            <select className="field" defaultValue={user.followUpModule ?? ""} name="modulo">
+              <option value="">Todos</option>
+              <option value="IDEA">Solo Ideas</option>
+              <option value="KAIZEN">Solo Kaizen</option>
+              <option value="GENBA">Solo GENBA</option>
+            </select>
+          </label>
+          <button className="btn btn-primary" type="submit">Guardar</button>
+          <p className="text-xs text-slate-600 sm:col-span-3">
+            Es tuyo y no cambia lo que ven los demás. Un enlace que alguien te comparta se sigue abriendo donde apunta.
+          </p>
+        </form>
+      </details>
 
       <nav aria-label="Vistas de seguimiento" className="work-queue-tabs">
         {([
