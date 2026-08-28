@@ -21,15 +21,33 @@ type SeedNode = {
   children?: SeedNode[];
 };
 
-const pAreas: SeedNode[] = Array.from({ length: 9 }, (_, index) => ({
-  code: `APO-P${index + 1}`,
-  captureAreaCode: `P${index + 1}`,
-  name: `P${index + 1}`,
-  type: "AREA",
-  responsible: `Supervisor P${index + 1}`,
-  manager: "Jefatura de Produccion",
-  qrEnabled: true
-}));
+const pAreas: SeedNode[] = Array.from({ length: 9 }, (_, index) => {
+  const number = index + 1;
+  if (number === 1) {
+    return {
+      code: "APO-P1",
+      captureAreaCode: "P1",
+      name: "P1",
+      type: "AREA",
+      responsible: "Jefatura de P1",
+      manager: "Jefatura de Produccion",
+      children: [
+        { code: "APO-P1-MUSLO", captureAreaCode: "P1-MUSLO", name: "P1 Muslo", type: "PROCESO", responsible: "Supervisor P1 Muslo", manager: "Jefatura de P1", qrEnabled: true },
+        { code: "APO-P1-PYM-L1", captureAreaCode: "P1-PYM-L1", name: "P1 PYM Linea 1", type: "PROCESO", responsible: "Supervisor Pierna de Pavo", manager: "Jefatura de P1", qrEnabled: true },
+        { code: "APO-P1-PYM-L2", captureAreaCode: "P1-PYM-L2", name: "P1 PYM Linea 2", type: "PROCESO", responsible: "Supervisor Deshuese Automatico", manager: "Jefatura de P1", qrEnabled: true }
+      ]
+    };
+  }
+  return {
+    code: `APO-P${number}`,
+    captureAreaCode: `P${number}`,
+    name: `P${number}`,
+    type: "AREA",
+    responsible: `Supervisor P${number}`,
+    manager: "Jefatura de Produccion",
+    qrEnabled: true
+  };
+});
 
 const seedPlants: Array<{ code: PlantCode; name: string; nodes: SeedNode[] }> = [
   {
