@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-28 -- claude (codex/hierarchy-training-coins) -- Fusione 59 usuarios importados con su cuenta real @proboca.net en local y produccion (325 asignaciones movidas cada una); agregue KaizenFollower y GenbaFollower con sus acciones en src/app/seguir-actions.ts, probado de punta a punta. Commits 893c6f6 y decabe8.
+
+Siguiente paso dejado: Integrar los seguidores en Mi trabajo y poner el boton Seguir: toca seguimientos/page.tsx, que Codex tiene con cambios sin commitear. Falta db push del esquema nuevo en produccion. Pendiente del usuario: nombres de los 3 supervisores de las subareas de P1.
+
+---
+
 ## 2026-08-28 -- codex (codex/hierarchy-training-coins) -- Publique los commits 8fe2fd6 y 6d88241 en main; Vercel completo el despliegue dpl_FYM7giATSzusQxAMHZABa3q5eEu6 y aliaso sistema-ideas-propex.vercel.app. Login responde 200 y Entrenamientos protegido redirige al login.
 
 Siguiente paso dejado: Pedir a Erick recargar sin cache y validar con ADMIN o MEJORA_CONTINUA en Entrenamientos > Programas > Editar programa; si la cuenta no ve el boton, revisar su rol real en Neon.
