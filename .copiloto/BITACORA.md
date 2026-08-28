@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-28 -- codex (codex/hierarchy-training-coins) -- Aplique en Neon la nomina oficial de 807 colaboradores (157 quincenales y 650 semanales), confirme una segunda pasada sin duplicados, corregi Erick 81177 y Edgar 81171, y robustece el importador para transacciones de produccion. TypeScript y build:vercel pasaron.
+
+Siguiente paso dejado: Verificar en Vercel el despliegue de main y revisar posteriormente las 45 personas quincenales con correo pendiente y las 6 con correo encontrado pero sin cuenta, sin inventar accesos.
+
+---
+
 ## 2026-08-28 -- codex (codex/hierarchy-training-coins) -- Agregue PayrollFrequency y ParticipantEmailStatus en ambos esquemas; cree importador idempotente de HC quincenal, activos semanal y Outlook; aplique y verifique 807 personas en dev.db (157 quincenales, 650 semanales, Fernando 26677), sin cambiar ideas, entrenamientos ni ProbocaCoins; agregue filtros/etiquetas en Entrenamientos y busqueda tolerante por nombre, acentos, orden y ceros; tsc y build:vercel pasaron; commit 3596210.
 
 Siguiente paso dejado: No se modifico produccion. Con autorizacion explicita: cargar DATABASE_URL de .env.local, ejecutar primero prisma db push con prisma/schema.production.prisma y luego scripts/importar-plantilla-nomina.ts contra Neon en simulacion; revisar 112 FOUND, 45 PENDING, cero conflictos y solo entonces repetir con --aplicar. Los 6 correos encontrados sin cuenta requieren decision separada sobre crear acceso.
