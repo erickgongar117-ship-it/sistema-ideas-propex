@@ -32,6 +32,7 @@ import {
   LayoutList,
   LoaderCircle,
   MoreHorizontal,
+  Pin,
   Plus,
   RotateCcw,
   Rows3,
@@ -138,6 +139,14 @@ export type WorkboardItem = {
   allowedGroups?: string[];
   bulkEntityId?: string;
   bulkActions?: WorkboardBulkAction[];
+  /**
+   * Fijado arriba por quien mira, y a que registro apunta el boton de fijar.
+   *
+   * Va el modulo y el id real, no el `id` de la fila: la fila se llama "kaizen-abc123" para
+   * no chocar entre modulos, y la accion de servidor necesita el id de verdad.
+   */
+  pinned?: boolean;
+  pinTarget?: { modulo: "IDEA" | "KAIZEN" | "GENBA"; registroId: string };
 };
 
 export type WorkboardMetric = {
@@ -321,6 +330,7 @@ export function OperationsWorkboard({
   onBulkAction,
   childActions,
   itemAction,
+  pinAction,
   childLabel = "Subelementos",
   clientPagination = true
 }: {
@@ -334,6 +344,8 @@ export function OperationsWorkboard({
   onBulkAction?: (input: WorkboardBulkInput) => Promise<WorkboardBulkResult>;
   childActions?: WorkboardChildActions;
   itemAction?: WorkboardItemAction;
+  /** Fijar o soltar el registro que se esta mirando. Cada quien fija en su propia bandeja. */
+  pinAction?: (formData: FormData) => void | Promise<void>;
   childLabel?: string;
   clientPagination?: boolean;
 }) {
@@ -1114,7 +1126,20 @@ export function OperationsWorkboard({
                 </details>
               </div>
             ) : null}
-            <footer><Link className="btn btn-primary w-full" href={focusedItem.href}>Abrir expediente completo<ArrowRight className="h-4 w-4" aria-hidden /></Link></footer>
+            <footer className="grid gap-2">
+              {pinAction && focusedItem.pinTarget ? (
+                <form action={pinAction}>
+                  <input name="modulo" type="hidden" value={focusedItem.pinTarget.modulo} />
+                  <input name="registroId" type="hidden" value={focusedItem.pinTarget.registroId} />
+                  <input name="fijar" type="hidden" value={focusedItem.pinned ? "no" : "si"} />
+                  <button className="btn btn-secondary w-full" type="submit">
+                    <Pin className="h-4 w-4" aria-hidden />
+                    {focusedItem.pinned ? "Quitar de mis fijados" : "Fijar arriba de mi bandeja"}
+                  </button>
+                </form>
+              ) : null}
+              <Link className="btn btn-primary w-full" href={focusedItem.href}>Abrir expediente completo<ArrowRight className="h-4 w-4" aria-hidden /></Link>
+            </footer>
           </aside>
         </div>
       ) : null}

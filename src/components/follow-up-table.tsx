@@ -6,6 +6,7 @@ import {
   type WorkboardMetric
 } from "@/components/operations-workboard";
 import { bulkFollowUpAction } from "@/app/actions";
+import { fijarRegistroAction } from "@/app/seguir-actions";
 import { workItemStatusRender, type StatusCategory } from "@/lib/status-system";
 
 export type FollowUpModule = "IDEA" | "KAIZEN" | "GENBA";
@@ -42,6 +43,8 @@ export type FollowUpRow = {
     percent: number;
   };
   children?: FollowUpChild[];
+  /** Fijado arriba por quien mira. Lo decide cada persona en su propia bandeja. */
+  pinned?: boolean;
 };
 
 const moduleLabels: Record<FollowUpModule, string> = {
@@ -50,9 +53,12 @@ const moduleLabels: Record<FollowUpModule, string> = {
   GENBA: "GENBA"
 };
 
-const urgencyOrder = ["overdue", "today", "soon", "planned", "no-date"];
+// Lo fijado va antes que lo vencido a proposito: si alguien decidio que ese proyecto es lo
+// primero que quiere ver, mandarlo debajo de una lista de vencidos anula la decision.
+const urgencyOrder = ["pinned", "overdue", "today", "soon", "planned", "no-date"];
 
 function urgency(row: FollowUpRow, now: Date) {
+  if (row.pinned) return { key: "pinned", label: "Fijados por ti", color: "var(--brand-red)" };
   if (row.overdue) return { key: "overdue", label: "Vencidos", color: "var(--time-overdue)" };
   if (!row.dueDate) return { key: "no-date", label: "Sin fecha compromiso", color: "var(--time-none)" };
 
@@ -103,6 +109,8 @@ export function FollowUpTable({
       tags: [moduleLabel, row.status, row.assignment],
       bulkEntityId: row.bulkEntityId,
       bulkActions: row.bulkActions,
+      pinned: row.pinned,
+      pinTarget: { modulo: row.module, registroId: row.key.replace(/^(idea|kaizen|genba)-/, "") },
       children: row.children?.map((child) => {
         const childStatus = workItemStatusRender(child.status);
         return {
@@ -144,6 +152,7 @@ export function FollowUpTable({
       locationLabel="Planta y area"
       metrics={metrics}
       onBulkAction={bulkFollowUpAction}
+      pinAction={fijarRegistroAction}
       primaryLabel="Trabajo"
     />
   );

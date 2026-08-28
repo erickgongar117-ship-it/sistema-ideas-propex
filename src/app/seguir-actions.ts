@@ -105,3 +105,76 @@ export async function dejarDeSeguirAction(formData: FormData) {
   });
   for (const ruta of rutasQueRefrescar(modulo, registroId)) revalidatePath(ruta);
 }
+
+/**
+ * Las tres preferencias de la bandeja, decididas con el usuario.
+ *
+ * La idea era "que cada quien vea primero lo que le importa". Se acoto a proposito a tres
+ * cosas —con que pestana abre, que modulo trae por defecto y que registros van fijados
+ * arriba— en vez de dejar armar tableros a medida. En una planta de mil personas, mil
+ * configuraciones distintas significan que nadie puede ayudar a otro por telefono: "dale
+ * a la tercera pestana" deja de querer decir lo mismo para todos.
+ *
+ * Vacio siempre es una respuesta valida: guardar sin elegir nada devuelve a la persona al
+ * comportamiento de siempre, que es la unica forma de deshacer una preferencia.
+ */
+const VISTAS_VALIDAS = ["pendientes", "mias", "seguimiento", "equipo"];
+const MODULOS_VALIDOS = ["IDEA", "KAIZEN", "GENBA"];
+
+export async function guardarPreferenciasSeguimientoAction(formData: FormData) {
+  const user = await requireUser();
+  const vista = String(formData.get("vista") ?? "").trim();
+  const modulo = String(formData.get("modulo") ?? "").trim().toUpperCase();
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      followUpView: VISTAS_VALIDAS.includes(vista) ? vista : null,
+      followUpModule: MODULOS_VALIDOS.includes(modulo) ? modulo : null
+    }
+  });
+  revalidatePath("/seguimientos");
+}
+
+/**
+ * Fijar arriba reutiliza al seguidor en vez de inventar otra tabla.
+ *
+ * Fijar algo ya implica seguirlo, asi que si la persona no lo seguia se crea el seguimiento
+ * en el mismo paso. Desfijar solo baja la bandera y conserva el seguimiento: quien fija y
+ * luego desfija casi nunca quiere dejar de ver el registro, solo quitarlo de la cabecera.
+ */
+export async function fijarRegistroAction(formData: FormData) {
+  const user = await requireUser();
+  const modulo = String(formData.get("modulo") ?? "") as Modulo;
+  const registroId = String(formData.get("registroId") ?? "");
+  const fijar = String(formData.get("fijar") ?? "") !== "no";
+  if (!["IDEA", "KAIZEN", "GENBA"].includes(modulo) || !registroId) return;
+
+  const permitido = await verificarAcceso(modulo, registroId, user.id, user.role);
+  if (!permitido) return;
+
+  if (modulo === "IDEA") {
+    await prisma.ideaFollower.upsert({
+      where: { ideaId_userId: { ideaId: registroId, userId: user.id } },
+      update: { pinned: fijar },
+      create: { ideaId: registroId, userId: user.id, createdById: user.id, label: "Fijado por mi", pinned: fijar }
+    });
+  } else if (modulo === "KAIZEN") {
+    await prisma.kaizenFollower.upsert({
+      where: { projectId_userId: { projectId: registroId, userId: user.id } },
+      update: { pinned: fijar },
+      create: { projectId: registroId, userId: user.id, label: "Fijado por mi", pinned: fijar }
+    });
+  } else {
+    await prisma.genbaFollower.upsert({
+      where: { walkId_userId: { walkId: registroId, userId: user.id } },
+      update: { pinned: fijar },
+      create: { walkId: registroId, userId: user.id, label: "Fijado por mi", pinned: fijar }
+    });
+  }
+
+  await prisma.auditLog.create({
+    data: { entity: `${modulo}_FOLLOW`, entityId: registroId, action: fijar ? "FOLLOW_PINNED" : "FOLLOW_UNPINNED", userId: user.id, details: "{}" }
+  });
+  for (const ruta of rutasQueRefrescar(modulo, registroId)) revalidatePath(ruta);
+}
