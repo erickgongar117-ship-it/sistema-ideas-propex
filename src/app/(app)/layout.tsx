@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +10,9 @@ export const dynamic = "force-dynamic";
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  // Quien todavia trae la contrasena que le pusieron no pasa de aqui. La pantalla vive fuera
+  // de este grupo de rutas, o se redirigiria a si misma sin parar.
+  if (user.mustChangePassword) redirect("/cambiar-contrasena");
   const pendingStatuses: NotificationStatus[] = ["PENDING", "ERROR"];
   const notificationWhere =
     hasExecutiveVisibility(user) && user.role !== "DIRECCION"

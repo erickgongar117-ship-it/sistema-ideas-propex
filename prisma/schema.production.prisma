@@ -208,6 +208,9 @@ model User {
   genbaAccess                   Boolean               @default(false)
   jobTitle                      String?
   employeeNumber                String?               @unique
+  // Obliga a poner contrasena propia antes de usar el sistema. Se enciende cuando la
+  // contrasena la puso alguien mas: el alta inicial o un administrador.
+  mustChangePassword            Boolean               @default(false)
   // Con que abre cada quien su bandeja. Nulo = el comportamiento de siempre.
   followUpView                  String?
   followUpModule                String?

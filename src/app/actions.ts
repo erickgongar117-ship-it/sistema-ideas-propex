@@ -3157,7 +3157,10 @@ export async function createUserAction(formData: FormData) {
         active: checked(formData, "active"),
         kaizenAccess: checked(formData, "kaizenAccess"),
         genbaAccess: checked(formData, "genbaAccess"),
-        passwordHash: await bcrypt.hash(password, 10)
+        passwordHash: await bcrypt.hash(password, 10),
+        // Nace temporal: la escribio el administrador, asi que no puede identificar a nadie
+        // hasta que la persona ponga la suya.
+        mustChangePassword: true
         }
       });
       if (created.active) await resolveParticipantFromUser(created.id, tx);
@@ -3223,7 +3226,7 @@ export async function updateUserAction(formData: FormData) {
     active: checked(formData, "active"),
     kaizenAccess: checked(formData, "kaizenAccess"),
     genbaAccess: checked(formData, "genbaAccess"),
-    ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {})
+    ...(password ? { passwordHash: await bcrypt.hash(password, 10), mustChangePassword: true } : {})
   };
 
   let user;
