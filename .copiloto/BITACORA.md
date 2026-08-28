@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-28 -- codex (codex/hierarchy-training-coins) -- Publique los commits 8fe2fd6 y 6d88241 en main; Vercel completo el despliegue dpl_FYM7giATSzusQxAMHZABa3q5eEu6 y aliaso sistema-ideas-propex.vercel.app. Login responde 200 y Entrenamientos protegido redirige al login.
+
+Siguiente paso dejado: Pedir a Erick recargar sin cache y validar con ADMIN o MEJORA_CONTINUA en Entrenamientos > Programas > Editar programa; si la cuenta no ve el boton, revisar su rol real en Neon.
+
+---
+
 ## 2026-08-28 -- codex (codex/hierarchy-training-coins) -- Agregue editor de programas en Entrenamientos para cambiar nombre, descripcion y ProbocaCoins; los nuevos valores aplican a pendientes y el libro mayor historico no se altera. Prueba transaccional, TypeScript y build:vercel pasaron. Commit 8fe2fd6.
 
 Siguiente paso dejado: Publicar el commit 8fe2fd6 en main/Vercel cuando Erick lo autorice; despues verificar en produccion Entrenamientos > Programas > Editar programa con una cuenta ADMIN o MEJORA_CONTINUA.
