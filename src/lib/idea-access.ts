@@ -120,54 +120,24 @@ export async function getSupervisableOrgUnits(userId: string): Promise<Supervisa
 
 export function buildInitialReviewWhere(
   user: IdeaAccessUser,
-  supervisableOrgUnitIds: string[] = []
+  _supervisableOrgUnitIds: string[] = []
 ): Prisma.IdeaWhereInput {
   if (user.role === "ADMIN") return {};
 
-  const assignments: Prisma.IdeaWhereInput[] = [
-    { supervisorId: user.id },
-    { area: { is: { supervisorId: user.id } } },
-    { approvals: { some: { type: "SUPERVISOR", assignedToId: user.id } } },
-    {
-      escalationRule: {
-        is: {
-          reviewerMembership: {
-            is: { userId: user.id, active: true }
-          }
-        }
-      }
-    }
-  ];
-
-  if (supervisableOrgUnitIds.length) {
-    assignments.push(
-      {
-        area: {
-          is: {
-            organizationUnit: {
-              is: { id: { in: supervisableOrgUnitIds } }
-            }
-          }
-        }
-      },
-      { escalationRule: { is: { orgUnitId: { in: supervisableOrgUnitIds } } } },
-      { participant: { is: { orgUnitId: { in: supervisableOrgUnitIds } } } }
-    );
-  }
-
-  return { OR: assignments };
+  return {
+    approvals: { some: { type: "SUPERVISOR", assignedToId: user.id } }
+  };
 }
 
 export async function canDecideInitialIdea(user: IdeaAccessUser, ideaId: string) {
   if (user.role === "DIRECCION") return false;
   if (user.role === "ADMIN") return true;
-  const supervisableOrgUnitIds = await getSupervisableOrgUnitIds(user.id);
-  const match = await prisma.idea.findFirst({
+  const match = await prisma.approval.findFirst({
     where: {
-      AND: [
-        { id: ideaId },
-        buildInitialReviewWhere(user, supervisableOrgUnitIds)
-      ]
+      ideaId,
+      type: "SUPERVISOR",
+      assignedToId: user.id,
+      status: { in: ["PENDING", "MORE_INFO"] }
     },
     select: { id: true }
   });
@@ -189,12 +159,16 @@ export async function decidableInitialIdeaIds(
   // Mismo atajo que canDecideInitialIdea: ADMIN decide cualquier idea sin comprobar ambito.
   if (user.role === "ADMIN") return new Set(unique);
 
-  const supervisableOrgUnitIds = await getSupervisableOrgUnitIds(user.id);
-  const matches = await prisma.idea.findMany({
-    where: { AND: [{ id: { in: unique } }, buildInitialReviewWhere(user, supervisableOrgUnitIds)] },
-    select: { id: true }
+  const matches = await prisma.approval.findMany({
+    where: {
+      ideaId: { in: unique },
+      type: "SUPERVISOR",
+      assignedToId: user.id,
+      status: { in: ["PENDING", "MORE_INFO"] }
+    },
+    select: { ideaId: true }
   });
-  return new Set(matches.map((idea) => idea.id));
+  return new Set(matches.map((approval) => approval.ideaId));
 }
 
 /**
