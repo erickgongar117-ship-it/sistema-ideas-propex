@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-28 -- codex (main) -- Revise e integre los cambios de Claude en main, cerre la autorizacion inicial al revisor exacto, alinee la semilla P1, valide TypeScript y build Vercel, publique dpl_22SqKNGXVVid49ZdNMn4sr2NiTBR y comprobe login, contrasena, tres capturas P1 y QR.
+
+Siguiente paso dejado: Validar con cuentas reales en produccion: un supervisor debe ver y aprobar solo ideas cuyo Approval SUPERVISOR tenga assignedToId igual a su usuario; una persona con actividad Kaizen o GENBA debe verla en /seguimientos en Solo mias.
+
+---
+
 ## 2026-08-28 -- claude (codex/hierarchy-training-coins) -- Fusione 59 usuarios importados con su cuenta real @proboca.net en local y produccion (325 asignaciones movidas cada una); agregue KaizenFollower y GenbaFollower con sus acciones en src/app/seguir-actions.ts, probado de punta a punta. Commits 893c6f6 y decabe8.
 
 Siguiente paso dejado: Integrar los seguidores en Mi trabajo y poner el boton Seguir: toca seguimientos/page.tsx, que Codex tiene con cambios sin commitear. Falta db push del esquema nuevo en produccion. Pendiente del usuario: nombres de los 3 supervisores de las subareas de P1.
