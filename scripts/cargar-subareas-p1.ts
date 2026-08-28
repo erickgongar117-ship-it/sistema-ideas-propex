@@ -36,9 +36,14 @@ const aplicar = process.argv.includes("--aplicar");
 
 const PADRE = "APO-P1";
 
+// El codigo de la unidad y el del area de captura no son el mismo a proposito: el del area
+// es el que sale en el QR, y /captura/P1-MUSLO se lee mucho mejor que /captura/APO-P1-MUSLO
+// para quien lo escanea junto a la linea. Ambos coinciden con la semilla de
+// src/lib/organization.ts; si se separan, una base nueva termina con seis sub-areas.
 const LINEAS = [
   {
-    code: "APO-P1-MUS",
+    code: "APO-P1-MUSLO",
+    areaCode: "P1-MUSLO",
     name: "P1 Muslo",
     etiquetaSupervisor: "Supervisor de muslo",
     // Buzon compartido: hoy lo leen Jose Miguel Cerda Robles y Placido Hernandez.
@@ -49,7 +54,8 @@ const LINEAS = [
     cuentaImportada: "Miguel Cerda"
   },
   {
-    code: "APO-P1-PYM1",
+    code: "APO-P1-PYM-L1",
+    areaCode: "P1-PYM-L1",
     name: "P1 PYM Linea 1",
     etiquetaSupervisor: "Supervisor de pierna de pavo",
     correo: "supervisor.pavo@proboca.net",
@@ -57,7 +63,8 @@ const LINEAS = [
     cuentaImportada: "Erik Reyna"
   },
   {
-    code: "APO-P1-PYM2",
+    code: "APO-P1-PYM-L2",
+    areaCode: "P1-PYM-L2",
     name: "P1 PYM Linea 2",
     etiquetaSupervisor: "Supervisor de deshuese automatico",
     correo: "sup.deshueseautomatico@proboca.net",
@@ -125,7 +132,7 @@ async function main() {
     paso(unidadPrevia ? "sin cambio" : "crea", `unidad PROCESO bajo ${PADRE}`);
     const usuarioPrevio = await prisma.user.findUnique({ where: { email: linea.correo }, select: { id: true, name: true } });
     paso(usuarioPrevio ? "sin cambio" : "crea", `usuario ${linea.titular} <${linea.correo}>`);
-    paso(unidadPrevia ? "sin cambio" : "crea", `area de captura y QR /captura/${linea.code}`);
+    paso(unidadPrevia ? "sin cambio" : "crea", `area de captura y QR /captura/${linea.areaCode}`);
     const importada = await buscarImportada(linea.cuentaImportada);
     if (importada) paso("absorbe", `cuenta importada ${importada.name} <${importada.email}> con ${importada._count.ownedKaizenActivities} Kaizen y ${importada._count.ownedGenbaActivities} GENBA`);
     else if (linea.cuentaImportada) paso("nada", `sin cuenta importada "${linea.cuentaImportada}" pendiente`);
@@ -140,9 +147,9 @@ async function main() {
     });
 
     const area = await prisma.area.upsert({
-      where: { code: linea.code },
+      where: { code: linea.areaCode },
       update: { name: linea.name, supervisorId: usuario.id, active: true },
-      create: { code: linea.code, name: linea.name, supervisorId: usuario.id, active: true }
+      create: { code: linea.areaCode, name: linea.name, supervisorId: usuario.id, active: true }
     });
 
     const unidad = await prisma.orgUnit.upsert({
