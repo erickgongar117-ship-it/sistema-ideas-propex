@@ -1,6 +1,11 @@
 "use server";
 
-import { Prisma, TrainingEnrollmentStatus } from "@prisma/client";
+import {
+  ParticipantEmailStatus,
+  PayrollFrequency,
+  Prisma,
+  TrainingEnrollmentStatus
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
@@ -20,6 +25,11 @@ function textValue(formData: FormData, key: string) {
 
 function optionalValue(formData: FormData, key: string) {
   return textValue(formData, key) || null;
+}
+
+function enumValue<T extends string>(formData: FormData, key: string, values: readonly T[]) {
+  const value = textValue(formData, key) as T;
+  return values.includes(value) ? value : undefined;
 }
 
 function integerValue(formData: FormData, key: string) {
@@ -129,17 +139,31 @@ export async function createTrainingSessionAction(formData: FormData) {
 export async function createParticipantAction(formData: FormData) {
   await requireUser([...trainingRoles]);
   const userId = optionalValue(formData, "userId");
+  const payrollFrequency = enumValue(formData, "payrollFrequency", Object.values(PayrollFrequency));
+  const requestedEmailStatus = enumValue(formData, "emailStatus", Object.values(ParticipantEmailStatus));
+  const emailStatus = payrollFrequency === PayrollFrequency.WEEKLY
+    ? ParticipantEmailStatus.NOT_APPLICABLE
+    : requestedEmailStatus;
 
   try {
-    const participant = userId
+    let participant = userId
       ? await resolveParticipantFromUser(userId)
       : await resolveParticipantFromCollaborator({
           name: textValue(formData, "name"),
           employeeNumber: optionalValue(formData, "employeeNumber"),
           email: optionalValue(formData, "email"),
           jobTitle: optionalValue(formData, "jobTitle"),
-          orgUnitId: optionalValue(formData, "orgUnitId")
+          orgUnitId: optionalValue(formData, "orgUnitId"),
+          payrollFrequency,
+          emailStatus
         });
+
+    if (userId && (payrollFrequency || emailStatus)) {
+      participant = await prisma.participant.update({
+        where: { id: participant.id },
+        data: { payrollFrequency, emailStatus }
+      });
+    }
 
     refreshTraining();
     redirect(trainingPath({ success: "participante", participant: participant.id }));

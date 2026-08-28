@@ -1,4 +1,9 @@
-import { Prisma, TrainingEnrollmentStatus } from "@prisma/client";
+import {
+  ParticipantEmailStatus,
+  PayrollFrequency,
+  Prisma,
+  TrainingEnrollmentStatus
+} from "@prisma/client";
 import Link from "next/link";
 import {
   Award,
@@ -10,6 +15,9 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   Filter,
+  MailCheck,
+  MailQuestion,
+  MailX,
   Plus,
   Search,
   Trash2,
@@ -50,6 +58,8 @@ type TrainingPageProps = {
     error?: string;
     participant?: string;
     peoplePage?: string;
+    peopleEmail?: string;
+    peoplePayroll?: string;
     peopleQ?: string;
     peopleStatus?: string;
     rosterPage?: string;
@@ -74,6 +84,19 @@ function positivePage(value?: string) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
 }
+
+const payrollLabels: Record<PayrollFrequency, string> = {
+  UNCLASSIFIED: "Sin clasificar",
+  WEEKLY: "Semanal",
+  BIWEEKLY: "Quincenal"
+};
+
+const emailStatusLabels: Record<ParticipantEmailStatus, string> = {
+  UNCHECKED: "Correo sin revisar",
+  FOUND: "Correo encontrado",
+  PENDING: "Correo pendiente",
+  NOT_APPLICABLE: "No requiere correo"
+};
 
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("es-MX", {
@@ -215,6 +238,16 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
   const rosterSearch = query.rosterQ?.trim() ?? "";
   const peopleSearch = query.peopleQ?.trim() ?? "";
   const peopleActive = query.peopleStatus !== "inactive";
+  const peoplePayroll = Object.values(PayrollFrequency).includes(
+    query.peoplePayroll as PayrollFrequency
+  )
+    ? query.peoplePayroll as PayrollFrequency
+    : undefined;
+  const peopleEmail = Object.values(ParticipantEmailStatus).includes(
+    query.peopleEmail as ParticipantEmailStatus
+  )
+    ? query.peopleEmail as ParticipantEmailStatus
+    : undefined;
   const rosterStatus = Object.values(TrainingEnrollmentStatus).includes(
     query.rosterStatus as TrainingEnrollmentStatus
   )
@@ -234,6 +267,8 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
     : {};
   const peopleWhere: Prisma.ParticipantWhereInput = {
     active: peopleActive,
+    ...(peoplePayroll ? { payrollFrequency: peoplePayroll } : {}),
+    ...(peopleEmail ? { emailStatus: peopleEmail } : {}),
     ...(peopleSearch
       ? {
           OR: [
@@ -1001,6 +1036,23 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                   <span className="label">Correo</span>
                   <input className="field" name="email" type="email" />
                 </label>
+                <label>
+                  <span className="label">Tipo de nomina</span>
+                  <select className="field" defaultValue="UNCLASSIFIED" name="payrollFrequency">
+                    <option value="UNCLASSIFIED">Sin clasificar</option>
+                    <option value="WEEKLY">Semanal</option>
+                    <option value="BIWEEKLY">Quincenal</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="label">Revision de correo</span>
+                  <select className="field" defaultValue="UNCHECKED" name="emailStatus">
+                    <option value="UNCHECKED">Sin revisar</option>
+                    <option value="FOUND">Encontrado en directorio</option>
+                    <option value="PENDING">Pendiente</option>
+                    <option value="NOT_APPLICABLE">No requiere correo</option>
+                  </select>
+                </label>
                 <label className="md:col-span-2">
                   <span className="label">Area</span>
                   <select className="field" name="orgUnitId">
@@ -1077,7 +1129,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
           ) : (
             <div>
               <form
-                className="mb-4 grid gap-2 sm:grid-cols-[1fr_180px_auto]"
+                className="mb-4 grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_160px_180px_190px_auto]"
                 method="get"
               >
                 <input name="view" type="hidden" value="directory" />
@@ -1106,6 +1158,33 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                   >
                     <option value="active">Activos</option>
                     <option value="inactive">Retirados</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="sr-only">Tipo de nomina</span>
+                  <select
+                    className="field"
+                    defaultValue={peoplePayroll ?? ""}
+                    name="peoplePayroll"
+                  >
+                    <option value="">Todas las nominas</option>
+                    <option value="BIWEEKLY">Quincenal</option>
+                    <option value="WEEKLY">Semanal</option>
+                    <option value="UNCLASSIFIED">Sin clasificar</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="sr-only">Estado del correo</span>
+                  <select
+                    className="field"
+                    defaultValue={peopleEmail ?? ""}
+                    name="peopleEmail"
+                  >
+                    <option value="">Todos los correos</option>
+                    <option value="FOUND">Encontrado</option>
+                    <option value="PENDING">Pendiente</option>
+                    <option value="NOT_APPLICABLE">No requerido</option>
+                    <option value="UNCHECKED">Sin revisar</option>
                   </select>
                 </label>
                 <button className="btn btn-secondary" type="submit">
@@ -1138,6 +1217,39 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                             participant.user?.email ??
                             "Sin identificador"}{" "}
                           - {organization}
+                        </span>
+                      </span>
+                      <span className="flex min-w-48 flex-wrap items-center gap-1.5">
+                        <span
+                          className={
+                            "inline-flex items-center border px-2 py-1 text-[10px] font-extrabold uppercase " +
+                            (participant.payrollFrequency === PayrollFrequency.BIWEEKLY
+                              ? "border-sky-200 bg-sky-50 text-sky-800"
+                              : participant.payrollFrequency === PayrollFrequency.WEEKLY
+                                ? "border-amber-200 bg-amber-50 text-amber-900"
+                                : "border-slate-200 bg-slate-50 text-slate-600")
+                          }
+                        >
+                          {payrollLabels[participant.payrollFrequency]}
+                        </span>
+                        <span
+                          className={
+                            "inline-flex items-center gap-1 border px-2 py-1 text-[10px] font-extrabold uppercase " +
+                            (participant.emailStatus === ParticipantEmailStatus.FOUND
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : participant.emailStatus === ParticipantEmailStatus.PENDING
+                                ? "border-amber-200 bg-amber-50 text-amber-900"
+                                : "border-slate-200 bg-slate-50 text-slate-600")
+                          }
+                        >
+                          {participant.emailStatus === ParticipantEmailStatus.FOUND ? (
+                            <MailCheck className="h-3.5 w-3.5" aria-hidden />
+                          ) : participant.emailStatus === ParticipantEmailStatus.PENDING ? (
+                            <MailQuestion className="h-3.5 w-3.5" aria-hidden />
+                          ) : (
+                            <MailX className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                          {emailStatusLabels[participant.emailStatus]}
                         </span>
                       </span>
                       <Link
@@ -1211,7 +1323,9 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                   view: "directory",
                   directory: "people",
                   peopleQ: peopleSearch || undefined,
-                  peopleStatus: peopleActive ? "active" : "inactive"
+                  peopleStatus: peopleActive ? "active" : "inactive",
+                  peoplePayroll,
+                  peopleEmail
                 }}
                 totalItems={peopleCount}
                 totalPages={Math.max(1, Math.ceil(peopleCount / peoplePageSize))}

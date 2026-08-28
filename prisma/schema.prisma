@@ -170,6 +170,19 @@ enum TrainingEnrollmentStatus {
   CANCELLED
 }
 
+enum PayrollFrequency {
+  UNCLASSIFIED
+  WEEKLY
+  BIWEEKLY
+}
+
+enum ParticipantEmailStatus {
+  UNCHECKED
+  FOUND
+  PENDING
+  NOT_APPLICABLE
+}
+
 enum CoinTransactionType {
   AWARD
   ADJUSTMENT
@@ -423,18 +436,20 @@ model IdeaFollower {
 }
 
 model Participant {
-  id               String               @id @default(cuid())
-  userId           String?              @unique
+  id               String                 @id @default(cuid())
+  userId           String?                @unique
   orgUnitId        String?
   name             String
-  employeeNumber   String?              @unique
+  employeeNumber   String?                @unique
   email            String?
   jobTitle         String?
-  active           Boolean              @default(true)
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  user             User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
-  orgUnit          OrgUnit?             @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  payrollFrequency PayrollFrequency       @default(UNCLASSIFIED)
+  emailStatus      ParticipantEmailStatus @default(UNCHECKED)
+  active           Boolean                @default(true)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  user             User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orgUnit          OrgUnit?                @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
   ideas            Idea[]
   enrollments      TrainingEnrollment[]
   coinTransactions CoinTransaction[]
@@ -443,6 +458,8 @@ model Participant {
   @@index([active, name])
   @@index([email])
   @@index([orgUnitId, active])
+  @@index([payrollFrequency, active])
+  @@index([emailStatus, active])
 }
 
 model TrainingProgram {

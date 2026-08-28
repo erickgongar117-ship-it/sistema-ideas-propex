@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Search, UserPlus, UsersRound, X } from "lucide-react";
+import { matchesPersonSearch } from "@/lib/person-search";
 
 type ParticipantOption = {
   id: string;
@@ -18,20 +19,16 @@ type ParticipantMultiSelectProps = {
   sessionId: string;
 };
 
-function normalize(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
-
 export function ParticipantMultiSelect({ action, participants, sessionId }: ParticipantMultiSelectProps) {
   const [search, setSearch] = useState("");
   const [area, setArea] = useState("");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const areas = useMemo(() => [...new Set(participants.map((participant) => `${participant.plant}|${participant.area}`))].sort(), [participants]);
   const filtered = useMemo(() => {
-    const term = normalize(search);
     return participants.filter((participant) => {
       const areaKey = `${participant.plant}|${participant.area}`;
-      return (!area || areaKey === area) && (!term || normalize(`${participant.name} ${participant.employeeNumber ?? ""} ${participant.email ?? ""} ${participant.area} ${participant.plant}`).includes(term));
+      const searchable = `${participant.name} ${participant.employeeNumber ?? ""} ${participant.email ?? ""} ${participant.area} ${participant.plant}`;
+      return (!area || areaKey === area) && matchesPersonSearch(searchable, search);
     });
   }, [area, participants, search]);
   const visible = filtered.slice(0, 80);

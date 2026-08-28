@@ -4,6 +4,8 @@ import { randomUUID } from "crypto";
 import {
   CoinSourceType,
   CoinTransactionType,
+  ParticipantEmailStatus,
+  PayrollFrequency,
   Prisma
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -20,6 +22,8 @@ export type CollaboratorParticipantInput = {
   email?: string | null;
   jobTitle?: string | null;
   orgUnitId?: string | null;
+  payrollFrequency?: PayrollFrequency;
+  emailStatus?: ParticipantEmailStatus;
 };
 
 export type CoinTransactionInput = {
@@ -167,13 +171,23 @@ export async function resolveParticipantFromCollaborator(
         email: email ?? existing.email,
         jobTitle: jobTitle ?? existing.jobTitle,
         orgUnitId: orgUnitId ?? existing.orgUnitId,
+        payrollFrequency: input.payrollFrequency ?? existing.payrollFrequency,
+        emailStatus: input.emailStatus ?? existing.emailStatus,
         active: true
       }
     });
   }
 
   return database.participant.create({
-    data: { name, employeeNumber, email, jobTitle, orgUnitId }
+    data: {
+      name,
+      employeeNumber,
+      email,
+      jobTitle,
+      orgUnitId,
+      payrollFrequency: input.payrollFrequency,
+      emailStatus: input.emailStatus
+    }
   });
 }
 

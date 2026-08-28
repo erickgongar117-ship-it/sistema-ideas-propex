@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, Search, X } from "lucide-react";
+import { matchesPersonSearch } from "@/lib/person-search";
 
 export type SearchablePickerOption = {
   value: string;
@@ -20,10 +21,6 @@ type SearchablePickerProps = {
   required?: boolean;
 };
 
-function normalize(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
-
 export function SearchablePicker({
   defaultValue = "",
   helpText,
@@ -40,9 +37,11 @@ export function SearchablePicker({
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === selectedValue) ?? null;
   const filtered = useMemo(() => {
-    const term = normalize(search);
-    if (!term) return options.slice(0, 60);
-    return options.filter((option) => normalize(`${option.label} ${option.description ?? ""} ${option.searchText ?? ""}`).includes(term)).slice(0, 60);
+    if (!search.trim()) return options.slice(0, 60);
+    return options.filter((option) => matchesPersonSearch(
+      `${option.label} ${option.description ?? ""} ${option.searchText ?? ""}`,
+      search
+    )).slice(0, 60);
   }, [options, search]);
 
   useEffect(() => {
