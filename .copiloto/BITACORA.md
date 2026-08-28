@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-28 -- codex (main) -- Implemente y publique cierre de actividades Kaizen/GENBA desde el panel Mi trabajo con evidencia o justificacion; agregue asistentes nominales GENBA editables desde el directorio; oculte nombres personales en las rutas QR P1; agregue Padilla como tercer escalon en las tres lineas; sincronice SQLite y Neon; valide TypeScript, ambos esquemas, build y Vercel dpl_7WGFrjVZA32SC9BcrJQAPAGL89o3.
+
+Siguiente paso dejado: Validar con una cuenta que tenga actividad asignada: en /seguimientos?vista=mias abrir el panel lateral, cerrar con evidencia y confirmar que desaparece de pendientes; en un GENBA agregar y retirar una persona por numero de empleado.
+
+---
+
 ## 2026-08-28 -- codex (main) -- Revise e integre los cambios de Claude en main, cerre la autorizacion inicial al revisor exacto, alinee la semilla P1, valide TypeScript y build Vercel, publique dpl_22SqKNGXVVid49ZdNMn4sr2NiTBR y comprobe login, contrasena, tres capturas P1 y QR.
 
 Siguiente paso dejado: Validar con cuentas reales en produccion: un supervisor debe ver y aprobar solo ideas cuyo Approval SUPERVISOR tenga assignedToId igual a su usuario; una persona con actividad Kaizen o GENBA debe verla en /seguimientos en Solo mias.
