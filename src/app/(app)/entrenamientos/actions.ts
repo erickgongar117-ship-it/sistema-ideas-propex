@@ -82,6 +82,38 @@ export async function createTrainingProgramAction(formData: FormData) {
   redirect(trainingPath({ success: "programa" }));
 }
 
+export async function updateTrainingProgramAction(formData: FormData) {
+  await requireUser([...trainingRoles]);
+  const programId = textValue(formData, "programId");
+  const name = textValue(formData, "name");
+  const description = optionalValue(formData, "description");
+  const coinValue = integerValue(formData, "coinValue");
+  const returnPath = {
+    view: "directory",
+    directory: "programs"
+  };
+
+  if (!programId || !name || !Number.isInteger(coinValue) || coinValue <= 0) {
+    redirect(trainingPath({ ...returnPath, error: "programa" }));
+  }
+
+  try {
+    const result = await prisma.trainingProgram.updateMany({
+      where: { id: programId },
+      data: { name, description, coinValue }
+    });
+    if (!result.count) redirect(trainingPath({ ...returnPath, error: "programa" }));
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      redirect(trainingPath({ ...returnPath, error: "programa_duplicado" }));
+    }
+    throw error;
+  }
+
+  refreshTraining();
+  redirect(trainingPath({ ...returnPath, success: "programa_actualizado" }));
+}
+
 export async function toggleTrainingProgramAction(formData: FormData) {
   await requireUser([...trainingRoles]);
   const programId = textValue(formData, "programId");

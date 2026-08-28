@@ -18,6 +18,7 @@ import {
   MailCheck,
   MailQuestion,
   MailX,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -48,6 +49,7 @@ import {
   createTrainingSessionAction,
   deleteInactiveParticipantAction,
   toggleTrainingProgramAction,
+  updateTrainingProgramAction,
   updateParticipantActiveAction
 } from "./actions";
 
@@ -178,6 +180,7 @@ function messageFor(query: Awaited<TrainingPageProps["searchParams"]>) {
   const count = Math.max(0, Number(query.count) || 0);
   const successMessages: Record<string, string> = {
     programa: "El entrenamiento quedo disponible para crear sesiones.",
+    programa_actualizado: "El entrenamiento y sus ProbocaCoins futuras quedaron actualizados.",
     programa_activado: "El entrenamiento volvio a quedar activo.",
     programa_pausado: "El entrenamiento se pauso sin perder su historial.",
     sesion: "La sesion fue creada correctamente.",
@@ -1088,31 +1091,70 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
               </div>
               <div className="divide-y divide-line border-b border-line">
                 {programs.map((program) => (
-                  <div
-                    className="grid gap-3 px-3 py-4 md:grid-cols-[minmax(0,1fr)_130px_130px_auto] md:items-center"
-                    key={program.id}
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-extrabold text-ink">{program.name}</p>
-                      <p className="mt-0.5 truncate text-xs text-slate-500">
-                        {program.description ?? "Sin descripcion"}
+                  <div className="px-3 py-4" key={program.id}>
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_130px_130px_auto] md:items-center">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-extrabold text-ink">{program.name}</p>
+                        <p className="mt-0.5 truncate text-xs text-slate-500">
+                          {program.description ?? "Sin descripcion"}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold tabular-nums text-slate-600">
+                        {program._count.sessions}
+                        <span className="ml-1 text-xs font-normal md:hidden">sesiones</span>
                       </p>
+                      <p className="flex items-center gap-2 text-sm font-extrabold tabular-nums text-ink">
+                        <ProbocaCoin size="sm" />
+                        {program.coinValue}
+                      </p>
+                      {canManage ? (
+                        <div className="md:text-right">
+                          <form action={toggleTrainingProgramAction}>
+                            <input name="programId" type="hidden" value={program.id} />
+                            <input name="active" type="hidden" value={String(!program.active)} />
+                            <button className="btn btn-secondary" type="submit">
+                              {program.active ? "Pausar" : "Activar"}
+                            </button>
+                          </form>
+                        </div>
+                      ) : (
+                        <span className="text-right text-xs font-extrabold text-slate-500">
+                          {program.active ? "Activo" : "Pausado"}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-sm font-bold tabular-nums text-slate-600">
-                      {program._count.sessions}
-                      <span className="ml-1 text-xs font-normal md:hidden">sesiones</span>
-                    </p>
-                    <p className="flex items-center gap-2 text-sm font-extrabold tabular-nums text-ink">
-                      <ProbocaCoin size="sm" />
-                      {program.coinValue}
-                    </p>
-                    {canManage ? <form action={toggleTrainingProgramAction} className="md:text-right">
-                      <input name="programId" type="hidden" value={program.id} />
-                      <input name="active" type="hidden" value={String(!program.active)} />
-                      <button className="btn btn-secondary" type="submit">
-                        {program.active ? "Pausar" : "Activar"}
-                      </button>
-                    </form> : <span className="text-right text-xs font-extrabold text-slate-500">{program.active ? "Activo" : "Pausado"}</span>}
+                    {canManage ? (
+                      <details className="mt-3">
+                        <summary className="btn btn-secondary cursor-pointer list-none">
+                          <Pencil className="h-4 w-4" aria-hidden />
+                          Editar programa
+                        </summary>
+                        <form
+                          action={updateTrainingProgramAction}
+                          className="mt-3 grid gap-3 border-t border-line pt-4 md:grid-cols-[minmax(220px,1fr)_160px_auto]"
+                        >
+                          <input name="programId" type="hidden" value={program.id} />
+                          <label>
+                            <span className="label">Nombre</span>
+                            <input className="field" defaultValue={program.name} name="name" required />
+                          </label>
+                          <label>
+                            <span className="label">ProbocaCoins</span>
+                            <input className="field" defaultValue={program.coinValue} min={1} name="coinValue" required type="number" />
+                          </label>
+                          <div className="flex items-end">
+                            <button className="btn btn-primary w-full" type="submit">Guardar cambios</button>
+                          </div>
+                          <label className="md:col-span-3">
+                            <span className="label">Descripcion</span>
+                            <textarea className="field min-h-20" defaultValue={program.description ?? ""} name="description" />
+                          </label>
+                          <p className="text-xs text-slate-500 md:col-span-3">
+                            El nuevo valor se aplicara al completar participaciones pendientes. Las ProbocaCoins ya otorgadas conservan su historial.
+                          </p>
+                        </form>
+                      </details>
+                    ) : null}
                   </div>
                 ))}
                 {!programs.length ? (
