@@ -16,7 +16,7 @@
  *   1. Tres unidades de tipo PROCESO colgando de P1, con su area de captura y su QR.
  *   2. Un usuario por puesto, con el correo funcional que dio el usuario.
  *   3. Su membresia en la unidad, con permiso de recibir ideas.
- *   4. La escalera de cada una: operativo -> supervisor de la linea -> jefe de turno.
+ *   4. La escalera de cada una: operativo -> supervisor de la linea -> jefe de turno -> Gerencia de Operaciones.
  *
  * El jefe de turno se hereda de P1: quien ya sea el revisor del escalon 1 de APO-P1 pasa a
  * serlo de las tres lineas, en vez de codificar un nombre que manana cambia.
@@ -115,15 +115,21 @@ async function main() {
     where: { code: PADRE },
     select: {
       id: true, plantId: true, name: true,
-      escalationRules: { where: { active: true, submitterLevel: 1 }, select: { reviewerMembershipId: true, reviewerMembership: { select: { user: { select: { name: true } } } } } }
+      escalationRules: {
+        where: { active: true, submitterLevel: { in: [1, 2] } },
+        select: { submitterLevel: true, reviewerMembershipId: true, reviewerMembership: { select: { user: { select: { name: true } } } } }
+      }
     }
   });
   if (!padre) throw new Error(`No existe la unidad ${PADRE}.`);
 
   // El jefe de turno no se codifica: se toma del escalon 1 que P1 ya tiene configurado.
-  const jefeDeTurno = padre.escalationRules[0];
+  const jefeDeTurno = padre.escalationRules.find((rule) => rule.submitterLevel === 1);
   if (!jefeDeTurno) throw new Error(`${PADRE} no tiene un revisor de escalon 1 del que heredar el jefe de turno.`);
-  console.log(`Jefe de turno heredado de ${PADRE}: ${jefeDeTurno.reviewerMembership.user.name}\n`);
+  const gerenteOperaciones = padre.escalationRules.find((rule) => rule.submitterLevel === 2);
+  if (!gerenteOperaciones) throw new Error(`${PADRE} no tiene un revisor de escalon 2 del que heredar la Gerencia de Operaciones.`);
+  console.log(`Jefe de turno heredado de ${PADRE}: ${jefeDeTurno.reviewerMembership.user.name}`);
+  console.log(`Gerencia heredada de ${PADRE}: ${gerenteOperaciones.reviewerMembership.user.name}\n`);
 
   for (const [indice, linea] of LINEAS.entries()) {
     console.log(`${linea.name}  (${linea.code})`);
@@ -138,6 +144,7 @@ async function main() {
     else if (linea.cuentaImportada) paso("nada", `sin cuenta importada "${linea.cuentaImportada}" pendiente`);
     paso("crea", `escalon 1: ${ESCALON_OPERATIVO} -> ${linea.etiquetaSupervisor}`);
     paso("crea", `escalon 2: ${ESCALON_SUPERVISOR} -> ${jefeDeTurno.reviewerMembership.user.name}`);
+    paso("crea", `escalon 3: Jefe de turno -> ${gerenteOperaciones.reviewerMembership.user.name}`);
     console.log("");
 
     if (!aplicar) continue;
@@ -205,7 +212,8 @@ async function main() {
     // principal, la que el QR preselecciona y la que sincroniza al responsable del area.
     const reglas: Array<{ etiqueta: string; nivel: number; revisor: string; principal: boolean }> = [
       { etiqueta: ESCALON_OPERATIVO, nivel: 0, revisor: membresia.id, principal: true },
-      { etiqueta: ESCALON_SUPERVISOR, nivel: 1, revisor: jefeDeTurno.reviewerMembershipId, principal: false }
+      { etiqueta: ESCALON_SUPERVISOR, nivel: 1, revisor: jefeDeTurno.reviewerMembershipId, principal: false },
+      { etiqueta: "Jefe de turno", nivel: 2, revisor: gerenteOperaciones.reviewerMembershipId, principal: false }
     ];
     for (const regla of reglas) {
       const previa = await prisma.orgEscalationRule.findFirst({ where: { orgUnitId: unidad.id, submitterLabel: regla.etiqueta } });

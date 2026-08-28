@@ -462,6 +462,7 @@ model Participant {
   ideas            Idea[]
   enrollments      TrainingEnrollment[]
   coinTransactions CoinTransaction[]
+  genbaAttendances GenbaAttendee[]
 
   @@index([name])
   @@index([active, name])
@@ -807,6 +808,19 @@ model GenbaWalk {
   activities          GenbaActivity[]
   attachments         GenbaAttachment[]
   updates             GenbaUpdate[]
+  attendees           GenbaAttendee[]
+}
+
+model GenbaAttendee {
+  id            String      @id @default(cuid())
+  walkId        String
+  participantId String
+  createdAt     DateTime    @default(now())
+  walk          GenbaWalk   @relation(fields: [walkId], references: [id], onDelete: Cascade)
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([walkId, participantId])
+  @@index([participantId])
 }
 
 model GenbaActivity {

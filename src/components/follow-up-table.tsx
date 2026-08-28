@@ -5,7 +5,7 @@ import {
   type WorkboardItem,
   type WorkboardMetric
 } from "@/components/operations-workboard";
-import { bulkFollowUpAction } from "@/app/actions";
+import { bulkFollowUpAction, closeFollowUpActivityAction } from "@/app/actions";
 import { fijarRegistroAction } from "@/app/seguir-actions";
 import { workItemStatusRender, type StatusCategory } from "@/lib/status-system";
 
@@ -18,6 +18,9 @@ export type FollowUpChild = {
   statusLabel: string;
   owner: string;
   dueDate: Date | null;
+  module: "KAIZEN" | "GENBA";
+  actionable: boolean;
+  closed: boolean;
 };
 
 export type FollowUpRow = {
@@ -121,7 +124,10 @@ export function FollowUpTable({
           owner: child.owner,
           dueDate: child.dueDate?.toISOString() ?? null,
           statusCategory: childStatus.category,
-          statusReference: childStatus.reference
+          statusReference: childStatus.reference,
+          module: child.module,
+          actionable: child.actionable,
+          closed: child.closed
         };
       })
     };
@@ -152,6 +158,7 @@ export function FollowUpTable({
       locationLabel="Planta y area"
       metrics={metrics}
       onBulkAction={bulkFollowUpAction}
+      childActions={{ close: closeFollowUpActivityAction }}
       pinAction={fijarRegistroAction}
       primaryLabel="Trabajo"
     />

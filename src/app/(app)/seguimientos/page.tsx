@@ -94,15 +94,24 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     ? requestedModule
     : "TODOS";
   const errorMessage = query.error === "sin_permiso"
-    ? "No puedes decidir esa idea porque no está asignada a tu ruta ni al equipo que supervisas."
-    : query.error === "validacion_ejecutiva_permiso"
-      ? "Esta validación ejecutiva no está asignada a tu cuenta o ya no admite esa acción."
-      : query.error === "validacion_ejecutiva_justificacion"
-        ? "Escribe una justificación suficiente para completar la decisión ejecutiva."
-        : query.error === "validacion_ejecutiva_campos"
-          ? "Agrega la información solicitada antes de reenviar la validación ejecutiva."
-          : null;
+    ? "No tienes permiso para realizar ese movimiento o la asignación cambió mientras la revisabas."
+    : query.error === "evidencia"
+      ? "Para completar una actividad debes adjuntar evidencia."
+      : query.error === "justificacion"
+        ? "Para cerrar una actividad sin ejecutarla debes escribir la justificación."
+        : query.error === "cerrado"
+          ? "El Kaizen o GENBA ya está cerrado y no admite más movimientos."
+          : query.error === "actividad"
+            ? "No pudimos identificar la actividad seleccionada. Recarga la bandeja e intenta nuevamente."
+            : query.error === "validacion_ejecutiva_permiso"
+              ? "Esta validación ejecutiva no está asignada a tu cuenta o ya no admite esa acción."
+              : query.error === "validacion_ejecutiva_justificacion"
+                ? "Escribe una justificación suficiente para completar la decisión ejecutiva."
+                : query.error === "validacion_ejecutiva_campos"
+                  ? "Agrega la información solicitada antes de reenviar la validación ejecutiva."
+                  : null;
   const globalAccess = hasGlobalIdeaAccess(user) && user.role !== "DIRECCION";
+  const canOperateActivities = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
   const [supervisableOrgUnitIds, manageableOrgUnitIds, moduleAccess] = await Promise.all([
     globalAccess ? Promise.resolve([]) : getSupervisableOrgUnitIds(user.id),
     globalAccess ? Promise.resolve([]) : getManageableActivityOrgUnitIds(user.id),
@@ -401,7 +410,10 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         status: activity.status,
         statusLabel: workItemStatusLabels[activity.status],
         owner: activity.owner?.name ?? "Sin responsable",
-        dueDate: activity.dueDate
+        dueDate: activity.dueDate,
+        module: "KAIZEN" as const,
+        actionable: activeWorkStatuses.has(activity.status) && (activity.ownerId === user.id || project.leaderId === user.id || canOperateActivities),
+        closed: ["COMPLETADA", "CANCELADA"].includes(activity.status)
       }))
     });
   }
@@ -460,7 +472,10 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         status: activity.status,
         statusLabel: workItemStatusLabels[activity.status],
         owner: activity.owner?.name ?? "Sin responsable",
-        dueDate: activity.dueDate
+        dueDate: activity.dueDate,
+        module: "GENBA" as const,
+        actionable: activeWorkStatuses.has(activity.status) && (activity.ownerId === user.id || walk.coordinatorId === user.id || canOperateActivities),
+        closed: ["COMPLETADA", "CANCELADA"].includes(activity.status)
       }))
     });
   }
