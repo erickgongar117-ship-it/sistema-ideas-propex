@@ -230,6 +230,8 @@ model User {
   orgMemberships                OrgMembership[]
   assignedSupportIdeas          IdeaSupportRequest[]  @relation("IdeaSupportAssignee")
   followedIdeas                 IdeaFollower[]        @relation("IdeaFollowerUser")
+  followedKaizen          KaizenFollower[]     @relation("KaizenFollowerUser")
+  followedGenba           GenbaFollower[]      @relation("GenbaFollowerUser")
   createdIdeaFollowers          IdeaFollower[]        @relation("IdeaFollowerCreator")
   participant                   Participant?
   createdTrainingPrograms       TrainingProgram[]     @relation("TrainingProgramCreator")
@@ -660,6 +662,7 @@ model Setting {
 }
 
 model KaizenProject {
+  followers        KaizenFollower[]
   id               String             @id @default(cuid())
   number           Int                @unique
   folio            String             @unique
@@ -775,6 +778,7 @@ model KaizenUpdate {
 }
 
 model GenbaWalk {
+  followers           GenbaFollower[]
   id                  String            @id @default(cuid())
   number              Int               @unique
   folio               String            @unique
@@ -848,4 +852,37 @@ model GenbaUpdate {
   walk       GenbaWalk      @relation(fields: [walkId], references: [id], onDelete: Cascade)
   activity   GenbaActivity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
   user       User?          @relation(fields: [userId], references: [id])
+}
+
+/// Seguimiento que una persona decide por su cuenta, no uno que le asignaron.
+///
+/// IdeaFollower ya existia, pero solo para Ideas y solo un administrador podia crearlo.
+/// Estos dos lo extienden a Kaizen y GENBA y se crean por decision de quien sigue. Son
+/// tablas propias en vez de una sola tabla generica con un id suelto porque asi la llave
+/// foranea existe de verdad: si el proyecto se borra, el seguimiento se va con el y no
+/// queda apuntando a la nada.
+model KaizenFollower {
+  id          String        @id @default(cuid())
+  projectId   String
+  userId      String
+  label       String        @default("Seguimiento propio")
+  createdAt   DateTime      @default(now())
+  project     KaizenProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User          @relation("KaizenFollowerUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model GenbaFollower {
+  id        String    @id @default(cuid())
+  walkId    String
+  userId    String
+  label     String    @default("Seguimiento propio")
+  createdAt DateTime  @default(now())
+  walk      GenbaWalk @relation(fields: [walkId], references: [id], onDelete: Cascade)
+  user      User      @relation("GenbaFollowerUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([walkId, userId])
+  @@index([userId])
 }

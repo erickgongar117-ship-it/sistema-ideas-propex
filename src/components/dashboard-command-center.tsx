@@ -28,6 +28,14 @@ export type DashboardIdea = {
   impactsQuality: boolean;
   impactsSafety: boolean;
   requiresMaintenance: boolean;
+  /**
+   * Si quien mira tiene la revision inicial asignada a su nombre.
+   *
+   * Lo calcula el servidor con la misma regla que aplica la accion. Antes el panel ofrecia
+   * decidir a cualquiera que viera una idea en revision: la accion rebotaba, pero el boton
+   * estaba ahi, y eso se lee como que cualquier supervisor puede aprobar.
+   */
+  canDecide: boolean;
 };
 
 export type DashboardPortfolio = {
@@ -107,9 +115,9 @@ export function DashboardCommandCenter({ canOperate, ideas, generatedAt, portfol
       risk: overdue || !idea.supervisorName,
       riskLabel: overdue ? "Compromiso vencido" : !idea.supervisorName ? "Responsable pendiente" : undefined,
       tags: [`Categoria ${idea.category}`, ...idea.impactTypes, ...support, idea.pointsAssigned ? `${idea.pointsAssigned} ProbocaCoins` : ""].filter(Boolean),
-      // Solo mientras la idea espera la primera revision. El servidor revalida quien puede
-      // decidir y en que estado; esto solo evita ofrecer un boton que iba a rebotar.
-      canDecide: canOperate && idea.status === "EN_REVISION_SUPERVISOR"
+      // La decision se ofrece solo a quien la tiene asignada. El servidor vuelve a
+      // comprobarlo; esto evita mostrar un boton que no le toca a quien mira.
+      canDecide: canOperate && idea.canDecide && idea.status === "EN_REVISION_SUPERVISOR"
     };
   });
 

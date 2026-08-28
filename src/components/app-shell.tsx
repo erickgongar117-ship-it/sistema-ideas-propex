@@ -111,14 +111,19 @@ const genbaNav: NavItem[] = [
   { href: "/genba/kanban", label: "Kanban por recorrido", shortLabel: "Kanban", icon: FolderKanban, roles: allRoles, group: "control" }
 ];
 
+// El orden importa: es el que ve la gente al abrir el menu, y lo fijo el usuario.
+//
+// "Panel ejecutivo" va primero, pero solo lo alcanzan los roles directivos, asi que para un
+// supervisor u operador la lista arranca en "Mi trabajo" sin necesidad de una segunda lista.
+// Un solo arreglo sirve para las dos reglas.
 const unifiedNav: NavItem[] = [
-  { href: "/dashboard", label: "Ideas de mejora", shortLabel: "Ideas", icon: ClipboardList, roles: executiveRoles, group: "work" },
+  { href: "/panorama", label: "Panel ejecutivo", shortLabel: "Panel", icon: LayoutDashboard, roles: executiveRoles, group: "work" },
   { href: "/seguimientos", label: "Mi trabajo", shortLabel: "Mi trabajo", icon: ListChecks, roles: allRoles, group: "work" },
+  { href: "/dashboard", label: "Ideas de mejora", shortLabel: "Ideas", icon: ClipboardList, roles: executiveRoles, group: "work" },
   { href: "/kaizen", label: "Proyectos Kaizen", shortLabel: "Kaizen", icon: FolderKanban, roles: allRoles, requiresModule: "kaizen", group: "work" },
   { href: "/genba", label: "Recorridos GENBA", shortLabel: "GENBA", icon: Footprints, roles: allRoles, requiresModule: "genba", group: "work" },
   { href: "/entrenamientos", label: "Entrenamientos", shortLabel: "Cursos", icon: GraduationCap, roles: executiveRoles, group: "work" },
   { href: "/probocacoins", label: "ProbocaCoins", shortLabel: "Coins", icon: Coins, roles: executiveRoles, group: "work" },
-  { href: "/panorama", label: "Panel ejecutivo", shortLabel: "Panel", icon: LayoutDashboard, roles: executiveRoles, group: "work" },
 
   { href: "/supervisor", label: "Aprobaciones", shortLabel: "Aprobar", icon: UserCheck, roles: allRoles, requiresReviewAccess: true, group: "control" },
   { href: "/validaciones/calidad", label: "Validaciones de calidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "control" },
@@ -144,8 +149,8 @@ const unifiedNav: NavItem[] = [
 const roleTheme: Record<Role, { accent: string; soft: string; home: string; context: string }> = {
   ADMIN: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/dashboard", context: "Control del sistema" },
   DIRECCION: { accent: "var(--brand-red)", soft: "var(--brand-red-soft)", home: "/panorama", context: "Visión ejecutiva" },
-  GERENTE: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/dashboard", context: "Portafolio gerencial" },
-  MEJORA_CONTINUA: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/dashboard", context: "Seguimiento global" },
+  GERENTE: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/panorama", context: "Portafolio gerencial" },
+  MEJORA_CONTINUA: { accent: "var(--brand-black)", soft: "var(--brand-black-soft)", home: "/panorama", context: "Seguimiento global" },
   SUPERVISOR: { accent: "var(--supervisor)", soft: "var(--supervisor-soft)", home: "/seguimientos", context: "Seguimiento de tu área" },
   CALIDAD: { accent: "var(--quality)", soft: "var(--quality-soft)", home: "/seguimientos", context: "Calidad e inocuidad" },
   SEGURIDAD: { accent: "var(--safety)", soft: "var(--safety-soft)", home: "/seguimientos", context: "Seguridad industrial" },

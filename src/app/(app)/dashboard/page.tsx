@@ -4,6 +4,7 @@ import { DashboardCommandCenter, type DashboardIdea } from "@/components/dashboa
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
 import { attendancePercent, executiveViewerRoles, isWorkItemOverdue, parseImpactTypes, workProgress } from "@/lib/domain";
+import { decidableInitialIdeaIds } from "@/lib/idea-access";
 import { prisma } from "@/lib/prisma";
 
 
@@ -29,6 +30,12 @@ export default async function DashboardPage() {
     prisma.genbaWalk.findMany({ include: { activities: true } })
   ]);
 
+  // Quien tiene asignada la revision inicial de cada idea, con la misma regla que aplica
+  // supervisorDecisionAction. Se resuelve en una sola consulta para todas las ideas, no una
+  // por fila. Sin esto el tablero ofrecia decidir a cualquiera con permiso de operar, aunque
+  // la idea fuera de otro supervisor: la accion lo rechazaba, pero el boton estaba ahi.
+  const decidibles = await decidableInitialIdeaIds(user, ideas.map((idea) => idea.id));
+
   const dashboardIdeas: DashboardIdea[] = ideas.map((idea) => ({
     id: idea.id,
     folio: idea.folio,
@@ -45,7 +52,8 @@ export default async function DashboardPage() {
     impactTypes: parseImpactTypes(idea.impactTypes),
     impactsQuality: idea.impactsQuality,
     impactsSafety: idea.impactsSafety,
-    requiresMaintenance: idea.requiresMaintenance
+    requiresMaintenance: idea.requiresMaintenance,
+    canDecide: decidibles.has(idea.id)
   }));
 
   const implementationRows = ideas.filter((idea) => idea.implementedAt);

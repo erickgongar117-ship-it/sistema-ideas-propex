@@ -79,7 +79,9 @@ function followUpHref(view: FollowUpView, moduleFilter: FollowUpModuleFilter, pa
 export default async function FollowUpsPage({ searchParams }: PageProps) {
   const [user, query] = await Promise.all([requireUser(), searchParams]);
   const requestedView = query.vista;
-  const activeView: FollowUpView = requestedView === "seguimiento" || requestedView === "equipo" ? requestedView : "pendientes";
+  const activeView: FollowUpView = requestedView === "seguimiento" || requestedView === "equipo" || requestedView === "mias"
+    ? requestedView
+    : "pendientes";
   const requestedModule = query.modulo?.toUpperCase();
   const moduleFilter: FollowUpModuleFilter = requestedModule === "IDEA" || requestedModule === "KAIZEN" || requestedModule === "GENBA"
     ? requestedModule
@@ -170,9 +172,15 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
   const buckets: Record<FollowUpView, FollowUpRow[]> = {
     pendientes: [],
     seguimiento: [],
-    equipo: []
+    equipo: [],
+    mias: []
   };
-  const supervisedScope = new Set(supervisableOrgUnitIds);
+  /**
+   * En "mias" la consulta ya trajo solo lo que lleva mi nombre, asi que no hay que
+   * reclasificar: cada registro va directo a esa cubeta. Si se dejara correr la
+   * clasificacion normal, el mismo elemento caeria en "pendientes" y la vista saldria vacia.
+   */
+  const bucketFor = (computed: FollowUpView): FollowUpView => (activeView === "mias" ? "mias" : computed);
   const manageableScope = new Set(manageableOrgUnitIds);
 
   for (const idea of ideas) {
@@ -206,12 +214,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       idea.area.supervisorId === user.id ||
       idea.escalationRule?.reviewerMembership.userId === user.id
     );
-    const teamInitialReview = Boolean(
-      (orgUnit?.id && supervisedScope.has(orgUnit.id)) ||
-      (idea.escalationRule?.orgUnitId && supervisedScope.has(idea.escalationRule.orgUnitId)) ||
-      (idea.participant?.orgUnitId && supervisedScope.has(idea.participant.orgUnitId))
-    );
-    const supervisorAction = user.role !== "DIRECCION" && initialReviewStatuses.has(idea.status) && (user.role === "ADMIN" || directInitialReview || teamInitialReview);
+    const supervisorAction = user.role !== "DIRECCION" && initialReviewStatuses.has(idea.status) && (user.role === "ADMIN" || directInitialReview);
     const ownerAction = idea.implementationOwnerId === user.id && ["APROBADA_PARA_IMPLEMENTAR", "EN_IMPLEMENTACION", "VENCIDA"].includes(idea.status);
     const unassignedValidation = (user.role === "ADMIN" && pendingApprovals.some((approval) => !approval.assignedToId)) || (globalAccess && pendingSupports.some((request) => !request.assignedToId));
     const globalAction = globalAccess && mcActionStatuses.has(idea.status);
@@ -226,7 +229,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       idea.followers.length ||
       idea.escalationRule?.reviewerMembership.userId === user.id
     );
-    const view: FollowUpView = needsAction ? "pendientes" : directAssignment ? "seguimiento" : "equipo";
+    const view: FollowUpView = bucketFor(needsAction ? "pendientes" : directAssignment ? "seguimiento" : "equipo");
     const dueDate = idea.dueDate;
     const supportLabel = pendingSupport ? `Apoyo solicitado · ${pendingSupport.orgUnit.name}` : null;
     const followerLabel = idea.followers[0]?.label;
@@ -321,6 +324,15 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
 
   for (const project of kaizenProjects) {
     const ownedActiveActivities = project.activities.filter((activity) => activity.ownerId === user.id && activeWorkStatuses.has(activity.status));
+    // En "mias" se desglosan unicamente mis actividades. En el resto de vistas sigue
+    // apareciendo el proyecto completo, con las mias arriba.
+    const orderedActivities = activeView === "mias"
+      ? ownedActiveActivities
+      : [
+          ...ownedActiveActivities,
+          ...project.activities.filter((activity) => !ownedActiveActivities.some((owned) => owned.id === activity.id))
+        ];
+    const focusedActivity = ownedActiveActivities.length === 1 ? ownedActiveActivities[0] : null;
     const manageableProject = Boolean(project.orgUnitId && manageableScope.has(project.orgUnitId));
     const blockedActivities = project.activities.filter((activity) => activity.status === "BLOQUEADA");
     const needsCharter = project.status === "PENDIENTE_CHARTER" && !project.attachments.length;
@@ -331,8 +343,10 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       (globalAccess && (needsCharter || blockedActivities.length))
     );
     const directAssignment = project.leaderId === user.id || project.activities.some((activity) => activity.ownerId === user.id);
-    const view: FollowUpView = needsAction ? "pendientes" : directAssignment ? "seguimiento" : "equipo";
-    const progress = workProgress(project.activities);
+    const view: FollowUpView = bucketFor(needsAction ? "pendientes" : directAssignment ? "seguimiento" : "equipo");
+    // El avance tambien se recorta: en "mias", "2 de 3" son mis tres actividades, no las
+    // catorce del proyecto. Ver un 80% ajeno junto a mi propia tarea confunde mas que ayuda.
+    const progress = workProgress(activeView === "mias" ? ownedActiveActivities : project.activities);
     const dueDate = nearestDueDate([
       ...ownedActiveActivities.map((activity) => activity.dueDate),
       directAssignment || globalAccess || manageableProject ? project.endDate : null
@@ -351,11 +365,13 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       key: `kaizen-${project.id}`,
       module: "KAIZEN",
       reference: project.folio,
-      title: project.title,
-      subtitle: `Líder: ${project.leader.name}`,
+      title: focusedActivity?.action ?? (ownedActiveActivities.length > 1 ? `${ownedActiveActivities.length} actividades asignadas` : project.title),
+      subtitle: focusedActivity
+        ? `Kaizen: ${project.title} · Líder: ${project.leader.name}`
+        : `Líder: ${project.leader.name}`,
       location: project.orgUnit ? `${project.orgUnit.plant.code} · ${project.orgUnit.name}` : [project.plant, project.area].filter(Boolean).join(" · "),
       assignment,
-      owner: project.leader.name,
+      owner: focusedActivity?.owner?.name ?? (ownedActiveActivities.length ? user.name : project.leader.name),
       status: kaizenStatusLabels[project.status],
       statusCategory: kaizenStatusCategory(project.status),
       href: `/kaizen/${project.id}`,
@@ -363,7 +379,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       updatedAt: project.updatedAt,
       overdue: isPastDue(dueDate, project.status === "COMPLETADO" || project.status === "CANCELADO"),
       progress: { completed: progress.closed, total: progress.total, percent: progress.percent },
-      children: project.activities.map((activity) => ({
+      children: orderedActivities.map((activity) => ({
         id: activity.id,
         label: activity.action,
         status: activity.status,
@@ -376,6 +392,13 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
 
   for (const walk of genbaWalks) {
     const ownedActiveActivities = walk.activities.filter((activity) => activity.ownerId === user.id && activeWorkStatuses.has(activity.status));
+    const orderedActivities = activeView === "mias"
+      ? ownedActiveActivities
+      : [
+          ...ownedActiveActivities,
+          ...walk.activities.filter((activity) => !ownedActiveActivities.some((owned) => owned.id === activity.id))
+        ];
+    const focusedActivity = ownedActiveActivities.length === 1 ? ownedActiveActivities[0] : null;
     const manageableWalk = Boolean(walk.orgUnitId && manageableScope.has(walk.orgUnitId));
     const blockedActivities = walk.activities.filter((activity) => activity.status === "BLOQUEADA");
     const coordinatorAction = walk.coordinatorId === user.id && walk.status === "ABIERTO";
@@ -386,8 +409,8 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       (globalAccess && blockedActivities.length)
     );
     const directAssignment = walk.coordinatorId === user.id || walk.activities.some((activity) => activity.ownerId === user.id);
-    const view: FollowUpView = needsAction ? "pendientes" : directAssignment ? "seguimiento" : "equipo";
-    const progress = workProgress(walk.activities);
+    const view: FollowUpView = bucketFor(needsAction ? "pendientes" : directAssignment ? "seguimiento" : "equipo");
+    const progress = workProgress(activeView === "mias" ? ownedActiveActivities : walk.activities);
     const dueDate = nearestDueDate(ownedActiveActivities.map((activity) => activity.dueDate));
     const assignment = ownedActiveActivities.length
       ? `${ownedActiveActivities.length} ${ownedActiveActivities.length === 1 ? "actividad a tu cargo" : "actividades a tu cargo"}`
@@ -403,11 +426,13 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       key: `genba-${walk.id}`,
       module: "GENBA",
       reference: walk.folio,
-      title: `Recorrido en ${walk.areaName}`,
-      subtitle: `Coordinación: ${walk.coordinator.name}`,
+      title: focusedActivity?.action || focusedActivity?.problem || (ownedActiveActivities.length > 1 ? `${ownedActiveActivities.length} actividades asignadas` : `Recorrido en ${walk.areaName}`),
+      subtitle: focusedActivity
+        ? `GENBA: ${walk.folio} · ${walk.areaName} · Coordinación: ${walk.coordinator.name}`
+        : `Coordinación: ${walk.coordinator.name}`,
       location: walk.orgUnit ? `${walk.orgUnit.plant.code} · ${walk.orgUnit.name}` : walk.areaName,
       assignment,
-      owner: walk.coordinator.name,
+      owner: focusedActivity?.owner?.name ?? (ownedActiveActivities.length ? user.name : walk.coordinator.name),
       status: genbaStatusLabels[walk.status],
       statusCategory: genbaStatusCategory(walk.status),
       href: `/genba/${walk.id}`,
@@ -415,7 +440,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       updatedAt: walk.updatedAt,
       overdue: isPastDue(dueDate, walk.status !== "ABIERTO"),
       progress: { completed: progress.closed, total: progress.total, percent: progress.percent },
-      children: walk.activities.map((activity) => ({
+      children: orderedActivities.map((activity) => ({
         id: activity.id,
         label: activity.action || activity.problem,
         status: activity.status,
@@ -429,6 +454,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
   sortRows(buckets.pendientes, "pendientes");
   sortRows(buckets.seguimiento, "seguimiento");
   sortRows(buckets.equipo, "equipo");
+  sortRows(buckets.mias, "pendientes");
   const totalItems = ideaCount + kaizenCount + genbaCount;
   const loadedItems = buckets[activeView].length;
   const consumedBefore = portfolioOverview ? 0 : followUpConsumedBeforePage(moduleCounts, pageSlots, currentPage);
@@ -447,6 +473,12 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       description: "Elementos en los que participas, lideras o das seguimiento directo.",
       emptyTitle: "No hay seguimientos directos",
       emptyDescription: "Las ideas, Kaizen y GENBA que te asignen se concentrarán en esta vista."
+    },
+    mias: {
+      title: "Solo lo que está a mi nombre",
+      description: "Tus actividades abiertas de Kaizen y GENBA, y las ideas que esperan tu respuesta. Al desplegar verás únicamente las tuyas.",
+      emptyTitle: "No tienes actividades a tu nombre",
+      emptyDescription: "Aquí aparecerá lo que te asignen dentro de un Kaizen, un recorrido GENBA o una idea."
     },
     equipo: {
       title: "Panorama de tu equipo",
@@ -493,6 +525,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
       <nav aria-label="Vistas de seguimiento" className="work-queue-tabs">
         {([
           ["pendientes", "Pendientes"],
+          ["mias", "Solo mías"],
           ["seguimiento", "Seguimiento"],
           ["equipo", "Equipo"]
         ] as const).map(([value, label]) => (
