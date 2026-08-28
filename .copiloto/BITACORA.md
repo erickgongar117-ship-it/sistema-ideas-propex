@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-28 -- codex (codex/hierarchy-training-coins) -- Agregue PayrollFrequency y ParticipantEmailStatus en ambos esquemas; cree importador idempotente de HC quincenal, activos semanal y Outlook; aplique y verifique 807 personas en dev.db (157 quincenales, 650 semanales, Fernando 26677), sin cambiar ideas, entrenamientos ni ProbocaCoins; agregue filtros/etiquetas en Entrenamientos y busqueda tolerante por nombre, acentos, orden y ceros; tsc y build:vercel pasaron; commit 3596210.
+
+Siguiente paso dejado: No se modifico produccion. Con autorizacion explicita: cargar DATABASE_URL de .env.local, ejecutar primero prisma db push con prisma/schema.production.prisma y luego scripts/importar-plantilla-nomina.ts contra Neon en simulacion; revisar 112 FOUND, 45 PENDING, cero conflictos y solo entonces repetir con --aplicar. Los 6 correos encontrados sin cuenta requieren decision separada sobre crear acceso.
+
+---
+
 ## 2026-08-27 -- codex (codex/hierarchy-training-coins) -- Audite HC EDGAR y activos 2708: identifique 157 quincenales reales, 650 semanales, cruce reciente con Outlook, coincidencias existentes, jefaturas, truncamientos y excepciones sin modificar datos ni codigo.
 
 Siguiente paso dejado: Crear un importador idempotente para Participant/User que persista tipo de nomina QUINCENAL/SEMANAL y estado de correo ENCONTRADO/PENDIENTE/NO_APLICA; simular primero contra Neon y resolver el numero 266770 antes de aplicar. Corregir Erick Osvaldo de 81163 a 81177 y liberar 81163 para Ana Jazmin segun HC.
