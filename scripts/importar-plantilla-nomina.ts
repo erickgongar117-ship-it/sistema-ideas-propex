@@ -17,6 +17,7 @@ import {
 
 const prisma = new PrismaClient();
 const applyChanges = process.argv.includes("--aplicar");
+const IMPORT_TRANSACTION_TIMEOUT_MS = 600_000;
 
 type Database = Prisma.TransactionClient;
 
@@ -274,24 +275,60 @@ function uniqueByName<T extends { name: string }>(values: T[]) {
 
 async function correctKnownIdentity(database: Database, stats: ImportStats) {
   const participants = await database.participant.findMany({ include: { user: true } });
-  const erick = participants.find((participant) => normalize(participant.name) === "erick osvaldo gongora garza");
-  if (!erick || erick.employeeNumber === "81177") return;
-  if (erick.employeeNumber !== "81163") {
-    throw new Error(`Erick Gongora tiene un numero inesperado: ${erick.employeeNumber ?? "sin numero"}.`);
-  }
-  const occupiedParticipant = await database.participant.findUnique({ where: { employeeNumber: "81177" } });
-  if (occupiedParticipant && occupiedParticipant.id !== erick.id) {
-    throw new Error("El numero 81177 ya pertenece a otro participante.");
-  }
-  await database.participant.update({ where: { id: erick.id }, data: { employeeNumber: "81177" } });
-  if (erick.userId) {
-    const occupiedUser = await database.user.findUnique({ where: { employeeNumber: "81177" } });
-    if (occupiedUser && occupiedUser.id !== erick.userId) {
-      throw new Error("El numero 81177 ya pertenece a otra cuenta de acceso.");
+  const corrections = [
+    {
+      normalizedName: "erick osvaldo gongora garza",
+      displayName: "Erick Osvaldo Gongora Garza",
+      desiredNumber: "81177",
+      acceptedPreviousNumbers: new Set(["81163"])
+    },
+    {
+      normalizedName: "edgar allan santos tamez",
+      displayName: "Edgar Allan Santos Tamez",
+      desiredNumber: "81171",
+      acceptedPreviousNumbers: new Set(["81163"])
     }
-    await database.user.update({ where: { id: erick.userId }, data: { employeeNumber: "81177" } });
+  ];
+
+  for (const correction of corrections) {
+    const participant = participants.find((item) => normalize(item.name) === correction.normalizedName);
+    if (!participant) continue;
+    const currentNumbers = [participant.employeeNumber, participant.user?.employeeNumber].filter(
+      (number): number is string => Boolean(number && number !== correction.desiredNumber)
+    );
+    const unexpected = currentNumbers.find((number) => !correction.acceptedPreviousNumbers.has(number));
+    if (unexpected) {
+      throw new Error(`${correction.displayName} tiene un numero inesperado: ${unexpected}.`);
+    }
+    if (participant.employeeNumber === correction.desiredNumber
+      && (!participant.user || participant.user.employeeNumber === correction.desiredNumber)) continue;
+
+    const occupiedParticipant = await database.participant.findUnique({
+      where: { employeeNumber: correction.desiredNumber }
+    });
+    if (occupiedParticipant && occupiedParticipant.id !== participant.id) {
+      throw new Error(`El numero ${correction.desiredNumber} ya pertenece a otro participante.`);
+    }
+    if (participant.userId) {
+      const occupiedUser = await database.user.findUnique({
+        where: { employeeNumber: correction.desiredNumber }
+      });
+      if (occupiedUser && occupiedUser.id !== participant.userId) {
+        throw new Error(`El numero ${correction.desiredNumber} ya pertenece a otra cuenta de acceso.`);
+      }
+      await database.user.update({
+        where: { id: participant.userId },
+        data: { employeeNumber: correction.desiredNumber }
+      });
+    }
+    await database.participant.update({
+      where: { id: participant.id },
+      data: { employeeNumber: correction.desiredNumber }
+    });
+    stats.knownCorrections.push(
+      `${correction.displayName}: ${currentNumbers.join("/") || "sin numero"} -> ${correction.desiredNumber}`
+    );
   }
-  stats.knownCorrections.push("Erick Osvaldo Gongora Garza: 81163 -> 81177");
 }
 
 async function importRoster(
@@ -533,7 +570,7 @@ async function main() {
     await prisma.$transaction(async (database) => {
       await importRoster(database, roster, directory, stats);
       if (!applyChanges) throw new DryRunRollback("Simulacion completada");
-    }, { maxWait: 10_000, timeout: 120_000 });
+    }, { maxWait: 30_000, timeout: IMPORT_TRANSACTION_TIMEOUT_MS });
   } catch (error) {
     if (!(error instanceof DryRunRollback)) throw error;
   }
