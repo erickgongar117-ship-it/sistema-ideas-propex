@@ -60,6 +60,8 @@ export type WorkboardChild = {
   closed?: boolean;
   /** Quien mira puede moverla. Sin esto el panel la deja en solo lectura. */
   actionable?: boolean;
+  /** Modulo del subelemento para despachar la accion rapida al flujo correcto. */
+  module?: "KAIZEN" | "GENBA";
 };
 
 /**
@@ -1058,6 +1060,8 @@ export function OperationsWorkboard({
                                 <summary><span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" aria-hidden />Cerrar</span></summary>
                                 <form action={childActions.close} className="grid gap-2 p-3">
                                   <input name="activityId" type="hidden" value={child.id} />
+                                  <input name="activityModule" type="hidden" value={child.module ?? ""} />
+                                  <input name="returnTo" type="hidden" value="/seguimientos?vista=mias" />
                                   <label><span className="label">Evidencia</span><input accept="image/*,.pdf,.doc,.docx" className="field" name="evidence" type="file" /></label>
                                   <label><span className="label">Resultado o justificacion</span><textarea className="field min-h-16" name="note" placeholder="Que se hizo, o por que no se hara" /></label>
                                   <div className="grid gap-2 sm:grid-cols-2">

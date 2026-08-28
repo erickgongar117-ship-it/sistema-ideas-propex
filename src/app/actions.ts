@@ -2302,12 +2302,12 @@ export async function closeKaizenActivityAction(formData: FormData) {
   const outcome = text(formData, "outcome") as WorkItemStatus;
   const note = text(formData, "note");
   const activity = await prisma.kaizenActivity.findUniqueOrThrow({ where: { id: activityId }, include: { project: true } });
-  if (activity.project.status === "COMPLETADO" || activity.project.status === "CANCELADO") redirect(`/kaizen/${activity.projectId}?error=cerrado`);
-  if (!isImprovementManager(user.role) && activity.ownerId !== user.id && activity.project.leaderId !== user.id) redirect(`/kaizen/${activity.projectId}`);
-  if (outcome !== "COMPLETADA" && outcome !== "CANCELADA") redirect(`/kaizen/${activity.projectId}`);
-  if (outcome === "CANCELADA" && !note) redirect(`/kaizen/${activity.projectId}?error=justificacion`);
+  if (activity.project.status === "COMPLETADO" || activity.project.status === "CANCELADO") redirect(activityCloseTarget(formData, `/kaizen/${activity.projectId}`, "cerrado"));
+  if (!isImprovementManager(user.role) && activity.ownerId !== user.id && activity.project.leaderId !== user.id) redirect(activityCloseTarget(formData, `/kaizen/${activity.projectId}`, "sin_permiso"));
+  if (outcome !== "COMPLETADA" && outcome !== "CANCELADA") redirect(activityCloseTarget(formData, `/kaizen/${activity.projectId}`, "actividad"));
+  if (outcome === "CANCELADA" && !note) redirect(activityCloseTarget(formData, `/kaizen/${activity.projectId}`, "justificacion"));
   const evidence = await saveUpload(formData.get("evidence") as File | null, `${activity.project.folio}-actividad-${activity.number}`);
-  if (outcome === "COMPLETADA" && !evidence) redirect(`/kaizen/${activity.projectId}?error=evidencia`);
+  if (outcome === "COMPLETADA" && !evidence) redirect(activityCloseTarget(formData, `/kaizen/${activity.projectId}`, "evidencia"));
 
   try {
     await serializableTransaction(async (tx) => {
@@ -2335,15 +2335,15 @@ export async function closeKaizenActivityAction(formData: FormData) {
       await tx.auditLog.create({ data: { entity: "KaizenActivity", entityId: activityId, action: `KAIZEN_ACTIVITY_${outcome}`, userId: user.id, details: JSON.stringify({ note, evidence: evidence?.filename }) } });
     });
   } catch (error) {
-    if (error instanceof KaizenAlreadyClosedError) redirect(`/kaizen/${activity.projectId}?error=cerrado`);
-    if (error instanceof KaizenPermissionChangedError) redirect(`/kaizen/${activity.projectId}?error=sin_permiso`);
+    if (error instanceof KaizenAlreadyClosedError) redirect(activityCloseTarget(formData, `/kaizen/${activity.projectId}`, "cerrado"));
+    if (error instanceof KaizenPermissionChangedError) redirect(activityCloseTarget(formData, `/kaizen/${activity.projectId}`, "sin_permiso"));
     throw error;
   }
   await refreshKaizenProject(activity.projectId, user.id);
   revalidatePath("/kaizen");
   revalidatePath("/kaizen/kanban");
   revalidatePath(`/kaizen/${activity.projectId}`);
-  redirect(`/kaizen/${activity.projectId}`);
+  redirect(activityCloseTarget(formData, `/kaizen/${activity.projectId}`));
 }
 
 /**
@@ -2775,6 +2775,42 @@ export async function updateGenbaWalkAction(formData: FormData) {
   redirect(`/genba/${walkId}`);
 }
 
+export async function addGenbaAttendeeAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const walkId = text(formData, "walkId");
+  const participantId = text(formData, "participantId");
+  const [walk, participant] = await Promise.all([
+    prisma.genbaWalk.findUnique({ where: { id: walkId }, select: { id: true, folio: true } }),
+    prisma.participant.findFirst({ where: { id: participantId, active: true }, select: { id: true, name: true, employeeNumber: true } })
+  ]);
+  if (!walk || !participant) redirect(`/genba/${walkId}?error=asistente`);
+  await prisma.genbaAttendee.upsert({
+    where: { walkId_participantId: { walkId, participantId } },
+    update: {},
+    create: { walkId, participantId }
+  });
+  await auditLog({ entity: "GenbaWalk", entityId: walkId, action: "GENBA_ATTENDEE_ADDED", userId: user.id, details: { participantId, name: participant.name, employeeNumber: participant.employeeNumber } });
+  revalidatePath(`/genba/${walkId}`);
+  revalidatePath("/genba");
+  redirect(`/genba/${walkId}#asistencia-personas`);
+}
+
+export async function removeGenbaAttendeeAction(formData: FormData) {
+  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const walkId = text(formData, "walkId");
+  const attendeeId = text(formData, "attendeeId");
+  const attendee = await prisma.genbaAttendee.findFirst({
+    where: { id: attendeeId, walkId },
+    include: { participant: { select: { id: true, name: true, employeeNumber: true } } }
+  });
+  if (!attendee) redirect(`/genba/${walkId}?error=asistente`);
+  await prisma.genbaAttendee.delete({ where: { id: attendee.id } });
+  await auditLog({ entity: "GenbaWalk", entityId: walkId, action: "GENBA_ATTENDEE_REMOVED", userId: user.id, details: { participantId: attendee.participant.id, name: attendee.participant.name, employeeNumber: attendee.participant.employeeNumber } });
+  revalidatePath(`/genba/${walkId}`);
+  revalidatePath("/genba");
+  redirect(`/genba/${walkId}#asistencia-personas`);
+}
+
 export async function addGenbaActivityAction(formData: FormData) {
   const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
   const walkId = text(formData, "walkId");
@@ -2856,12 +2892,12 @@ export async function closeGenbaActivityAction(formData: FormData) {
   const outcome = text(formData, "outcome") as WorkItemStatus;
   const note = text(formData, "note");
   const activity = await prisma.genbaActivity.findUniqueOrThrow({ where: { id: activityId }, include: { walk: true } });
-  if (activity.walk.status !== "ABIERTO") redirect(`/genba/${activity.walkId}?error=cerrado`);
-  if (!isImprovementManager(user.role) && activity.ownerId !== user.id && activity.walk.coordinatorId !== user.id) redirect(`/genba/${activity.walkId}`);
-  if (outcome !== "COMPLETADA" && outcome !== "CANCELADA") redirect(`/genba/${activity.walkId}`);
-  if (outcome === "CANCELADA" && !note) redirect(`/genba/${activity.walkId}?error=justificacion`);
+  if (activity.walk.status !== "ABIERTO") redirect(activityCloseTarget(formData, `/genba/${activity.walkId}`, "cerrado"));
+  if (!isImprovementManager(user.role) && activity.ownerId !== user.id && activity.walk.coordinatorId !== user.id) redirect(activityCloseTarget(formData, `/genba/${activity.walkId}`, "sin_permiso"));
+  if (outcome !== "COMPLETADA" && outcome !== "CANCELADA") redirect(activityCloseTarget(formData, `/genba/${activity.walkId}`, "actividad"));
+  if (outcome === "CANCELADA" && !note) redirect(activityCloseTarget(formData, `/genba/${activity.walkId}`, "justificacion"));
   const evidence = await saveUpload(formData.get("evidence") as File | null, `${activity.walk.folio}-actividad-${activity.number}`);
-  if (outcome === "COMPLETADA" && !evidence) redirect(`/genba/${activity.walkId}?error=evidencia`);
+  if (outcome === "COMPLETADA" && !evidence) redirect(activityCloseTarget(formData, `/genba/${activity.walkId}`, "evidencia"));
 
   await prisma.$transaction(async (tx) => {
     await tx.genbaActivity.update({
@@ -2883,7 +2919,21 @@ export async function closeGenbaActivityAction(formData: FormData) {
   revalidatePath("/genba");
   revalidatePath("/genba/kanban");
   revalidatePath(`/genba/${activity.walkId}`);
-  redirect(`/genba/${activity.walkId}`);
+  redirect(activityCloseTarget(formData, `/genba/${activity.walkId}`));
+}
+
+function activityCloseTarget(formData: FormData, fallback: string, error?: string) {
+  const returnTo = text(formData, "returnTo");
+  const base = returnTo.startsWith("/seguimientos") ? returnTo : fallback;
+  if (!error) return base;
+  return `${base}${base.includes("?") ? "&" : "?"}error=${encodeURIComponent(error)}`;
+}
+
+export async function closeFollowUpActivityAction(formData: FormData) {
+  const module = text(formData, "activityModule");
+  if (module === "KAIZEN") return closeKaizenActivityAction(formData);
+  if (module === "GENBA") return closeGenbaActivityAction(formData);
+  redirect("/seguimientos?vista=mias&error=actividad");
 }
 
 export async function mergeGenbaActivitiesAction(formData: FormData) {

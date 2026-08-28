@@ -145,7 +145,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
   const escalationRoutes = area.organizationUnit?.escalationRules ?? [];
   const primaryRoute = escalationRoutes.find((route) => route.isDefault) ?? escalationRoutes[0];
   const fallbackSupervisor = area.supervisor?.active ? area.supervisor : null;
-  const receiverName = primaryRoute?.reviewerMembership.user.name ?? fallbackSupervisor?.name ?? "Responsable pendiente";
+  const receiverName = primaryRoute?.reviewerMembership.title ?? area.organizationUnit?.responsible ?? fallbackSupervisor?.jobTitle ?? fallbackSupervisor?.name ?? "Responsable pendiente";
   const hasReceiver = Boolean(primaryRoute || fallbackSupervisor);
 
   return (
@@ -266,7 +266,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                       <input className="peer sr-only" defaultChecked={route.isDefault || (!primaryRoute?.isDefault && index === 0)} name="escalationRuleId" required type="radio" value={route.id} />
                       <span className="capture-choice-box min-h-20">
                         <GitBranch className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden />
-                        <span className="min-w-0"><span className="capture-choice-title block text-sm">{route.reviewerMembership.user.name}</span><small className="mt-1 block text-xs leading-4">{route.reviewerMembership.title}</small></span>
+                        <span className="min-w-0"><span className="capture-choice-title block text-sm">{route.reviewerMembership.title}</span><small className="mt-1 block text-xs leading-4">Ruta de autorización por puesto</small></span>
                       </span>
                     </label>
                   ))}

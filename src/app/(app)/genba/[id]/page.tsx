@@ -12,15 +12,19 @@ import {
   Plus,
   Save,
   Send,
+  Trash2,
+  UserPlus,
   UsersRound,
   XCircle
 } from "lucide-react";
 import {
   addGenbaActivityAction,
+  addGenbaAttendeeAction,
   addGenbaUpdateAction,
   closeGenbaActivityAction,
   mergeGenbaActivitiesAction,
   promoteGenbaActivityToKaizenAction,
+  removeGenbaAttendeeAction,
   updateGenbaActivityAction,
   updateGenbaWalkAction
 } from "@/app/actions";
@@ -52,7 +56,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
   const { user, canManage: hasManagePermission, canViewAll } = await requireGenbaAccess();
   const { id } = await params;
   const query = await searchParams;
-  const [walk, users, kaizenProjects] = await Promise.all([
+  const [walk, users, kaizenProjects, participants] = await Promise.all([
     prisma.genbaWalk.findUnique({
       where: { id },
       include: {
@@ -66,11 +70,20 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
           },
           orderBy: { number: "asc" }
         },
-        updates: { include: { user: true, activity: true }, orderBy: { createdAt: "desc" }, take: 60 }
+        updates: { include: { user: true, activity: true }, orderBy: { createdAt: "desc" }, take: 60 },
+        attendees: {
+          include: { participant: { include: { orgUnit: { include: { plant: true } } } } },
+          orderBy: { participant: { name: "asc" } }
+        }
       }
     }),
     prisma.user.findMany({ where: operationalUserWhere(), orderBy: { name: "asc" } }),
-    prisma.kaizenProject.findMany({ where: { status: { notIn: ["COMPLETADO", "CANCELADO"] } }, orderBy: { number: "desc" } })
+    prisma.kaizenProject.findMany({ where: { status: { notIn: ["COMPLETADO", "CANCELADO"] } }, orderBy: { number: "desc" } }),
+    prisma.participant.findMany({
+      where: { active: true },
+      select: { id: true, name: true, employeeNumber: true, email: true, jobTitle: true },
+      orderBy: { name: "asc" }
+    })
   ]);
 
   if (!walk) notFound();
@@ -78,6 +91,7 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
 
   const walkClosed = walk.status === "CERRADO" || walk.status === "CANCELADO";
   const canManage = hasManagePermission && !walkClosed;
+  const canEditAttendance = hasManagePermission;
 
   const progress = workProgress(walk.activities);
   const expected = parseStringArray(walk.expectedDepartments);
@@ -91,6 +105,8 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
     ? "Para completar una actividad debes adjuntar evidencia."
     : query.error === "justificacion"
       ? "Escribe por qué la actividad no se realizará."
+      : query.error === "asistente"
+        ? "Selecciona una persona activa del directorio para registrar su asistencia."
       : query.error === "lider"
         ? "Selecciona el líder del nuevo proyecto Kaizen."
         : query.error === "actividad"
@@ -132,10 +148,34 @@ export default async function GenbaDetailPage({ params, searchParams }: GenbaDet
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
         <div className="min-w-0 space-y-5">
-          <article className="surface rounded-lg p-5">
+          <article className="surface rounded-lg p-5" id="asistencia-personas">
             <SectionHeading description="Comparación entre comité esperado y asistencia real." title="Asistencia" />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {expected.map((department) => <div className={`flex items-center justify-between rounded-lg border p-3 text-sm font-bold ${attended.has(department) ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-rose-200 bg-rose-50 text-rose-800"}`} key={department}><span>{department}</span><span className="text-[10px] font-extrabold uppercase">{attended.has(department) ? "Asistió" : "Ausente"}</span></div>)}
+            </div>
+            <div className="mt-5 border-t border-line pt-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><h3 className="text-sm font-extrabold text-ink">Personas asistentes</h3><p className="mt-1 text-xs text-slate-500">{walk.attendees.length} personas registradas en este recorrido.</p></div>
+                <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-xs font-extrabold text-red-800"><UsersRound className="h-4 w-4" aria-hidden />{walk.attendees.length}</span>
+              </div>
+              {walk.attendees.length ? (
+                <div className="mt-3 divide-y divide-line rounded-lg border border-line">
+                  {walk.attendees.map((attendee) => (
+                    <div className="flex items-center gap-3 p-3" key={attendee.id}>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-extrabold text-slate-700">{attendee.participant.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("")}</span>
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-extrabold text-ink">{attendee.participant.name}</span><span className="block truncate text-xs text-slate-500">{attendee.participant.employeeNumber ? `Empleado ${attendee.participant.employeeNumber}` : "Sin número de empleado"} · {attendee.participant.orgUnit?.name ?? "Sin área"}</span></span>
+                      {canEditAttendance ? <form action={removeGenbaAttendeeAction}><input name="walkId" type="hidden" value={walk.id} /><input name="attendeeId" type="hidden" value={attendee.id} /><button aria-label={`Quitar a ${attendee.participant.name} de la asistencia`} className="icon-button text-rose-700" title="Quitar de asistencia" type="submit"><Trash2 className="h-4 w-4" aria-hidden /></button></form> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="mt-3 rounded-lg border border-dashed border-line p-4 text-center text-xs text-slate-500">Todavía no se han agregado personas.</p>}
+              {canEditAttendance ? (
+                <form action={addGenbaAttendeeAction} className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                  <input name="walkId" type="hidden" value={walk.id} />
+                  <SearchablePicker label="Agregar persona" name="participantId" options={personOptions(participants.filter((participant) => !walk.attendees.some((attendee) => attendee.participantId === participant.id)))} placeholder="Nombre o número de empleado" />
+                  <button className="btn btn-primary" type="submit"><UserPlus className="h-4 w-4" aria-hidden />Agregar asistencia</button>
+                </form>
+              ) : null}
             </div>
           </article>
 
