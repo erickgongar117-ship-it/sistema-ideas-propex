@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-28 -- codex (codex/hierarchy-training-coins) -- Agregue editor de programas en Entrenamientos para cambiar nombre, descripcion y ProbocaCoins; los nuevos valores aplican a pendientes y el libro mayor historico no se altera. Prueba transaccional, TypeScript y build:vercel pasaron. Commit 8fe2fd6.
+
+Siguiente paso dejado: Publicar el commit 8fe2fd6 en main/Vercel cuando Erick lo autorice; despues verificar en produccion Entrenamientos > Programas > Editar programa con una cuenta ADMIN o MEJORA_CONTINUA.
+
+---
+
 ## 2026-08-28 -- codex (codex/hierarchy-training-coins) -- Aplique en Neon la nomina oficial de 807 colaboradores (157 quincenales y 650 semanales), confirme una segunda pasada sin duplicados, corregi Erick 81177 y Edgar 81171, y robustece el importador para transacciones de produccion. TypeScript y build:vercel pasaron.
 
 Siguiente paso dejado: Verificar en Vercel el despliegue de main y revisar posteriormente las 45 personas quincenales con correo pendiente y las 6 con correo encontrado pero sin cuenta, sin inventar accesos.
