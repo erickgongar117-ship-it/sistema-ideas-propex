@@ -334,14 +334,19 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
 
   for (const project of kaizenProjects) {
     const ownedActiveActivities = project.activities.filter((activity) => activity.ownerId === user.id && activeWorkStatuses.has(activity.status));
-    // En "mias" se desglosan unicamente mis actividades. En el resto de vistas sigue
-    // apareciendo el proyecto completo, con las mias arriba.
-    const orderedActivities = activeView === "mias"
+    /**
+     * Si tengo actividades abiertas aqui, al desplegar veo las mias y nada mas.
+     *
+     * La regla es la misma en todas las vistas, no solo en "Solo mias": cuando el registro
+     * aparece en mi bandeja PORQUE algo esta a mi nombre, el resto del proyecto es ruido.
+     * Buscar dos actividades propias entre las catorce de un Kaizen era el reclamo original.
+     *
+     * Cuando no tengo ninguna —soy el lider, coordino, o superviso el area— si se despliega
+     * todo, que es justo lo que ese papel necesita ver.
+     */
+    const orderedActivities = ownedActiveActivities.length
       ? ownedActiveActivities
-      : [
-          ...ownedActiveActivities,
-          ...project.activities.filter((activity) => !ownedActiveActivities.some((owned) => owned.id === activity.id))
-        ];
+      : project.activities;
     const focusedActivity = ownedActiveActivities.length === 1 ? ownedActiveActivities[0] : null;
     const manageableProject = Boolean(project.orgUnitId && manageableScope.has(project.orgUnitId));
     const blockedActivities = project.activities.filter((activity) => activity.status === "BLOQUEADA");
@@ -354,9 +359,9 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     );
     const directAssignment = project.leaderId === user.id || project.activities.some((activity) => activity.ownerId === user.id);
     const view: FollowUpView = bucketFor(needsAction ? "pendientes" : directAssignment ? "seguimiento" : "equipo");
-    // El avance tambien se recorta: en "mias", "2 de 3" son mis tres actividades, no las
-    // catorce del proyecto. Ver un 80% ajeno junto a mi propia tarea confunde mas que ayuda.
-    const progress = workProgress(activeView === "mias" ? ownedActiveActivities : project.activities);
+    // El avance se recorta igual: "2 de 3" son mis tres actividades, no las catorce del
+    // proyecto. Ver un 80% ajeno junto a mi propia tarea confunde mas que ayuda.
+    const progress = workProgress(ownedActiveActivities.length ? ownedActiveActivities : project.activities);
     const dueDate = nearestDueDate([
       ...ownedActiveActivities.map((activity) => activity.dueDate),
       directAssignment || globalAccess || manageableProject ? project.endDate : null
@@ -403,12 +408,9 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
 
   for (const walk of genbaWalks) {
     const ownedActiveActivities = walk.activities.filter((activity) => activity.ownerId === user.id && activeWorkStatuses.has(activity.status));
-    const orderedActivities = activeView === "mias"
+    const orderedActivities = ownedActiveActivities.length
       ? ownedActiveActivities
-      : [
-          ...ownedActiveActivities,
-          ...walk.activities.filter((activity) => !ownedActiveActivities.some((owned) => owned.id === activity.id))
-        ];
+      : walk.activities;
     const focusedActivity = ownedActiveActivities.length === 1 ? ownedActiveActivities[0] : null;
     const manageableWalk = Boolean(walk.orgUnitId && manageableScope.has(walk.orgUnitId));
     const blockedActivities = walk.activities.filter((activity) => activity.status === "BLOQUEADA");
@@ -421,7 +423,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     );
     const directAssignment = walk.coordinatorId === user.id || walk.activities.some((activity) => activity.ownerId === user.id);
     const view: FollowUpView = bucketFor(needsAction ? "pendientes" : directAssignment ? "seguimiento" : "equipo");
-    const progress = workProgress(activeView === "mias" ? ownedActiveActivities : walk.activities);
+    const progress = workProgress(ownedActiveActivities.length ? ownedActiveActivities : walk.activities);
     const dueDate = nearestDueDate(ownedActiveActivities.map((activity) => activity.dueDate));
     const assignment = ownedActiveActivities.length
       ? `${ownedActiveActivities.length} ${ownedActiveActivities.length === 1 ? "actividad a tu cargo" : "actividades a tu cargo"}`
