@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 import { ThemeSelector } from "@/components/theme-selector";
+import { PropexAssistant } from "@/components/propex-assistant";
 import { WorkspacePeriodControl, WorkspaceSearch } from "@/components/workspace-controls";
 import { roleLabels } from "@/lib/domain";
 
@@ -577,6 +578,7 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
           </aside>
         </div>
       ) : null}
+      <PropexAssistant />
     </div>
   );
 }
