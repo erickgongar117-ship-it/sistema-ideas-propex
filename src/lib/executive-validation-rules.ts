@@ -1,4 +1,4 @@
-import type { ExecutiveValidationLevel, ExecutiveValidationStatus, User } from "@prisma/client";
+import type { ExecutiveValidationLevel, ExecutiveValidationStatus, Prisma, User } from "@prisma/client";
 
 export const CEO_EMAIL = "osbaldo.montano@proboca.net";
 
@@ -34,4 +34,27 @@ export function canTargetExecutive(
   if (!target.active || target.role !== "DIRECCION" || requester.id === target.id) return false;
   if (requester.role === "GERENTE") return true;
   return requester.role === "DIRECCION" && !isCeoUser(requester) && isCeoUser(target);
+}
+
+export function buildExecutiveValidationIdeaScope(
+  requester: Pick<User, "email" | "role">,
+  orgUnitIds: string[] = []
+): Prisma.IdeaWhereInput | null {
+  const openIdea: Prisma.IdeaWhereInput = { status: { notIn: ["CERRADA", "CANCELADA"] } };
+
+  if (requester.role === "DIRECCION") return isCeoUser(requester) ? null : openIdea;
+  if (requester.role !== "GERENTE" || !orgUnitIds.length) return null;
+
+  return {
+    AND: [
+      openIdea,
+      {
+        OR: [
+          { area: { is: { organizationUnit: { is: { id: { in: orgUnitIds } } } } } },
+          { escalationRule: { is: { orgUnitId: { in: orgUnitIds } } } },
+          { participant: { is: { orgUnitId: { in: orgUnitIds } } } }
+        ]
+      }
+    ]
+  };
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { PrismaClient } from "@prisma/client";
 import {
   blocksIdeaClosure,
+  buildExecutiveValidationIdeaScope,
   canTargetExecutive,
   isCeoUser
 } from "../src/lib/executive-validation-rules";
@@ -13,6 +14,23 @@ class ProbeRollback extends Error {}
 function check(condition: unknown, message: string) {
   assert.ok(condition, message);
   checks.push(message);
+}
+
+function runPolicyChecks() {
+  const manager = { id: "manager", email: "gerencia@proboca.net", role: "GERENTE" as const };
+  const director = { id: "director", email: "direccion@proboca.net", role: "DIRECCION" as const, active: true };
+  const ceo = { id: "ceo", email: "osbaldo.montano@proboca.net", role: "DIRECCION" as const, active: true };
+  const collaborator = { id: "collaborator", email: "persona@proboca.net", role: "COLABORADOR" as const };
+
+  check(canTargetExecutive(manager, director) && canTargetExecutive(manager, ceo), "Gerencia puede solicitar decisión a Dirección o CEO");
+  check(canTargetExecutive(director, ceo) && !canTargetExecutive(director, director), "Dirección solo puede solicitar decisión al CEO");
+  check(!canTargetExecutive(ceo, director) && !canTargetExecutive(collaborator, ceo), "CEO y personal no ejecutivo no generan escalaciones ejecutivas");
+  check(Boolean(buildExecutiveValidationIdeaScope(manager, ["unit-a"])), "Gerencia con alcance puede escalar ideas abiertas de su estructura");
+  check(buildExecutiveValidationIdeaScope(manager, []) === null, "Gerencia sin alcance no puede escalar ideas ajenas");
+  check(Boolean(buildExecutiveValidationIdeaScope(director)), "Dirección puede escalar una idea abierta al CEO");
+  check(buildExecutiveValidationIdeaScope(ceo) === null, "El CEO recibe decisiones y cierra la cadena de escalación");
+  check(blocksIdeaClosure("PENDING") && blocksIdeaClosure("MORE_INFO") && blocksIdeaClosure("REJECTED"), "Una decisión ejecutiva no resuelta bloquea el cierre");
+  check(!blocksIdeaClosure("APPROVED") && !blocksIdeaClosure("CANCELLED"), "Una decisión aprobada o cancelada libera el cierre");
 }
 
 async function main() {
@@ -54,6 +72,14 @@ async function main() {
   check(canTargetExecutive(manager, director) && canTargetExecutive(manager, ceo), "Gerencia puede dirigir una solicitud a Dirección o CEO");
   check(canTargetExecutive(director, ceo) && !canTargetExecutive(director, manager) && !canTargetExecutive(director, director), "Dirección solo puede dirigir una solicitud al CEO");
   check(!canTargetExecutive(collaborator, ceo), "Un usuario no ejecutivo no puede crear solicitudes ejecutivas");
+  const managerScope = buildExecutiveValidationIdeaScope(manager, ["qa-unit"]);
+  const managerWithoutScope = buildExecutiveValidationIdeaScope(manager, []);
+  const directorScope = buildExecutiveValidationIdeaScope(director);
+  const ceoScope = buildExecutiveValidationIdeaScope(ceo);
+  check(Boolean(managerScope) && JSON.stringify(managerScope).includes("qa-unit"), "Gerencia puede escalar ideas abiertas dentro de su alcance organizacional");
+  check(managerWithoutScope === null, "Gerencia sin alcance organizacional no puede escalar ideas ajenas");
+  check(Boolean(directorScope), "Dirección puede elevar una idea abierta al CEO");
+  check(ceoScope === null, "El CEO recibe decisiones, pero no genera otra escalación ejecutiva");
   check(blocksIdeaClosure("PENDING") && blocksIdeaClosure("MORE_INFO") && blocksIdeaClosure("REJECTED"), "Pendiente, más información y rechazo bloquean el cierre");
   check(!blocksIdeaClosure("APPROVED") && !blocksIdeaClosure("CANCELLED"), "Aprobación o cancelación liberan el cierre");
 
@@ -98,9 +124,15 @@ async function main() {
   console.log(JSON.stringify({ ok: true, checks: checks.length, validationsReviewed: storedValidations.length }, null, 2));
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(() => prisma.$disconnect());
+if (process.argv.includes("--policy-only")) {
+  runPolicyChecks();
+  console.log(JSON.stringify({ ok: true, checks: checks.length, mode: "policy-only" }, null, 2));
+  void prisma.$disconnect();
+} else {
+  main()
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    })
+    .finally(() => prisma.$disconnect());
+}

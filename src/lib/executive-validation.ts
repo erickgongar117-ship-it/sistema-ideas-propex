@@ -1,15 +1,17 @@
 import "server-only";
 
-import type { User } from "@prisma/client";
-import { canDecideInitialIdea } from "@/lib/idea-access";
+import type { Prisma, User } from "@prisma/client";
+import { getSupervisableOrgUnitIds } from "@/lib/idea-access";
 import {
   CEO_EMAIL,
+  buildExecutiveValidationIdeaScope,
   isCeoUser
 } from "@/lib/executive-validation-rules";
 import { prisma } from "@/lib/prisma";
 
 export {
   blocksIdeaClosure,
+  buildExecutiveValidationIdeaScope,
   canTargetExecutive,
   CEO_EMAIL,
   executiveValidationLevelFor,
@@ -43,6 +45,20 @@ export async function canRequestExecutiveValidation(
   requester: Pick<User, "id" | "email" | "role">,
   ideaId: string
 ) {
-  if (requester.role === "GERENTE") return canDecideInitialIdea(requester, ideaId);
-  return requester.role === "DIRECCION" && !isCeoUser(requester);
+  const scope = await executiveValidationRequestScopeFor(requester);
+  if (!scope) return false;
+
+  return Boolean(await prisma.idea.findFirst({
+    where: { AND: [{ id: ideaId }, scope] },
+    select: { id: true }
+  }));
+}
+
+export async function executiveValidationRequestScopeFor(
+  requester: Pick<User, "id" | "email" | "role">
+): Promise<Prisma.IdeaWhereInput | null> {
+  const orgUnitIds = requester.role === "GERENTE"
+    ? await getSupervisableOrgUnitIds(requester.id)
+    : [];
+  return buildExecutiveValidationIdeaScope(requester, orgUnitIds);
 }

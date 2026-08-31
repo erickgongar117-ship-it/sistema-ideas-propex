@@ -1281,6 +1281,7 @@ export async function requestExecutiveValidationAction(formData: FormData) {
   }
 
   revalidatePath("/seguimientos");
+  revalidatePath("/validaciones/ejecutivas");
   revalidatePath("/notificaciones");
   revalidatePath(`/ideas/${ideaId}`);
   redirect(`/ideas/${ideaId}?success=validacion_ejecutiva_solicitada`);
@@ -1338,6 +1339,7 @@ export async function decideExecutiveValidationAction(formData: FormData) {
   });
 
   revalidatePath("/seguimientos");
+  revalidatePath("/validaciones/ejecutivas");
   revalidatePath("/notificaciones");
   revalidatePath(`/ideas/${validation.ideaId}`);
   redirect(`/ideas/${validation.ideaId}?success=validacion_ejecutiva_decidida`);
@@ -1396,6 +1398,7 @@ export async function resubmitExecutiveValidationAction(formData: FormData) {
   });
 
   revalidatePath("/seguimientos");
+  revalidatePath("/validaciones/ejecutivas");
   revalidatePath("/notificaciones");
   revalidatePath(`/ideas/${validation.ideaId}`);
   redirect(`/ideas/${validation.ideaId}?success=validacion_ejecutiva_reenviada`);
@@ -1444,6 +1447,7 @@ export async function cancelExecutiveValidationAction(formData: FormData) {
   });
 
   revalidatePath("/seguimientos");
+  revalidatePath("/validaciones/ejecutivas");
   revalidatePath("/notificaciones");
   revalidatePath(`/ideas/${validation.ideaId}`);
   redirect(`/ideas/${validation.ideaId}?success=validacion_ejecutiva_cancelada`);
