@@ -16,6 +16,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Coins,
+  Crown,
   Database,
   Download,
   Footprints,
@@ -126,6 +127,7 @@ const unifiedNav: NavItem[] = [
   { href: "/probocacoins", label: "ProbocaCoins", shortLabel: "Coins", icon: Coins, roles: executiveRoles, group: "work" },
 
   { href: "/supervisor", label: "Aprobaciones", shortLabel: "Aprobar", icon: UserCheck, roles: allRoles, requiresReviewAccess: true, group: "control" },
+  { href: "/validaciones/ejecutivas", label: "Validaciones ejecutivas", shortLabel: "Ejecutivas", icon: Crown, roles: ["GERENTE", "DIRECCION"], group: "control" },
   { href: "/validaciones/calidad", label: "Validaciones de calidad", shortLabel: "Calidad", icon: ShieldCheck, roles: ["ADMIN", "CALIDAD"], group: "control" },
   { href: "/validaciones/seguridad", label: "Validaciones de seguridad", shortLabel: "Seguridad", icon: ClipboardCheck, roles: ["ADMIN", "SEGURIDAD"], group: "control" },
   { href: "/validaciones/mantenimiento", label: "Validaciones tecnicas", icon: Wrench, roles: ["ADMIN", "MANTENIMIENTO"], group: "control" },
