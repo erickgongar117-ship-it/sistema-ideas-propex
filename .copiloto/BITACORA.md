@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-31 -- codex (main) -- Implemente y publique el asistente virtual PROpEx: panel responsive global, API autenticada, contexto limitado por permisos, consultas de pendientes/Ideas/Kaizen/GENBA/rutas, fallback operativo, capa OpenAI opcional, limite de uso y 10 pruebas. Vercel dpl_AF2iEPe8xeTi4u9hAfzqW7JkVEXD.
+
+Siguiente paso dejado: Configurar OPENAI_API_KEY y OPENAI_ASSISTANT_MODEL en Vercel cuando el usuario proporcione una clave; despues implementar el clasificador guiado de captura para separar idea de mejora, mantenimiento, calidad y seguridad antes de generar la ruta.
+
+---
+
 ## 2026-08-31 -- codex (main) -- Corregi el alcance de validaciones ejecutivas, agregue bandeja visible para Gerencia/Direccion/CEO, nueve pruebas de politica, build, push a main y despliegue Vercel dpl_6b12Xvb4G3XfFDhNsnpgTEwbnhcF.
 
 Siguiente paso dejado: Disenar e implementar captura guiada en src/app/(public)/captura/[code] o su ruta real: clasificar idea de mejora vs orden de mantenimiento/calidad/seguridad, pedir planta-area-puesto-jefe directo y resolver automaticamente la ruta con la estructura organizacional; despues conectar un asistente conversacional con permisos por rol.
