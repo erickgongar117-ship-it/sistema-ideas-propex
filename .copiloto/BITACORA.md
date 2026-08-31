@@ -4,6 +4,12 @@ Append-only. Lo nuevo se agrega **arriba**. Aqui va el *por que*; el *que* ya lo
 
 ---
 
+## 2026-08-31 -- codex (main) -- Corregi el alcance de validaciones ejecutivas, agregue bandeja visible para Gerencia/Direccion/CEO, nueve pruebas de politica, build, push a main y despliegue Vercel dpl_6b12Xvb4G3XfFDhNsnpgTEwbnhcF.
+
+Siguiente paso dejado: Disenar e implementar captura guiada en src/app/(public)/captura/[code] o su ruta real: clasificar idea de mejora vs orden de mantenimiento/calidad/seguridad, pedir planta-area-puesto-jefe directo y resolver automaticamente la ruta con la estructura organizacional; despues conectar un asistente conversacional con permisos por rol.
+
+---
+
 ## 2026-08-28 -- codex (main) -- Implemente y publique cierre de actividades Kaizen/GENBA desde el panel Mi trabajo con evidencia o justificacion; agregue asistentes nominales GENBA editables desde el directorio; oculte nombres personales en las rutas QR P1; agregue Padilla como tercer escalon en las tres lineas; sincronice SQLite y Neon; valide TypeScript, ambos esquemas, build y Vercel dpl_7WGFrjVZA32SC9BcrJQAPAGL89o3.
 
 Siguiente paso dejado: Validar con una cuenta que tenga actividad asignada: en /seguimientos?vista=mias abrir el panel lateral, cerrar con evidencia y confirmar que desaparece de pendientes; en un GENBA agregar y retirar una persona por numero de empleado.
