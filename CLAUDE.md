@@ -54,7 +54,8 @@ La aplicacion debe sentirse clara para personal operativo. Las personas deben ve
 
 ## Reglas de acceso
 
-- Solo `ADMIN` y `MEJORA_CONTINUA` crean y editan proyectos Kaizen, recorridos GENBA, actividades, fechas, Gantt, responsables, Charter, combinaciones y bitacoras.
+- `ADMIN`, `MEJORA_CONTINUA`, `GERENTE` y `DIRECCION` crean y editan proyectos Kaizen, recorridos GENBA, actividades, fechas, Gantt, responsables, Charter, combinaciones y bitacoras. La lista vive en `improvementManagerRoles` (src/lib/domain.ts); no repitas los roles a mano.
+- Las decisiones sobre Ideas —clasificar, cerrar, cancelar, quitar puntos, reabrir rechazadas— siguen siendo solo de `ADMIN` y `MEJORA_CONTINUA`. Es un permiso distinto del anterior y no deben mezclarse.
 - Un lider Kaizen o responsable de actividad puede cerrar su actividad con evidencia o justificar que no se ejecutara.
 - Un coordinador GENBA o responsable de actividad puede cerrar su actividad con evidencia o justificar que no se ejecutara.
 - Usuarios asignados a una actividad obtienen acceso al modulo correspondiente; Administrador y Mejora Continua siempre tienen acceso.
