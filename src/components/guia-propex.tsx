@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, Check, CircleAlert, Compass, LoaderCircle, Pencil } from "lucide-react";
-import { analizarSolicitudAction, type GuiaAnalisis } from "@/app/guia-actions";
+import { analizarSolicitudAction, escalonesDeAreaAction, type GuiaAnalisis } from "@/app/guia-actions";
 
 /**
  * Guia PROpEx: arma el registro preguntando, y lo enseña antes de enviarlo.
@@ -98,9 +98,23 @@ export function GuiaPropex() {
     setBorrador("");
     setEditando(null);
 
-    // Se vuelve a analizar cuando cambia algo que altera la lectura: el relato y la propuesta
-    // cambian la clasificacion, el area cambia los escalones disponibles.
-    if (campo === "relato" || campo === "propuesta" || campo === "area") {
+    // Elegir area solo cambia quien revisa, no como se leyo el relato: se piden los escalones
+    // sin molestar al modelo. Antes esto costaba una llamada entera y una espera de segundos
+    // para recibir exactamente la misma lectura.
+    if (campo === "area") {
+      setCargando(true);
+      try {
+        const escalones = await escalonesDeAreaAction(valor);
+        setAnalisis((actual) => (actual ? { ...actual, escalones } : actual));
+        if (escalones.length === 1) setRespuestas((actual) => ({ ...actual, escalon: escalones[0].id }));
+      } finally {
+        setCargando(false);
+      }
+      return;
+    }
+
+    // Al modelo solo se vuelve cuando cambia el texto, que es lo unico que altera la lectura.
+    if (campo === "relato" || campo === "propuesta") {
       setCargando(true);
       try {
         const resultado = await analizarSolicitudAction({

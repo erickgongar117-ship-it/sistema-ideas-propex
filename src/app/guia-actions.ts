@@ -83,3 +83,13 @@ function siguientePregunta(sugerencia: GuiaSugerencia, areaCode: string | undefi
   return null;
 }
 
+/**
+ * Solo los escalones de un area, sin pasar por el modelo.
+ *
+ * Elegir area no cambia como se leyo lo que la persona conto, asi que volver a preguntarle al
+ * modelo ahi era pagar y hacer esperar por una respuesta identica. Esta accion existe para
+ * ese paso.
+ */
+export async function escalonesDeAreaAction(areaCode: string): Promise<GuiaEscalon[]> {
+  return areaCode ? escalonesDeArea(areaCode) : [];
+}
