@@ -3050,3 +3050,52 @@ html[data-theme="dark"] .alert-info { border-color: #24547c; background: #142638
   .kgantt-row { grid-template-columns: 7.5rem minmax(0, 1fr); }
   .kgantt-months { margin-left: 7.5rem; }
 }
+
+/* Guia PROpEx: la conversacion previa al formulario, en la pagina publica.
+   Usa tokens y no colores sueltos para que siga el tema claro/oscuro como el resto. */
+.guia-panel {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--panel);
+  padding: 1.25rem;
+}
+.guia-panel-head { display: flex; align-items: flex-start; gap: 0.75rem; }
+.guia-panel-icon {
+  display: flex; height: 2.5rem; width: 2.5rem; flex: none;
+  align-items: center; justify-content: center;
+  border-radius: 0.5rem; background: var(--brand-red); color: #fff;
+}
+.guia-panel-head h2 { font-size: 1.125rem; font-weight: 800; color: var(--ink); }
+.guia-panel-head p { margin-top: 0.125rem; font-size: 0.875rem; color: var(--muted); }
+.guia-campo { display: grid; gap: 0.375rem; }
+.guia-resultado { display: grid; gap: 1rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.guia-veredicto {
+  border-left: 3px solid var(--brand-red);
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: var(--panel-soft, var(--panel));
+  padding: 0.75rem 0.875rem;
+}
+.guia-veredicto.is-fuera { border-left-color: var(--warning); }
+.guia-veredicto-etiqueta {
+  display: inline-block; font-size: 0.6875rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--brand-red);
+}
+.guia-veredicto.is-fuera .guia-veredicto-etiqueta { color: var(--warning); }
+.guia-veredicto p { margin-top: 0.25rem; font-size: 0.875rem; color: var(--ink); }
+.guia-destino { display: flex; align-items: flex-start; gap: 0.375rem; font-weight: 700; }
+.guia-nota {
+  display: flex; align-items: flex-start; gap: 0.375rem;
+  font-size: 0.8125rem; color: var(--muted);
+}
+.guia-escalones { display: grid; gap: 0.5rem; }
+.guia-escalon {
+  display: flex; align-items: flex-start; gap: 0.625rem;
+  border: 1px solid var(--line); border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem; cursor: pointer;
+}
+.guia-escalon:has(input:checked) { border-color: var(--brand-red); }
+.guia-escalon:has(input:focus-visible) { outline: 2px solid var(--brand-red); outline-offset: 2px; }
+.guia-escalon strong { display: block; font-size: 0.875rem; color: var(--ink); }
+.guia-escalon small { display: block; margin-top: 0.125rem; font-size: 0.75rem; color: var(--muted); }

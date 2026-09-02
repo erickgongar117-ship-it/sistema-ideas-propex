@@ -33,7 +33,9 @@ export const dynamic = "force-dynamic";
 
 type CaptureProps = {
   params: Promise<{ code: string }>;
-  searchParams: Promise<{ error?: string; campos?: string; categoria?: string }>;
+  // problem/proposal/escalationRuleId los precarga la Guia PROpEx cuando la persona llega
+  // desde ahi; guia trae la clasificacion que propuso, para poder medirla despues.
+  searchParams: Promise<{ error?: string; campos?: string; categoria?: string; problem?: string; proposal?: string; escalationRuleId?: string; guia?: string }>;
 };
 
 const fieldLabels: Record<string, string> = {
@@ -281,13 +283,13 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
             <div className="grid gap-4">
               <label>
                 <span className="label">¿Qué problema viste? *</span>
-                <textarea className={`${fieldClass(errorFields, "problem")} min-h-28`} name="problem" placeholder="Ejemplo: El material se atora y retrasa la linea..." required />
+                <textarea className={`${fieldClass(errorFields, "problem")} min-h-28`} defaultValue={query.problem ?? ""} name="problem" placeholder="Ejemplo: El material se atora y retrasa la linea..." required />
                 {fieldHasError(errorFields, "problem") ? <span className="helper-text font-bold text-rose-700">Describe el problema con una frase corta.</span> : null}
               </label>
               <div className="grid gap-4 lg:grid-cols-2">
                 <label>
                   <span className="label">¿Qué propones hacer? *</span>
-                  <textarea className={`${fieldClass(errorFields, "proposal")} min-h-28`} name="proposal" placeholder="Ejemplo: Cambiar la guia para evitar el atoron..." required />
+                  <textarea className={`${fieldClass(errorFields, "proposal")} min-h-28`} defaultValue={query.proposal ?? ""} name="proposal" placeholder="Ejemplo: Cambiar la guia para evitar el atoron..." required />
                   {fieldHasError(errorFields, "proposal") ? <span className="helper-text font-bold text-rose-700">Escribe una propuesta corta.</span> : null}
                 </label>
                 <label>

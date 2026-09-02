@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Building2, CheckCircle2, LogIn, QrCode } from "lucide-react";
 import { CaptureAreaExplorer } from "@/components/capture-area-explorer";
 import { ThemeSelector } from "@/components/theme-selector";
+import { GuiaPropex } from "@/components/guia-propex";
 import { getPublicCaptureStructure } from "@/lib/organization";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,20 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="relative z-10 h-2 bg-brand-500" />
+      </section>
+
+      <section className="scroll-mt-6 bg-panel" id="guia">
+        <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
+          <div className="mb-6">
+            <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-brand-700">¿No sabes por dónde va?</p>
+            <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">Pregúntale a la Guía</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Descríbelo con tus palabras. Te digo si es una idea de mejora, una orden de mantenimiento o un tema de
+              seguridad, y a quién le toca revisarlo. No necesitas entrar con usuario.
+            </p>
+          </div>
+          <GuiaPropex />
+        </div>
       </section>
 
       <section className="scroll-mt-6 bg-white" id="areas">
