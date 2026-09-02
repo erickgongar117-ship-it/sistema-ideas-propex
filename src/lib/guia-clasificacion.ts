@@ -24,6 +24,11 @@ import type { Classification } from "@prisma/client";
  *
  * Es a proposito conservadora: ante la duda propone IDEA_RAPIDA con confianza baja y deja que
  * la persona corrija, en vez de mandar con seguridad a la cola equivocada.
+ *
+ * OJO con los destinos: salvo la solicitud administrativa, TODO se captura aqui. Estas
+ * categorias son la clasificacion que Mejora Continua le pone a la idea DESPUES de
+ * registrada, no oficinas a las que se manda a la persona. La primera version decia "va a
+ * Mantenimiento, como orden de trabajo" y mandaba a la gente a un lugar que no existe.
  */
 
 export type GuiaCategoria = Classification | "NO_ES_CAPTURA";
@@ -65,7 +70,7 @@ const REGLAS: Regla[] = [
   {
     categoria: "SEGURIDAD",
     etiqueta: "Riesgo de seguridad",
-    destino: "Seguridad Industrial, para atencion inmediata",
+    destino: "Se registra aqui y Seguridad lo revisa con prioridad",
     peso: 3,
     senales: [
       /\b(riesgo|peligro|accidente|lesion|lesionar|golpe|caida|resbal|quemad|atrapamiento|electrocut|chispa|incendio|fuga de gas|amoniaco)\b/,
@@ -75,7 +80,7 @@ const REGLAS: Regla[] = [
   {
     categoria: "CALIDAD_INOCUIDAD",
     etiqueta: "Tema de calidad o inocuidad",
-    destino: "Calidad e Inocuidad",
+    destino: "Se registra aqui y lo revisa Calidad e Inocuidad",
     peso: 3,
     senales: [
       /\b(inocuidad|contaminaci|cuerpo extrano|plaga|fauna nociva|moho|oxido|corrosion|temperatura fuera|cadena de frio)\b/,
@@ -85,7 +90,7 @@ const REGLAS: Regla[] = [
   {
     categoria: "ACCION_MANTENIMIENTO",
     etiqueta: "Orden de mantenimiento",
-    destino: "Mantenimiento, como orden de trabajo",
+    destino: "Se registra aqui y lo toma Mantenimiento",
     peso: 2,
     senales: [
       /\b(no (funciona|sirve|enciende|prende|arranca)|descompuest|averiad|fuga|gotea|ruido|vibra|banda rota|motor|rodamiento|balero|soldar|reparar|arreglar|cambiar la pieza|refaccion)\b/
@@ -96,14 +101,14 @@ const REGLAS: Regla[] = [
   {
     categoria: "CINCO_S_GESTION_VISUAL",
     etiqueta: "Orden, limpieza o senalizacion",
-    destino: "Mejora Continua, como accion de 5S",
+    destino: "Se registra aqui como accion de orden y limpieza",
     peso: 1,
     senales: [/\b(5s|cinco s|orden y limpieza|senaliz|etiquet|delimitar|marcar el piso|acomodar|tablero visual|identificar)\b/]
   },
   {
     categoria: "KAIZEN",
     etiqueta: "Posible proyecto Kaizen",
-    destino: "Mejora Continua, para confirmar si abre proyecto",
+    destino: "Se registra aqui y Mejora Continua decide si abre proyecto",
     peso: 2,
     senales: [
       /\b(proyecto|rediseno|reingenieria|automatiz|linea completa|todo el proceso|varias areas|inversion|cotizar|comprar equipo|layout)\b/,
@@ -113,7 +118,7 @@ const REGLAS: Regla[] = [
   {
     categoria: "NO_ES_CAPTURA",
     etiqueta: "Solicitud administrativa",
-    destino: "Recursos Humanos o tu jefe directo, no por este medio",
+    destino: "Esto se ve con Recursos Humanos o con tu jefe, no por aqui",
     peso: 2,
     senales: [
       /\b(vacacion|permiso|incapacidad|nomina|pago|sueldo|aguinaldo|uniforme|casillero|comedor|transporte|credencial|constancia|imss|infonavit)\b/
@@ -143,7 +148,7 @@ export function clasificarSolicitud(
       confianza: 0,
       etiqueta: "Todavia no puedo clasificarlo",
       motivo: "Necesito que me cuentes un poco mas de lo que viste.",
-      destino: "Pendiente de definir",
+      destino: "Todavia no lo se",
       faltantes
     };
   }
@@ -167,7 +172,7 @@ export function clasificarSolicitud(
       confianza: 0.45,
       etiqueta: "Idea de mejora",
       motivo: "No encontre senales de mantenimiento, seguridad ni calidad, asi que la tomo como propuesta de mejora. Si me equivoque, corrigeme.",
-      destino: "Tu jefe directo, para el primer visto bueno",
+      destino: "Se registra aqui y tu jefe directo da el primer visto bueno",
       faltantes
     };
   }
@@ -200,6 +205,11 @@ export function camposFaltantes(texto: string): string[] {
   if (limpio.length < 40) faltantes.push("Que viste exactamente");
   if (!/\b(propongo|sugiero|se podria|deberia|convendria|hay que|proponer|cambiar|poner|instalar|quitar)\b/.test(limpio)) {
     faltantes.push("Que propones hacer");
+  }
+  // El formulario exige los tres: problema, propuesta y beneficio esperado. Si la Guia no los
+  // junta, la persona igual acaba escribiendolos a mano y la Guia no le ahorro nada.
+  if (!/(para (que|no|evitar)|asi (ya )?no|se evita|ahorra|mas rapido|menos|mejora|seguro|riesgo)/.test(limpio)) {
+    faltantes.push("Que mejora esperas");
   }
   return faltantes;
 }

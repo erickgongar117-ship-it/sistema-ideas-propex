@@ -35,7 +35,7 @@ type CaptureProps = {
   params: Promise<{ code: string }>;
   // problem/proposal/escalationRuleId los precarga la Guia PROpEx cuando la persona llega
   // desde ahi; guia trae la clasificacion que propuso, para poder medirla despues.
-  searchParams: Promise<{ error?: string; campos?: string; categoria?: string; problem?: string; proposal?: string; escalationRuleId?: string; guia?: string }>;
+  searchParams: Promise<{ error?: string; campos?: string; categoria?: string; problem?: string; proposal?: string; expectedBenefit?: string; collaboratorName?: string; shift?: string; escalationRuleId?: string; guia?: string }>;
 };
 
 const fieldLabels: Record<string, string> = {
@@ -237,7 +237,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
             <div className="grid gap-4 sm:grid-cols-2">
               <label>
                 <span className="label">Nombre completo *</span>
-                <input autoComplete="name" className={fieldClass(errorFields, "collaboratorName")} name="collaboratorName" placeholder="Escribe tu nombre" required />
+                <input autoComplete="name" className={fieldClass(errorFields, "collaboratorName")} defaultValue={query.collaboratorName ?? ""} name="collaboratorName" placeholder="Escribe tu nombre" required />
                 {fieldHasError(errorFields, "collaboratorName") ? <span className="helper-text font-bold text-rose-700">Escribe al menos 2 letras.</span> : null}
               </label>
               <label>
@@ -251,7 +251,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
               </label>
               <label>
                 <span className="label">Turno *</span>
-                <select className={fieldClass(errorFields, "shift")} defaultValue="Matutino" name="shift" required>
+                <select className={fieldClass(errorFields, "shift")} defaultValue={query.shift ?? "Matutino"} name="shift" required>
                   {shifts.map((shift) => (
                     <option key={shift} value={shift}>{shift}</option>
                   ))}
@@ -294,7 +294,7 @@ export default async function CapturePage({ params, searchParams }: CaptureProps
                 </label>
                 <label>
                   <span className="label">¿Qué mejora esperas? *</span>
-                  <textarea className={`${fieldClass(errorFields, "expectedBenefit")} min-h-28`} name="expectedBenefit" placeholder="Ejemplo: Menos paro, menor riesgo y trabajo mas rapido..." required />
+                  <textarea className={`${fieldClass(errorFields, "expectedBenefit")} min-h-28`} defaultValue={query.expectedBenefit ?? ""} name="expectedBenefit" placeholder="Ejemplo: Menos paro, menor riesgo y trabajo mas rapido..." required />
                   {fieldHasError(errorFields, "expectedBenefit") ? <span className="helper-text font-bold text-rose-700">Escribe el beneficio esperado.</span> : null}
                 </label>
               </div>
