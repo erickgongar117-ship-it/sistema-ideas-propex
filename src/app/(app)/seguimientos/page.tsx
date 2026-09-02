@@ -24,7 +24,8 @@ import {
   followUpKaizenWhere,
   type FollowUpView
 } from "@/lib/follow-up-scope";
-import { userModuleAccess } from "@/lib/module-access";
+import { canManageImprovementModules, userModuleAccess } from "@/lib/module-access";
+import { operationalUserWhere } from "@/lib/director-policy";
 import { prisma } from "@/lib/prisma";
 import { genbaStatusCategory, ideaStatusCategory, kaizenStatusCategory } from "@/lib/status-system";
 
@@ -517,6 +518,20 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
     }
   };
   const currentMeta = viewMeta[activeView];
+  /**
+   * A quien se le puede pasar una actividad desde el panel lateral.
+   *
+   * Solo se consulta para quien administra los modulos: para el resto la lista llega vacia y
+   * el control ni se dibuja, asi que no se paga una consulta de doscientas personas por cada
+   * visita a la bandeja. Direccion queda fuera por la misma regla de siempre.
+   */
+  const reasignables = canManageImprovementModules(user)
+    ? (await prisma.user.findMany({
+        where: operationalUserWhere(),
+        select: { id: true, name: true, jobTitle: true },
+        orderBy: { name: "asc" }
+      })).map((persona) => ({ id: persona.id, name: persona.name, detail: persona.jobTitle ?? undefined }))
+    : [];
 
   return (
     <>
@@ -618,6 +633,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps) {
         <FollowUpTable
           emptyDescription={currentMeta.emptyDescription}
           emptyTitle={currentMeta.emptyTitle}
+          people={reasignables}
           rows={buckets[activeView]}
           totalRows={totalItems}
         />

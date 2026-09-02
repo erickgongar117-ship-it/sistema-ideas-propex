@@ -6,6 +6,7 @@ import {
   type WorkboardMetric
 } from "@/components/operations-workboard";
 import { bulkFollowUpAction, closeFollowUpActivityAction } from "@/app/actions";
+import { reasignarActividadAction } from "@/app/actividades-actions";
 import { fijarRegistroAction } from "@/app/seguir-actions";
 import { workItemStatusRender, type StatusCategory } from "@/lib/status-system";
 
@@ -78,12 +79,18 @@ export function FollowUpTable({
   rows,
   totalRows,
   emptyTitle,
-  emptyDescription
+  emptyDescription,
+  people
 }: {
   rows: FollowUpRow[];
   totalRows?: number;
   emptyTitle: string;
   emptyDescription: string;
+  /**
+   * Gente a la que se le puede pasar una actividad. Llega vacia para quien no administra los
+   * modulos, y con la lista vacia el control de reasignar no se dibuja.
+   */
+  people?: Array<{ id: string; name: string; detail?: string }>;
 }) {
   const now = new Date();
   const items: WorkboardItem[] = rows.map((row) => {
@@ -158,7 +165,12 @@ export function FollowUpTable({
       locationLabel="Planta y area"
       metrics={metrics}
       onBulkAction={bulkFollowUpAction}
-      childActions={{ close: closeFollowUpActivityAction }}
+      childActions={{
+        close: closeFollowUpActivityAction,
+        reassign: reasignarActividadAction,
+        // Sin reassignModule a proposito: cada fila lleva su modulo y el panel lo toma de ahi.
+        people
+      }}
       pinAction={fijarRegistroAction}
       primaryLabel="Trabajo"
     />

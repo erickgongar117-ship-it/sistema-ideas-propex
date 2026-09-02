@@ -39,6 +39,7 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Users,
   TriangleAlert,
   UserRoundCheck,
   X,
@@ -109,6 +110,21 @@ export type WorkboardChildActions = {
   createPrimaryPlaceholder?: string;
   createSecondaryField?: string;
   createSecondaryLabel?: string;
+  /**
+   * Cambiar el responsable sin salir del panel.
+   *
+   * Antes solo se podia desde el expediente, y quien administra el portafolio vive en los
+   * tableros. Necesita la lista de gente porque el panel es un componente de cliente y no
+   * puede consultarla por su cuenta.
+   */
+  reassign?: (formData: FormData) => void | Promise<void>;
+  /**
+   * Respaldo cuando el registro no dice de que modulo es. Lo normal es que si lo diga
+   * —el panel lo toma de la propia fila—, porque una bandeja mezcla Kaizen y GENBA y una
+   * constante mandaria todas como Kaizen.
+   */
+  reassignModule?: "KAIZEN" | "GENBA";
+  people?: Array<{ id: string; name: string; detail?: string }>;
 };
 
 export type WorkboardItem = {
@@ -1086,7 +1102,27 @@ export function OperationsWorkboard({
                                 </form>
                               </details>
                             ) : null}
+                            {!child.closed && childActions.reassign && childActions.people?.length ? (
+                              <details className="details-panel">
+                                <summary><span className="flex items-center gap-2"><Users className="h-4 w-4" aria-hidden />Cambiar responsable</span></summary>
+                                <form action={childActions.reassign} className="grid gap-2 p-3">
+                                  <input name="activityId" type="hidden" value={child.id} />
+                                  <input name="modulo" type="hidden" value={focusedItem.pinTarget?.modulo ?? childActions.reassignModule ?? "KAIZEN"} />
+                                  <label>
+                                    <span className="label">Nuevo responsable</span>
+                                    <select className="field" defaultValue="" name="ownerId">
+                                      <option value="">Sin asignar</option>
+                                      {childActions.people.map((persona) => (
+                                        <option key={persona.id} value={persona.id}>{persona.detail ? `${persona.name} · ${persona.detail}` : persona.name}</option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <button className="btn btn-secondary" type="submit">Guardar responsable</button>
+                                </form>
+                              </details>
+                            ) : null}
                             {child.closed && childActions.reopen ? (
+
                               <details className="details-panel">
                                 <summary><span className="flex items-center gap-2"><RotateCcw className="h-4 w-4" aria-hidden />Reabrir</span></summary>
                                 <form action={childActions.reopen} className="grid gap-2 p-3">
