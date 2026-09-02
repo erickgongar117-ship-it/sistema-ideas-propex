@@ -108,7 +108,15 @@ export function GuiaPropex() {
           areaCode: siguientes.area || undefined
         });
         setAnalisis(resultado);
-        if (resultado.escalones.length === 1) setRespuestas((actual) => ({ ...actual, escalon: resultado.escalones[0].id }));
+        // Se adopta lo que redacto el modelo, sin pisar lo que la persona ya escribio a mano.
+        // Ese es el apoyo real: no tiene que volver a contar lo mismo en otras palabras.
+        setRespuestas((actual) => ({
+          ...actual,
+          escalon: resultado.escalones.length === 1 ? resultado.escalones[0].id : actual.escalon,
+          relato: resultado.borrador.problema || actual.relato,
+          propuesta: actual.propuesta || resultado.borrador.propuesta,
+          beneficio: actual.beneficio || resultado.borrador.beneficio
+        }));
       } finally {
         setCargando(false);
       }
@@ -167,7 +175,13 @@ export function GuiaPropex() {
 
       {campoActual ? (
         <div className="guia-pregunta">
-          <p className="guia-pregunta-titulo">{PREGUNTAS[campoActual].titulo}</p>
+          <p className="guia-pregunta-titulo">
+            {/* Si el modelo pregunto algo concreto sobre lo que la persona conto, se usa esa
+                pregunta; la generica solo aparece cuando no hay nada mejor. */}
+            {!editando && analisis?.siguientePregunta && (campoActual === "propuesta" || campoActual === "beneficio")
+              ? analisis.siguientePregunta
+              : PREGUNTAS[campoActual].titulo}
+          </p>
           {PREGUNTAS[campoActual].ayuda ? <p className="guia-pregunta-ayuda">{PREGUNTAS[campoActual].ayuda}</p> : null}
 
           {campoActual === "area" ? (

@@ -30,6 +30,7 @@
     "migration:export:power-platform": "tsx scripts/export-power-platform.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0",
     "@hello-pangea/dnd": "18.0.1",
     "@prisma/client": "^6.13.0",
     "@vercel/blob": "^2.5.0",

@@ -1,16 +1,19 @@
 "use server";
 
-import { clasificarSolicitud, requiereConfirmacionHumana, type GuiaSugerencia } from "@/lib/guia-clasificacion";
+import { requiereConfirmacionHumana, type GuiaSugerencia } from "@/lib/guia-clasificacion";
+import { leerSolicitud } from "@/lib/guia-modelo";
 import { areasDisponibles, escalonesDeArea, type GuiaArea, type GuiaEscalon } from "@/lib/guia-ruta";
 
 /**
  * Los pasos de la Guia PROpEx, del lado del servidor.
  *
- * La conversacion es corta y con preguntas fijas —que paso, en que area, quien te revisa— y
- * termina en un resumen que la persona confirma. No hay modelo de lenguaje detras: clasificar
- * lo hace guia-clasificacion.ts con reglas y enrutar sale de la estructura organizacional que
- * ya esta en la base. Un modelo, si algun dia se conecta, entraria a redactar mejor el texto
- * y a entender frases que las reglas no anticipan; el flujo no cambia.
+ * La conversacion es corta y termina en un resumen que la persona confirma. Quien lee lo que
+ * escribio es Claude (guia-modelo.ts): entiende el habla de piso y redacta el problema y la
+ * propuesta en claro. Si no hay llave o el proveedor falla, cae solo a las reglas de
+ * guia-clasificacion.ts y la Guia sigue sirviendo.
+ *
+ * El enrutamiento no pasa por el modelo: sale de la estructura organizacional que ya esta en
+ * la base. Quien revisa una idea no es cosa de adivinar.
  *
  * Esto vive en una accion de servidor y no en una ruta de API porque no necesita ser publico
  * para nadie mas que para la propia pagina, y asi no hay un endpoint abierto que mantener.
@@ -29,7 +32,9 @@ export type GuiaAnalisis = {
   areas: GuiaArea[];
   escalones: GuiaEscalon[];
   /** Redaccion propuesta para el formulario, para que el supervisor lea algo claro. */
-  borrador: { problema: string; propuesta: string };
+  borrador: { problema: string; propuesta: string; beneficio: string };
+  /** "modelo" cuando entendio Claude, "reglas" cuando cayo a la red de respaldo. */
+  motor: "modelo" | "reglas";
 };
 
 const LIMITE_TEXTO = 1500;
@@ -41,25 +46,24 @@ export async function analizarSolicitudAction(input: {
   marcaCalidad?: boolean;
 }): Promise<GuiaAnalisis> {
   const texto = String(input.texto ?? "").trim().slice(0, LIMITE_TEXTO);
-  const sugerencia = clasificarSolicitud(texto, {
-    marcaSeguridad: input.marcaSeguridad,
-    marcaCalidad: input.marcaCalidad
-  });
 
-  // Las areas se cargan siempre; los escalones solo cuando ya eligio area, para no traer la
-  // estructura entera en cada tecla.
-  const [areas, escalones] = await Promise.all([
+  // La lectura y la estructura son independientes, asi que van en paralelo: el modelo tarda
+  // segundos y no tiene por que sumarse al tiempo de las consultas.
+  const [lectura, areas, escalones] = await Promise.all([
+    leerSolicitud(texto),
     areasDisponibles(),
     input.areaCode ? escalonesDeArea(input.areaCode) : Promise.resolve([])
   ]);
 
   return {
-    sugerencia,
-    necesitaConfirmacion: requiereConfirmacionHumana(sugerencia),
-    siguientePregunta: siguientePregunta(sugerencia, input.areaCode, escalones),
+    sugerencia: lectura.sugerencia,
+    necesitaConfirmacion: requiereConfirmacionHumana(lectura.sugerencia),
+    // La pregunta del modelo gana a la generica: esta escrita sobre lo que la persona conto.
+    siguientePregunta: lectura.pregunta || siguientePregunta(lectura.sugerencia, input.areaCode, escalones),
     areas,
     escalones,
-    borrador: redactar(texto, sugerencia)
+    borrador: { problema: lectura.problema, propuesta: lectura.propuesta, beneficio: lectura.beneficio },
+    motor: lectura.motor
   };
 }
 
@@ -79,23 +83,3 @@ function siguientePregunta(sugerencia: GuiaSugerencia, areaCode: string | undefi
   return null;
 }
 
-/**
- * Separa lo que la persona conto en problema y propuesta.
- *
- * Es a proposito modesto: parte el texto donde aparece el verbo de propuesta y limpia
- * espacios, sin inventar nada. Redactar de verdad —convertir "esta bien feo eso de la banda"
- * en una frase clara— es justo lo que un modelo de lenguaje haria bien y las reglas no,
- * asi que aqui se prefiere devolver las palabras de la persona antes que una version
- * adornada que ella no dijo.
- */
-function redactar(texto: string, sugerencia: GuiaSugerencia): { problema: string; propuesta: string } {
-  const limpio = texto.replace(/\s+/g, " ").trim();
-  const corte = limpio.search(/\b(propongo|sugiero|se podria|deberia|convendria|hay que|estaria bien)\b/i);
-  if (corte > 20) {
-    return { problema: limpio.slice(0, corte).trim().replace(/[,;]$/, ""), propuesta: limpio.slice(corte).trim() };
-  }
-  return {
-    problema: limpio,
-    propuesta: sugerencia.faltantes.includes("Que propones hacer") ? "" : limpio
-  };
-}
