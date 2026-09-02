@@ -37,6 +37,11 @@ const casos: Array<{ texto: string; espera: string; nota: string }> = [
     nota: "propone, no reporta falla: el descarte debe ganarle a mantenimiento"
   },
   {
+    texto: "se fundio la luz en el area y quedamos a oscuras",
+    espera: "ACCION_MANTENIMIENTO",
+    nota: "alumbrado: el caso que fallo en la prueba del usuario"
+  },
+  {
     texto: "seria bueno delimitar con pintura el paso de montacargas y poner senalizacion",
     espera: "CINCO_S_GESTION_VISUAL",
     nota: "orden y senalizacion"

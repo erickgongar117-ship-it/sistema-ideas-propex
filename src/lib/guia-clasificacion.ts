@@ -93,7 +93,10 @@ const REGLAS: Regla[] = [
     destino: "Se registra aqui y lo toma Mantenimiento",
     peso: 2,
     senales: [
-      /\b(no (funciona|sirve|enciende|prende|arranca)|descompuest|averiad|fuga|gotea|ruido|vibra|banda rota|motor|rodamiento|balero|soldar|reparar|arreglar|cambiar la pieza|refaccion)\b/
+      /\b(no (funciona|sirve|enciende|prende|arranca)|descompuest|averiad|fuga|gotea|ruido|vibra|banda rota|motor|rodamiento|balero|soldar|reparar|arreglar|cambiar la pieza|refaccion)\b/,
+      // Electricidad y alumbrado: "se fundio la luz" es de lo que mas se reporta en piso y
+      // la primera version lo mandaba a ideas de mejora.
+      /\b(fundi|foco|lampara|luminaria|alumbrado|sin luz|apagon|corto circuito|breaker|cable pelado|no hay corriente)/
     ],
     // "Proponer que se cambie" es una idea; "esta descompuesto" es una orden de trabajo.
     descartes: [/\b(propongo|sugiero|se podria|estaria bien|convendria)\b/]

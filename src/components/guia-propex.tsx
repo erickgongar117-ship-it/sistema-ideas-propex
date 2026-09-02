@@ -49,13 +49,11 @@ const PREGUNTAS: Record<Campo, { titulo: string; ayuda: string; ejemplo?: string
   },
   propuesta: {
     titulo: "¿Qué se te ocurre que podría hacerse?",
-    ayuda: "Aunque no estés seguro. Quien lo revise puede ajustarlo.",
-    ejemplo: "Ponerle un seguro o soldar la guarda para que no se mueva."
+    ayuda: "Aunque no estés seguro. Quien lo revise puede ajustarlo."
   },
   beneficio: {
     titulo: "Si se hace, ¿qué mejora?",
-    ayuda: "Qué se evita, qué se ahorra o qué se vuelve más seguro.",
-    ejemplo: "Se evita que alguien se lastime la mano y no hay que parar la línea."
+    ayuda: "Qué se evita, qué se ahorra o qué se vuelve más seguro."
   },
   nombre: { titulo: "¿Cómo te llamas?", ayuda: "Para que la mejora quede a tu nombre y te lleguen los puntos." },
   turno: { titulo: "¿En qué turno trabajas?", ayuda: "" },
