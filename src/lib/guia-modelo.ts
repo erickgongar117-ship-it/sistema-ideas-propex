@@ -1,6 +1,6 @@
 import "server-only";
 
-import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
 import { clasificarSolicitud, type GuiaSugerencia } from "@/lib/guia-clasificacion";
 
 /**
@@ -22,11 +22,20 @@ import { clasificarSolicitud, type GuiaSugerencia } from "@/lib/guia-clasificaci
  * herramienta de captura en piso no se puede caer porque un servicio de terceros tenga un mal
  * dia.
  *
- * Nada de esto identifica a nadie: se manda el texto que la persona escribio y la lista de
- * areas, nunca nombres, correos ni el organigrama.
+ * Nada de esto identifica a nadie: se manda el texto que la persona escribio, nada mas. Ni
+ * nombres, ni correos, ni el organigrama.
+ *
+ * El proveedor es Groq, elegido por el usuario despues de comparar. Tiene plan gratuito real
+ * —30 solicitudes por minuto, de sobra para dos llamadas por captura— y, a diferencia del
+ * gratuito de Google, sus terminos no permiten entrenar con lo que se le manda salvo permiso
+ * explicito. Eso importa aqui: el texto describe fallas, riesgos y procesos de la planta.
+ *
+ * Cambiar de proveedor es cambiar este archivo. El resto de la Guia no sabe quien contesta.
  */
 
-const MODELO = process.env.ANTHROPIC_GUIA_MODEL?.trim() || "claude-opus-5";
+// gpt-oss-120b y no el 20b: entender modismos de piso en espanol y reescribirlos es
+// justo donde se nota el modelo mas grande, y aqui va una llamada por captura, no miles.
+const MODELO = process.env.GROQ_GUIA_MODEL?.trim() || "openai/gpt-oss-120b";
 const TIEMPO_LIMITE_MS = 12_000;
 
 const CATEGORIAS = [
@@ -186,32 +195,33 @@ export async function leerSolicitud(texto: string): Promise<LecturaGuia> {
     };
   };
 
-  if (!process.env.ANTHROPIC_API_KEY?.trim() || limpio.length < 8) return porReglas();
+  if (!process.env.GROQ_API_KEY?.trim() || limpio.length < 8) return porReglas();
 
   try {
-    const client = new Anthropic();
-    const respuesta = await client.messages.create(
-      {
-        model: MODELO,
-        max_tokens: 2000,
-        system: INSTRUCCIONES,
-        // El texto de la persona va como mensaje, no dentro de las instrucciones: asi lo que
-        // escriba es contenido y no puede pasar por indicaciones del sistema.
-        messages: [{ role: "user", content: limpio }],
-        // Esfuerzo bajo a proposito: hay una persona parada en la linea esperando la
-        // respuesta, y clasificar y reescribir dos frases no necesita mas. Si mas adelante se
-        // ve que confunde casos dificiles, esto es lo primero que hay que subir.
-        output_config: {
-          effort: "low",
-          format: { type: "json_schema", schema: ESQUEMA_LECTURA }
-        }
-      },
-      { timeout: TIEMPO_LIMITE_MS }
-    );
+    const client = new Groq({ timeout: TIEMPO_LIMITE_MS });
+    const respuesta = await client.chat.completions.create({
+      model: MODELO,
+      max_completion_tokens: 2000,
+      // Baja la creatividad: aqui no se quiere variedad, se quiere que la misma frase se
+      // clasifique igual hoy que manana.
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: INSTRUCCIONES },
+        // El texto de la persona va como mensaje aparte, no dentro de las instrucciones: asi
+        // lo que escriba es contenido y no puede pasar por indicaciones del sistema.
+        { role: "user", content: limpio }
+      ],
+      // strict: decodificacion restringida, el JSON no puede salir fuera del esquema. El
+      // modo best-effort a veces devuelve JSON invalido, y eso caeria a reglas sin necesidad.
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "lectura_guia", strict: true, schema: ESQUEMA_LECTURA }
+      }
+    });
 
-    const salida = respuesta.content.find((bloque) => bloque.type === "text");
-    if (!salida || salida.type !== "text") return porReglas();
-    const lectura = comoLectura(JSON.parse(salida.text));
+    const salida = respuesta.choices[0]?.message?.content;
+    if (!salida) return porReglas();
+    const lectura = comoLectura(JSON.parse(salida));
     if (!lectura) return porReglas();
 
     return {

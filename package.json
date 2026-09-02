@@ -30,7 +30,6 @@
     "migration:export:power-platform": "tsx scripts/export-power-platform.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.123.0",
     "@hello-pangea/dnd": "18.0.1",
     "@prisma/client": "^6.13.0",
     "@vercel/blob": "^2.5.0",
@@ -38,6 +37,7 @@
     "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.6",
     "exceljs": "^4.4.0",
+    "groq-sdk": "^1.6.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
     "next": "^15.4.5",
