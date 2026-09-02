@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Archive, Download, Plus, TriangleAlert } from "lucide-react";
 import { GenbaCommandCenter, type GenbaDashboardWalk } from "@/components/genba-command-center";
 import { PageHeader } from "@/components/page-header";
-import { parseStringArray } from "@/lib/domain";
+import { parseStringArray, roleLabels } from "@/lib/domain";
 import { requireGenbaAccess } from "@/lib/module-access";
 import { prisma } from "@/lib/prisma";
 
@@ -43,6 +43,9 @@ export default async function GenbaDashboardPage({
     visitDate: walk.visitDate.toISOString(),
     status: walk.status,
     coordinatorName: walk.coordinator.name,
+    // El nivel sale del rol de quien coordina. Es lo que permite ver de un vistazo los
+    // recorridos que hace direccion, sin capturar el dato dos veces.
+    coordinatorLevel: roleLabels[walk.coordinator.role],
     expectedDepartments: parseStringArray(walk.expectedDepartments).length,
     attendedDepartments: parseStringArray(walk.attendedDepartments).length,
     createdAt: walk.createdAt.toISOString(),

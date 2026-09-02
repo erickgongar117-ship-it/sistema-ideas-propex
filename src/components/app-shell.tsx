@@ -44,7 +44,7 @@ import { logoutAction } from "@/app/actions";
 import { ThemeSelector } from "@/components/theme-selector";
 import { PropexAssistant } from "@/components/propex-assistant";
 import { WorkspacePeriodControl, WorkspaceSearch } from "@/components/workspace-controls";
-import { roleLabels } from "@/lib/domain";
+import { improvementManagerRoles, roleLabels } from "@/lib/domain";
 
 type ShellUser = {
   name: string;
@@ -312,7 +312,9 @@ export function AppShell({ user, children, pendingNotifications, moduleAccess, c
   const activeItem = [...searchableNav].sort((a, b) => b.href.length - a.href.length).find((item) => isCurrentPath(pathname, item.href));
   const showPeriodControl = pathname === "/dashboard" || pathname === "/kaizen" || pathname === "/genba";
   const searchItems = useMemo(() => searchableNav.map((item) => ({ href: item.href, label: item.label, group: groupLabels[item.group] })), [searchableNav]);
-  const canManagePrograms = user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
+  // Gerencia y direccion tambien crean: el menu de "Crear" se les mostraba vacio y parecia
+  // que el sistema estaba roto, cuando lo que faltaba era el permiso.
+  const canManagePrograms = improvementManagerRoles.includes(user.role);
 
   useEffect(() => {
     setSidebarCollapsed(window.localStorage.getItem("propex-sidebar-collapsed") === "true");

@@ -149,6 +149,15 @@ export type WorkboardItem = {
    */
   pinned?: boolean;
   pinTarget?: { modulo: "IDEA" | "KAIZEN" | "GENBA"; registroId: string };
+  /**
+   * Un corte propio de cada tablero, para filtrar por algo que solo ese modulo entiende.
+   *
+   * GENBA lo usa para el nivel de quien coordina —"Direccion", "Gerencia", "Mejora
+   * Continua"—, que era lo que pedia poder separarse. Se dejo generico en vez de escribir
+   * "nivel del coordinador" aqui porque Kaizen e Ideas van a querer su propio corte y no
+   * tiene caso agregar una prop por modulo.
+   */
+  segment?: string;
 };
 
 export type WorkboardMetric = {
@@ -326,6 +335,7 @@ export function OperationsWorkboard({
   metrics,
   primaryLabel,
   locationLabel = "Ubicacion",
+  segmentLabel,
   emptyLabel = "No hay registros con estos filtros",
   groupDefinitions,
   onMoveItem,
@@ -340,6 +350,8 @@ export function OperationsWorkboard({
   metrics: WorkboardMetric[];
   primaryLabel: string;
   locationLabel?: string;
+  /** Nombre del filtro propio del tablero. Sin esto, el filtro no se dibuja. */
+  segmentLabel?: string;
   emptyLabel?: string;
   groupDefinitions?: WorkboardGroupDefinition[];
   onMoveItem?: (input: WorkboardMoveInput) => Promise<WorkboardMoveResult>;
@@ -357,6 +369,7 @@ export function OperationsWorkboard({
   const [status, setStatus] = useState("all");
   const [location, setLocation] = useState("all");
   const [owner, setOwner] = useState("all");
+  const [segment, setSegment] = useState("all");
   const [sort, setSort] = useState<Sort>("priority");
   const [density, setDensity] = useState<Density>("comfortable");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -387,6 +400,7 @@ export function OperationsWorkboard({
   );
   const locations = useMemo(() => [...new Set(items.map((item) => item.location))].sort(), [items]);
   const owners = useMemo(() => [...new Set(items.map((item) => item.owner))].sort((a, b) => a.localeCompare(b, "es-MX")), [items]);
+  const segments = useMemo(() => [...new Set(items.map((item) => item.segment).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, "es-MX")), [items]);
   const normalizedQuery = query.trim().toLocaleLowerCase("es-MX");
   const searchMatched = useMemo(() => items.filter((item) => {
     const searchable = [
@@ -403,7 +417,7 @@ export function OperationsWorkboard({
     return matchesQuery && (location === "all" || item.location === location);
   }), [items, location, normalizedQuery]);
   const filtered = useMemo(() => {
-    const rows = searchMatched.filter((item) => (status === "all" || item.group === status) && (owner === "all" || item.owner === owner));
+    const rows = searchMatched.filter((item) => (status === "all" || item.group === status) && (owner === "all" || item.owner === owner) && (segment === "all" || item.segment === segment));
     return [...rows].sort((a, b) => {
       if (sort === "title") return a.title.localeCompare(b.title, "es-MX");
       if (sort === "progress") return (a.progress ?? 101) - (b.progress ?? 101) || a.title.localeCompare(b.title, "es-MX");
@@ -412,7 +426,7 @@ export function OperationsWorkboard({
       if (sort === "due") return aDate - bDate || a.title.localeCompare(b.title, "es-MX");
       return Number(Boolean(b.risk)) - Number(Boolean(a.risk)) || aDate - bDate || a.title.localeCompare(b.title, "es-MX");
     });
-  }, [owner, searchMatched, sort, status]);
+  }, [owner, searchMatched, segment, sort, status]);
 
   const totalPages = clientPagination ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
   const pageItems = useMemo(
@@ -455,7 +469,7 @@ export function OperationsWorkboard({
   /** Orden tal como se ve en pantalla; es el que usa la seleccion por rango con Shift. */
   const visibleOrder = useMemo(() => groups.flatMap((group) => group.rows.map((row) => row.id)), [groups]);
   const focusedItem = items.find((item) => item.id === focusedId) ?? null;
-  const activeFilters = Number(status !== "all") + Number(location !== "all") + Number(owner !== "all");
+  const activeFilters = Number(status !== "all") + Number(location !== "all") + Number(owner !== "all") + Number(segment !== "all");
   const draggingItem = items.find((item) => item.id === draggingId) ?? null;
   const selectedItems = useMemo(() => items.filter((item) => selected.has(item.id)), [items, selected]);
   const bulkCount = (action: WorkboardBulkAction) => selectedItems.filter((item) => item.bulkActions?.includes(action)).length;
@@ -854,13 +868,14 @@ export function OperationsWorkboard({
         <div className="workboard-filters no-print">
           <label><span>Estado</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Todos los estados</option>{statuses.map((value) => <option key={value} value={value}>{moveGroups.find((group) => group.key === value)?.label ?? value}</option>)}</select></label>
           <label><span>Responsable</span><select value={owner} onChange={(event) => setOwner(event.target.value)}><option value="all">Todas las personas</option>{owners.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          {segmentLabel && segments.length ? <label><span>{segmentLabel}</span><select value={segment} onChange={(event) => setSegment(event.target.value)}><option value="all">Todos</option>{segments.map((value) => <option key={value} value={value}>{value}</option>)}</select></label> : null}
           <label><span>{locationLabel}</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="all">Todas</option>{locations.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label><span>Orden</span><select value={sort} onChange={(event) => setSort(event.target.value as Sort)}><option value="priority">Atencion primero</option><option value="due">Fecha mas cercana</option><option value="progress">Menor avance</option><option value="title">Nombre</option></select></label>
           <div className="workboard-density" role="group" aria-label="Densidad de filas">
             <span>Densidad</span>
             <div><button aria-pressed={density === "comfortable"} className={density === "comfortable" ? "is-active" : ""} onClick={() => setDensity("comfortable")} title="Vista comoda" type="button"><Rows3 className="h-4 w-4" aria-hidden /><span>Comoda</span></button><button aria-pressed={density === "compact"} className={density === "compact" ? "is-active" : ""} onClick={() => setDensity("compact")} title="Vista compacta" type="button"><LayoutList className="h-4 w-4" aria-hidden /><span>Compacta</span></button></div>
           </div>
-          {activeFilters ? <button onClick={() => { setStatus("all"); setOwner("all"); setLocation("all"); }} type="button">Limpiar filtros</button> : null}
+          {activeFilters ? <button onClick={() => { setStatus("all"); setOwner("all"); setLocation("all"); setSegment("all"); }} type="button">Limpiar filtros</button> : null}
         </div>
       ) : null}
 

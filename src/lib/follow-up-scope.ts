@@ -120,7 +120,17 @@ export function followUpKaizenWhere(
   view: FollowUpView
 ): Prisma.KaizenProjectWhereInput {
   const { user, globalAccess, supervisableOrgUnitIds, manageableOrgUnitIds, hasAccess } = input;
-  if (user.role === "DIRECCION") return { id: "__no_director_operational_kaizen__" };
+  // Direccion no lleva la carga operativa de Kaizen, pero desde que puede abrir proyectos si
+  // tiene que ver los suyos: bloquearla por completo escondia su propio trabajo.
+  if (user.role === "DIRECCION") {
+    const propio: Prisma.KaizenProjectWhereInput = {
+      OR: [{ leaderId: user.id }, { activities: { some: { ownerId: user.id } } }, { createdById: user.id }]
+    };
+    const pendienteDireccion: Prisma.KaizenProjectWhereInput = {
+      AND: [propio, { activities: { some: { ownerId: user.id, status: { in: activeWorkStatuses } } } }]
+    };
+    return viewWhere(propio, pendienteDireccion, propio, propio, view);
+  }
   if (!hasAccess) return { id: "__no_kaizen_access__" };
 
   const memberScope = supervisableOrgUnitIds.length
@@ -171,7 +181,15 @@ export function followUpGenbaWhere(
   view: FollowUpView
 ): Prisma.GenbaWalkWhereInput {
   const { user, globalAccess, supervisableOrgUnitIds, manageableOrgUnitIds, hasAccess } = input;
-  if (user.role === "DIRECCION") return { id: "__no_director_operational_genba__" };
+  if (user.role === "DIRECCION") {
+    const propio: Prisma.GenbaWalkWhereInput = {
+      OR: [{ coordinatorId: user.id }, { activities: { some: { ownerId: user.id } } }, { createdById: user.id }]
+    };
+    const pendienteDireccion: Prisma.GenbaWalkWhereInput = {
+      AND: [propio, { OR: [{ coordinatorId: user.id, status: "ABIERTO" }, { activities: { some: { ownerId: user.id, status: { in: activeWorkStatuses } } } }] }]
+    };
+    return viewWhere(propio, pendienteDireccion, propio, propio, view);
+  }
   if (!hasAccess) return { id: "__no_genba_access__" };
 
   const memberScope = supervisableOrgUnitIds.length

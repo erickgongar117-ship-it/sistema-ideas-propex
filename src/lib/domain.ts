@@ -65,6 +65,18 @@ export const roleLabels: Record<Role, string> = {
 
 export const executiveViewerRoles: Role[] = ["ADMIN", "DIRECCION", "GERENTE", "MEJORA_CONTINUA"];
 
+/**
+ * Quien puede crear y editar Kaizen, GENBA y entrenamientos.
+ *
+ * Al principio eran solo Admin y Mejora Continua. El usuario corrigio la regla: gerencia y
+ * direccion tambien levantan recorridos, abren proyectos y programan cursos, y no tenerlo
+ * los obligaba a pedirle a Mejora Continua que capturara por ellos.
+ *
+ * OJO: esto NO abre las decisiones sobre Ideas —clasificar, cerrar, quitar puntos—, que
+ * siguen siendo de Mejora Continua. Son dos permisos distintos y conviene que no se mezclen.
+ */
+export const improvementManagerRoles: Role[] = ["ADMIN", "MEJORA_CONTINUA", "GERENTE", "DIRECCION"];
+
 export function hasExecutiveVisibility(user: Pick<{ role: Role }, "role">) {
   return executiveViewerRoles.includes(user.role);
 }

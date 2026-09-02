@@ -3,13 +3,13 @@ import "server-only";
 import type { User } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { hasExecutiveVisibility } from "@/lib/domain";
+import { hasExecutiveVisibility, improvementManagerRoles } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 
 type AccessUser = Pick<User, "id" | "role" | "kaizenAccess" | "genbaAccess">;
 
 export function canManageImprovementModules(user: Pick<User, "role">) {
-  return user.role === "ADMIN" || user.role === "MEJORA_CONTINUA";
+  return improvementManagerRoles.includes(user.role);
 }
 
 export async function userModuleAccess(user: AccessUser) {

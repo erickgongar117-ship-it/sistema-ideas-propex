@@ -35,6 +35,8 @@ export type GenbaDashboardWalk = {
   visitDate: string;
   status: GenbaStatus;
   coordinatorName: string;
+  /** Nivel de quien coordina, para separar los recorridos de direccion y gerencia. */
+  coordinatorLevel: string;
   expectedDepartments: number;
   attendedDepartments: number;
   createdAt: string;
@@ -83,6 +85,7 @@ export function GenbaCommandCenter({ walks, generatedAt, canManage = false }: { 
       statusLabel: genbaStatusLabels[walk.status],
       statusCategory,
       owner: walk.coordinatorName,
+      segment: walk.coordinatorLevel,
       location: walk.areaName,
       dueDate: walk.visitDate,
       progress: progress.percent,
@@ -133,6 +136,7 @@ export function GenbaCommandCenter({ walks, generatedAt, canManage = false }: { 
     groupDefinitions={GENBA_GROUPS}
     items={items}
     locationLabel="Area visitada"
+    segmentLabel="Nivel que recorre"
     primaryLabel="Recorridos"
     metrics={[
       { label: "Recorridos visibles", value: visible.length, detail: `${visible.filter((walk) => walk.status === "ABIERTO").length} abiertos`, color: "var(--time-soon)" },

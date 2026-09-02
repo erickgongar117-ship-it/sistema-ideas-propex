@@ -9,6 +9,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { improvementManagerRoles } from "@/lib/domain";
 import { EmployeeNumberValidationError } from "@/lib/employee-number";
 import {
   resolveParticipantFromCollaborator,
@@ -17,7 +18,8 @@ import {
 } from "@/lib/coins";
 import { prisma } from "@/lib/prisma";
 
-const trainingRoles = ["ADMIN", "MEJORA_CONTINUA"] as const;
+// Misma regla que Kaizen y GENBA: gerencia y direccion tambien programan cursos.
+const trainingRoles = improvementManagerRoles;
 
 function textValue(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();

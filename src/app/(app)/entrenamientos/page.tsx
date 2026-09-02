@@ -36,7 +36,7 @@ import { SearchablePicker } from "@/components/searchable-picker";
 import { SectionHeading } from "@/components/section-heading";
 import { TrainingAttendanceTable } from "@/components/training-attendance-table";
 import { requireUser } from "@/lib/auth";
-import { executiveViewerRoles } from "@/lib/domain";
+import { improvementManagerRoles, executiveViewerRoles } from "@/lib/domain";
 import { getParticipantBalances } from "@/lib/coins";
 import { prisma } from "@/lib/prisma";
 
@@ -229,7 +229,7 @@ function messageFor(query: Awaited<TrainingPageProps["searchParams"]>) {
 export default async function TrainingPage({ searchParams }: TrainingPageProps) {
   const currentUser = await requireUser(executiveViewerRoles);
   const query = await searchParams;
-  const canManage = currentUser.role === "ADMIN" || currentUser.role === "MEJORA_CONTINUA";
+  const canManage = improvementManagerRoles.includes(currentUser.role);
   const selectedSessionId = query.session || "";
   const requestedView = selectedSessionId ? "operation" : trainingView(query.view);
   const activeView = !canManage && requestedView === "setup" ? "operation" : requestedView;

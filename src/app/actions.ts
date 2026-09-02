@@ -9,7 +9,7 @@ import type { WorkboardBulkInput, WorkboardBulkItemResult, WorkboardBulkResult }
 import { auditLog } from "@/lib/audit";
 import { clearSession, requireUser, setSession } from "@/lib/auth";
 import { areOperationalUsers, operationalUserWhere } from "@/lib/director-policy";
-import { genbaDepartments, impactOptions, kaizenStatusLabels, nextValidationStatus, requiredApprovalTypes, roleHomePath, validationOrder } from "@/lib/domain";
+import { genbaDepartments, impactOptions, improvementManagerRoles, kaizenStatusLabels, nextValidationStatus, requiredApprovalTypes, roleHomePath, validationOrder } from "@/lib/domain";
 import { EmployeeNumberValidationError, normalizeEmployeeNumber } from "@/lib/employee-number";
 import {
   blocksIdeaClosure,
@@ -1986,7 +1986,7 @@ export async function removeIdeaFollowerAction(formData: FormData) {
 }
 
 export async function createKaizenProjectAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const title = text(formData, "title");
   const area = text(formData, "area");
   const objective = text(formData, "objective");
@@ -2038,7 +2038,7 @@ export async function createKaizenProjectAction(formData: FormData) {
 }
 
 export async function updateKaizenProjectAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const projectId = text(formData, "projectId");
   const startDate = dateOrNull(formData, "startDate");
   const endDate = dateOrNull(formData, "endDate");
@@ -2169,7 +2169,7 @@ export async function changeKaizenStageAction(input: {
 }
 
 export async function updateKaizenDatesAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const projectId = text(formData, "projectId");
   const startDate = dateOrNull(formData, "startDate");
   const endDate = dateOrNull(formData, "endDate");
@@ -2184,7 +2184,7 @@ export async function updateKaizenDatesAction(formData: FormData) {
 }
 
 export async function uploadKaizenCharterAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const projectId = text(formData, "projectId");
   const project = await prisma.kaizenProject.findUniqueOrThrow({ where: { id: projectId } });
   if (project.status === "COMPLETADO" || project.status === "CANCELADO") redirect(`/kaizen/${projectId}?error=cerrado`);
@@ -2203,7 +2203,7 @@ export async function uploadKaizenCharterAction(formData: FormData) {
 }
 
 export async function addKaizenActivityAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const projectId = text(formData, "projectId");
   const action = text(formData, "action");
   if (!action) redirect(`/kaizen/${projectId}?error=actividad`);
@@ -2257,7 +2257,7 @@ export async function addKaizenActivityAction(formData: FormData) {
 }
 
 export async function updateKaizenActivityAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const activityId = text(formData, "activityId");
   const status = text(formData, "status") as WorkItemStatus;
   const editableStatuses: WorkItemStatus[] = ["PENDIENTE", "EN_PROCESO", "BLOQUEADA"];
@@ -2415,7 +2415,7 @@ export async function reopenKaizenActivityAction(formData: FormData) {
 }
 
 export async function mergeKaizenActivitiesAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const sourceId = text(formData, "sourceId");
   const targetId = text(formData, "targetId");
   const reason = text(formData, "reason");
@@ -2444,7 +2444,7 @@ export async function mergeKaizenActivitiesAction(formData: FormData) {
 }
 
 export async function addKaizenUpdateAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const projectId = text(formData, "projectId");
   const comment = text(formData, "comment");
   if (!comment) redirect(`/kaizen/${projectId}`);
@@ -2470,7 +2470,7 @@ function kaizenCoinTargets(formData: FormData, members: Array<{ id: string; user
 }
 
 export async function addKaizenTeamMemberAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const projectId = text(formData, "projectId");
   const userId = text(formData, "userId");
   const requestedRole = text(formData, "role");
@@ -2502,7 +2502,7 @@ export async function addKaizenTeamMemberAction(formData: FormData) {
 }
 
 export async function removeKaizenTeamMemberAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const projectId = text(formData, "projectId");
   const memberId = text(formData, "memberId");
   const member = await prisma.kaizenTeamMember.findFirst({
@@ -2522,7 +2522,7 @@ export async function removeKaizenTeamMemberAction(formData: FormData) {
 }
 
 export async function closeKaizenProjectAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const projectId = text(formData, "projectId");
   const outcome = text(formData, "outcome") as KaizenStatus;
   const closureNote = text(formData, "closureNote");
@@ -2648,7 +2648,7 @@ export async function updateKaizenClosureNoteAction(formData: FormData) {
 }
 
 export async function updateKaizenRewardsAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const projectId = text(formData, "projectId");
   const project = await prisma.kaizenProject.findUniqueOrThrow({
     where: { id: projectId },
@@ -2684,7 +2684,7 @@ export async function updateKaizenRewardsAction(formData: FormData) {
 }
 
 export async function createGenbaWalkAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const areaName = text(formData, "areaName");
   const visitDate = dateOrNull(formData, "visitDate");
   const coordinatorId = text(formData, "coordinatorId");
@@ -2739,7 +2739,7 @@ export async function createGenbaWalkAction(formData: FormData) {
 }
 
 export async function updateGenbaWalkAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const walkId = text(formData, "walkId");
   const expectedDepartments = formData.getAll("expectedDepartments").map(String).filter((value) => genbaDepartments.includes(value));
   const attendedDepartments = formData.getAll("attendedDepartments").map(String).filter((value) => expectedDepartments.includes(value));
@@ -2780,7 +2780,7 @@ export async function updateGenbaWalkAction(formData: FormData) {
 }
 
 export async function addGenbaAttendeeAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const walkId = text(formData, "walkId");
   const participantId = text(formData, "participantId");
   const [walk, participant] = await Promise.all([
@@ -2800,7 +2800,7 @@ export async function addGenbaAttendeeAction(formData: FormData) {
 }
 
 export async function removeGenbaAttendeeAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const walkId = text(formData, "walkId");
   const attendeeId = text(formData, "attendeeId");
   const attendee = await prisma.genbaAttendee.findFirst({
@@ -2816,7 +2816,7 @@ export async function removeGenbaAttendeeAction(formData: FormData) {
 }
 
 export async function addGenbaActivityAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const walkId = text(formData, "walkId");
   const problem = text(formData, "problem");
   if (!problem) redirect(`/genba/${walkId}?error=actividad`);
@@ -2854,7 +2854,7 @@ export async function addGenbaActivityAction(formData: FormData) {
 }
 
 export async function updateGenbaActivityAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const activityId = text(formData, "activityId");
   const status = text(formData, "status") as WorkItemStatus;
   const editableStatuses: WorkItemStatus[] = ["PENDIENTE", "EN_PROCESO", "BLOQUEADA"];
@@ -2941,7 +2941,7 @@ export async function closeFollowUpActivityAction(formData: FormData) {
 }
 
 export async function mergeGenbaActivitiesAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const sourceId = text(formData, "sourceId");
   const targetId = text(formData, "targetId");
   const reason = text(formData, "reason");
@@ -2970,7 +2970,7 @@ export async function mergeGenbaActivitiesAction(formData: FormData) {
 }
 
 export async function addGenbaUpdateAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const walkId = text(formData, "walkId");
   const comment = text(formData, "comment");
   if (!comment) redirect(`/genba/${walkId}`);
@@ -3032,7 +3032,7 @@ export async function reopenGenbaActivityAction(formData: FormData) {
 }
 
 export async function promoteGenbaActivityToKaizenAction(formData: FormData) {
-  const user = await requireUser(["ADMIN", "MEJORA_CONTINUA"]);
+  const user = await requireUser(improvementManagerRoles);
   const activityId = text(formData, "activityId");
   const activity = await prisma.genbaActivity.findUniqueOrThrow({
     where: { id: activityId },
